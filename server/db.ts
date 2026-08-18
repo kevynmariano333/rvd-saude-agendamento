@@ -13,6 +13,7 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { normalizeCnpj } from "./fiscalFilters";
+import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -436,7 +437,7 @@ export async function createUnscheduledReceipt(input: {
     const inserted = await tx.insert(appointments).values({
       supplierId: input.operatorId,
       serviceType: serviceType.slice(0, 80),
-      scheduledFor: input.invoiceIssuedAt ?? new Date(),
+      scheduledFor: getUnscheduledReceiptRegisteredAt(),
       notes: "Recebimento registrado sem agendamento prévio, a partir do XML da nota fiscal.",
       source: "manual_xml",
       xmlStorageKey: input.xmlStorageKey,

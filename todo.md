@@ -82,3 +82,6 @@
 - [x] Adicionar confirmação de pré-nota na última ação da tabela e persistir a confirmação no agendamento.
 - [x] Exibir o ícone de pré-nota em verde após a confirmação e validar o fluxo de confirmação.
 - [x] Capturar e revisar o último ícone da tabela no estado confirmado, com o indicador verde visível.
+- [x] Usar a data e hora do registro do XML, em vez da emissão da NF, no recebimento sem agendamento.
+- [x] Cobrir a data de registro do recebimento avulso com teste automatizado.
+- [x] Exibir os contadores numéricos apenas nas abas Pendente e Agendado da central do Operador.
