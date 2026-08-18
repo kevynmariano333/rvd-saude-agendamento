@@ -72,3 +72,6 @@
 - [x] Documentar textualmente a revisão da captura com os cinco estados visíveis no histórico fornecedor.
 - [x] Adicionar testes Vitest para os filtros de número da nota, fornecedor e CNPJ destinatário.
 - [x] Persistir no histórico auditável a data/hora anterior e nova em cada reagendamento, com testes de validação.
+- [x] Reforçar a cor e o contraste do botão Recebimento sem Agendamento para eliminar a aparência transparente.
+- [x] Tornar o conteúdo do modal de Recebimento sem Agendamento opaco, com fundo branco sólido e contraste legível.
+- [x] Capturar e revisar visualmente o modal de Recebimento sem Agendamento aberto após o reforço de opacidade.
