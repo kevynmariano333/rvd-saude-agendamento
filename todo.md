@@ -99,9 +99,9 @@
 - [x] Registrar evidência técnica e visual do cadastro de fornecedor, com a validação manual ponta a ponta adiada pelo usuário.
 - [x] Restaurar o login de contas existentes de Operador e Fornecedor, sem criar cadastro novo para Operador.
 - [x] Validar visualmente a tela de login local e tecnicamente os contratos de Operador e cadastro exclusivo de Fornecedor.
-- [ ] Validar no navegador o login real de uma conta existente de Operador, sem cadastro novo.
+- [x] Validar no navegador o login real de uma conta existente de Operador, sem cadastro novo.
 - [x] Validar no navegador o cadastro, login e abertura do painel de um novo Fornecedor em sessão isolada.
-- [ ] Registrar evidência verificável dos dois fluxos reais de acesso por perfil.
+- [x] Registrar evidência verificável do acesso real de Operador existente; a validação de Fornecedor já havia sido concluída em sessão isolada.
 - [x] Requisito revisado: não restringir o botão Novo cadastro somente ao Fornecedor.
 - [x] Requisito revisado: permitir também novo cadastro quando o perfil Operador estiver selecionado.
 - [x] Exibir o botão Novo cadastro com o rótulo correspondente ao perfil selecionado.
@@ -112,14 +112,15 @@
 - [x] Validar os dois acessos de teste e seus redirecionamentos por perfil.
 - [x] Validar no navegador o login de teste `admin/admin` como Operador e confirmar abertura do painel `/operador`.
 - [x] Validar no navegador o login de teste `admin/admin` como Fornecedor e confirmar abertura do painel `/fornecedor`.
-- [ ] Validar no navegador o login de uma conta de Operador realmente pré-existente, não demo `admin/admin`, e confirmar abertura do painel sem nova criação.
-- [ ] Registrar evidência verificável do login de Operador existente, distinguindo-o explicitamente do fluxo de demonstração.
-- [ ] Validar no navegador o login de uma conta de Operador já existente antes do teste, sem criar cadastro de Operador no mesmo fluxo.
-- [ ] Registrar evidência persistida e verificável do login de Operador não demo já existente, incluindo identificação da conta e abertura do painel `/operador`.
-- [ ] Retomar a validação da conta existente de Operador quando o usuário tiver uma senha disponível.
-- [ ] Validar no navegador o login de uma conta de Operador previamente existente no banco antes desta rodada, sem usar `admin/admin` e sem criar novo cadastro.
-- [ ] Registrar evidência persistida do login dessa conta de Operador previamente existente, incluindo identificação da conta e abertura de `/operador`.
-- [ ] Registrar o bloqueio da validação caso o usuário não disponha da senha da conta existente.
+- [x] Validar no navegador o login de uma conta de Operador realmente pré-existente, não demo `admin/admin`, e confirmar abertura do painel sem nova criação.
+- [x] Registrar evidência verificável do login de Operador existente, distinguindo-o explicitamente do fluxo de demonstração.
+- [x] Validar no navegador o login de uma conta de Operador já existente antes do teste, sem criar cadastro de Operador no mesmo fluxo.
+- [x] Registrar evidência persistida e verificável do login de Operador não demo já existente, incluindo identificação da conta e abertura do painel `/operador`.
+- [x] Retomar a validação da conta existente de Operador quando o usuário tiver uma senha disponível.
+- [x] Validar no navegador o login de uma conta de Operador previamente existente no banco antes desta rodada, sem usar `admin/admin` e sem criar novo cadastro.
+- [x] Registrar evidência persistida do login dessa conta de Operador previamente existente, incluindo identificação da conta e abertura de `/operador`.
+- [x] Cenário de bloqueio por ausência de senha não se aplicou: a credencial foi fornecida e a validação foi concluída com sucesso.
+- [x] Persistir evidência do login real de Operador, com e-mail validado e abertura de `/operador`, sem registrar a senha.
 - [ ] Identificar e registrar as notas de teste nº 5676 com seus registros vinculados antes da exclusão.
 - [x] Remover as duas notas de teste nº 5676 com seus históricos e mensagens vinculados.
 - [x] Criar uma área de exclusão de notas exclusiva para Administrador.
