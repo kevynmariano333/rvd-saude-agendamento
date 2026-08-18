@@ -1,0 +1,613 @@
+{
+  "version": "5",
+  "dialect": "mysql",
+  "id": "1481dfda-bcd9-4966-9d83-bcaf114ff6f4",
+  "prevId": "c2065883-02e9-47d9-af22-72dcebba0594",
+  "tables": {
+    "appointmentStatusHistory": {
+      "name": "appointmentStatusHistory",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "appointmentId": {
+          "name": "appointmentId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "previousStatus": {
+          "name": "previousStatus",
+          "type": "enum('pending','scheduled','received','completed','backlog','rejected')",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "nextStatus": {
+          "name": "nextStatus",
+          "type": "enum('pending','scheduled','received','completed','backlog','rejected')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "handledBy": {
+          "name": "handledBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "eventNote": {
+          "name": "eventNote",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "previousScheduledFor": {
+          "name": "previousScheduledFor",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "nextScheduledFor": {
+          "name": "nextScheduledFor",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "appointment_status_history_idx": {
+          "name": "appointment_status_history_idx",
+          "columns": [
+            "appointmentId",
+            "createdAt"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "appointmentStatusHistory_appointmentId_appointments_id_fk": {
+          "name": "appointmentStatusHistory_appointmentId_appointments_id_fk",
+          "tableFrom": "appointmentStatusHistory",
+          "tableTo": "appointments",
+          "columnsFrom": [
+            "appointmentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "appointmentStatusHistory_handledBy_users_id_fk": {
+          "name": "appointmentStatusHistory_handledBy_users_id_fk",
+          "tableFrom": "appointmentStatusHistory",
+          "tableTo": "users",
+          "columnsFrom": [
+            "handledBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "appointmentStatusHistory_id": {
+          "name": "appointmentStatusHistory_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "appointmentSuggestions": {
+      "name": "appointmentSuggestions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "appointmentId": {
+          "name": "appointmentId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "supplierId": {
+          "name": "supplierId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "suggestedFor": {
+          "name": "suggestedFor",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('pending','accepted','declined')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "handledBy": {
+          "name": "handledBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "respondedAt": {
+          "name": "respondedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "appointment_suggestions_appointment_idx": {
+          "name": "appointment_suggestions_appointment_idx",
+          "columns": [
+            "appointmentId",
+            "status"
+          ],
+          "isUnique": false
+        },
+        "appointment_suggestions_supplier_idx": {
+          "name": "appointment_suggestions_supplier_idx",
+          "columns": [
+            "supplierId",
+            "createdAt"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "appointmentSuggestions_appointmentId_appointments_id_fk": {
+          "name": "appointmentSuggestions_appointmentId_appointments_id_fk",
+          "tableFrom": "appointmentSuggestions",
+          "tableTo": "appointments",
+          "columnsFrom": [
+            "appointmentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "appointmentSuggestions_supplierId_users_id_fk": {
+          "name": "appointmentSuggestions_supplierId_users_id_fk",
+          "tableFrom": "appointmentSuggestions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "supplierId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "appointmentSuggestions_handledBy_users_id_fk": {
+          "name": "appointmentSuggestions_handledBy_users_id_fk",
+          "tableFrom": "appointmentSuggestions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "handledBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "appointmentSuggestions_id": {
+          "name": "appointmentSuggestions_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "appointments": {
+      "name": "appointments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "supplierId": {
+          "name": "supplierId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "serviceType": {
+          "name": "serviceType",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scheduledFor": {
+          "name": "scheduledFor",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rejectionReason": {
+          "name": "rejectionReason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "enum('portal','manual_xml')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'portal'"
+        },
+        "preNoteConfirmedAt": {
+          "name": "preNoteConfirmedAt",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "preNoteConfirmedBy": {
+          "name": "preNoteConfirmedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "xmlStorageKey": {
+          "name": "xmlStorageKey",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "xmlUrl": {
+          "name": "xmlUrl",
+          "type": "varchar(1024)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "xmlFileName": {
+          "name": "xmlFileName",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "invoiceNumber": {
+          "name": "invoiceNumber",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "invoiceAccessKey": {
+          "name": "invoiceAccessKey",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "purchaseOrder": {
+          "name": "purchaseOrder",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "invoiceSupplierName": {
+          "name": "invoiceSupplierName",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "recipientCnpj": {
+          "name": "recipientCnpj",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "invoiceIssuedAt": {
+          "name": "invoiceIssuedAt",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('pending','scheduled','received','completed','backlog','rejected')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "handledBy": {
+          "name": "handledBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "appointments_supplier_status_idx": {
+          "name": "appointments_supplier_status_idx",
+          "columns": [
+            "supplierId",
+            "status"
+          ],
+          "isUnique": false
+        },
+        "appointments_schedule_idx": {
+          "name": "appointments_schedule_idx",
+          "columns": [
+            "scheduledFor"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "appointments_supplierId_users_id_fk": {
+          "name": "appointments_supplierId_users_id_fk",
+          "tableFrom": "appointments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "supplierId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "appointments_preNoteConfirmedBy_users_id_fk": {
+          "name": "appointments_preNoteConfirmedBy_users_id_fk",
+          "tableFrom": "appointments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "preNoteConfirmedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "appointments_handledBy_users_id_fk": {
+          "name": "appointments_handledBy_users_id_fk",
+          "tableFrom": "appointments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "handledBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "appointments_id": {
+          "name": "appointments_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "openId": {
+          "name": "openId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(320)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "loginMethod": {
+          "name": "loginMethod",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "passwordHash": {
+          "name": "passwordHash",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "enum('admin','operator','supplier')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'supplier'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        },
+        "lastSignedIn": {
+          "name": "lastSignedIn",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "columns": [
+            "email"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "users_id": {
+          "name": "users_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "users_openId_unique": {
+          "name": "users_openId_unique",
+          "columns": [
+            "openId"
+          ]
+        }
+      },
+      "checkConstraint": {}
+    }
+  },
+  "views": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "tables": {},
+    "indexes": {}
+  }
+}

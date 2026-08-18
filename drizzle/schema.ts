@@ -49,6 +49,8 @@ export const appointments = mysqlTable(
     notes: text("notes"),
     rejectionReason: text("rejectionReason"),
     source: mysqlEnum("source", appointmentSources).default("portal").notNull(),
+    preNoteConfirmedAt: datetime("preNoteConfirmedAt", { mode: "date" }),
+    preNoteConfirmedBy: int("preNoteConfirmedBy").references(() => users.id, { onDelete: "set null" }),
     xmlStorageKey: varchar("xmlStorageKey", { length: 512 }),
     xmlUrl: varchar("xmlUrl", { length: 1024 }),
     xmlFileName: varchar("xmlFileName", { length: 255 }),

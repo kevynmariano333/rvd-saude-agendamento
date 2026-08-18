@@ -75,3 +75,10 @@
 - [x] Reforçar a cor e o contraste do botão Recebimento sem Agendamento para eliminar a aparência transparente.
 - [x] Tornar o conteúdo do modal de Recebimento sem Agendamento opaco, com fundo branco sólido e contraste legível.
 - [x] Capturar e revisar visualmente o modal de Recebimento sem Agendamento aberto após o reforço de opacidade.
+- [x] Criar painel de detalhes do agendamento ao acionar Abrir nota, com status, dados fiscais, participantes, itens, observações e histórico.
+- [x] Integrar o painel de detalhes à ação Abrir nota e validar sua exibição na central do Operador.
+- [x] Fazer o ícone de documento no fim de cada linha abrir o painel de detalhes da nota, sem redirecionar diretamente ao XML.
+- [x] Adicionar ícone de histórico de datas e horários em cada linha, com modal que exiba sugestões, agendamentos e reagendamentos reais.
+- [x] Adicionar confirmação de pré-nota na última ação da tabela e persistir a confirmação no agendamento.
+- [x] Exibir o ícone de pré-nota em verde após a confirmação e validar o fluxo de confirmação.
+- [x] Capturar e revisar o último ícone da tabela no estado confirmado, com o indicador verde visível.

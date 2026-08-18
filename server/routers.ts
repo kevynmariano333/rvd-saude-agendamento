@@ -7,6 +7,7 @@ import {
   createAppointmentSuggestion,
   createManualXmlAppointment,
   createUnscheduledReceipt,
+  confirmAppointmentPreNote,
   createLocalUser,
   acceptAppointmentSuggestion,
   getAppointmentById,
@@ -199,6 +200,15 @@ export const appRouter = router({
         }
         return updateAppointmentStatus({ ...input, previousStatus: appointment.status, handledBy: ctx.user.id, eventNote: input.status === "received" ? "Recebimento confirmado pelo operador." : input.status === "completed" ? "Recebimento concluído pelo operador." : undefined });
       }),
+    confirmPreNote: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        assertOperator(ctx.user.role);
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+        if (appointment.preNoteConfirmedAt) return appointment;
+        return confirmAppointmentPreNote({ appointmentId: appointment.id, status: appointment.status, operatorId: ctx.user.id });
+      }),
     activeForSupplier: protectedProcedure
       .input(z.object({ supplierId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => { assertOperator(ctx.user.role); return listSupplierActiveAppointments(input.supplierId); }),
@@ -225,8 +235,14 @@ export const appRouter = router({
   }),
   suggestions: router({
     list: protectedProcedure
-      .input(z.object({ status: z.enum(["pending", "accepted", "declined"]).optional() }).optional())
-      .query(({ ctx, input }) => listAppointmentSuggestions({ status: input?.status, supplierId: isOperator(ctx.user.role) ? undefined : ctx.user.id })),
+      .input(z.object({ appointmentId: z.number().int().positive().optional(), status: z.enum(["pending", "accepted", "declined"]).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (input?.appointmentId && !isOperator(ctx.user.role)) {
+          const appointment = await getAppointmentById(input.appointmentId);
+          if (!appointment || appointment.supplierId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar sugestões deste agendamento." });
+        }
+        return listAppointmentSuggestions({ appointmentId: input?.appointmentId, status: input?.status, supplierId: isOperator(ctx.user.role) ? undefined : ctx.user.id });
+      }),
     create: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), suggestedFor: z.string().datetime(), notes: z.string().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {

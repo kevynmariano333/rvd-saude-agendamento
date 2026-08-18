@@ -3,10 +3,12 @@ import type { User } from "../drizzle/schema";
 
 const mocks = vi.hoisted(() => ({
   createAppointment: vi.fn(),
+  confirmAppointmentPreNote: vi.fn(),
   getAppointmentById: vi.fn(),
   getUserByEmail: vi.fn(),
   listAppointmentHistory: vi.fn(),
   listAppointments: vi.fn(),
+  listAppointmentSuggestions: vi.fn(),
   touchUserSignIn: vi.fn(),
   updateAppointmentStatus: vi.fn(),
   createLocalUser: vi.fn(),
@@ -37,8 +39,10 @@ describe("procedures de agendamento", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createAppointment.mockResolvedValue({ id: 1, status: "pending" });
+    mocks.confirmAppointmentPreNote.mockResolvedValue({ id: 1, status: "scheduled", preNoteConfirmedAt: new Date() });
     mocks.listAppointmentHistory.mockResolvedValue([]);
     mocks.listAppointments.mockResolvedValue([]);
+    mocks.listAppointmentSuggestions.mockResolvedValue([]);
   });
 
   it("permite que o fornecedor crie uma solicitação própria", async () => {
@@ -71,6 +75,12 @@ describe("procedures de agendamento", () => {
     expect(mocks.listAppointmentHistory).toHaveBeenCalledWith(1);
   });
 
+  it("permite ao operador filtrar sugestões pelo agendamento no histórico de datas", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.suggestions.list({ appointmentId: 1 });
+    expect(mocks.listAppointmentSuggestions).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1 }));
+  });
+
   it("bloqueia o histórico de outro fornecedor", async () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 99, status: "pending" });
     const caller = appRouter.createCaller(context("supplier"));
@@ -90,6 +100,13 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("operator"));
     await caller.appointments.updateStatus({ appointmentId: 1, status: "scheduled" });
     expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, status: "scheduled", previousStatus: "pending", handledBy: 24 }));
+  });
+
+  it("permite ao operador confirmar a pré-nota e registra o responsável", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, status: "scheduled", preNoteConfirmedAt: null });
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.confirmPreNote({ appointmentId: 1 });
+    expect(mocks.confirmAppointmentPreNote).toHaveBeenCalledWith({ appointmentId: 1, status: "scheduled", operatorId: 24 });
   });
 
   it("registra as datas anterior e nova quando o operador reagenda", async () => {

@@ -134,6 +134,8 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       scheduledFor: appointments.scheduledFor,
       notes: appointments.notes,
       source: appointments.source,
+      preNoteConfirmedAt: appointments.preNoteConfirmedAt,
+      preNoteConfirmedBy: appointments.preNoteConfirmedBy,
       xmlUrl: appointments.xmlUrl,
       xmlFileName: appointments.xmlFileName,
       invoiceNumber: appointments.invoiceNumber,
@@ -195,6 +197,8 @@ export async function listAppointmentsBetween(start: Date, end: Date) {
       scheduledFor: appointments.scheduledFor,
       notes: appointments.notes,
       source: appointments.source,
+      preNoteConfirmedAt: appointments.preNoteConfirmedAt,
+      preNoteConfirmedBy: appointments.preNoteConfirmedBy,
       xmlUrl: appointments.xmlUrl,
       xmlFileName: appointments.xmlFileName,
       invoiceNumber: appointments.invoiceNumber,
@@ -232,10 +236,11 @@ export async function getSuggestionById(id: number) {
   return result[0];
 }
 
-export async function listAppointmentSuggestions(filters: { supplierId?: number; status?: SuggestionStatus } = {}) {
+export async function listAppointmentSuggestions(filters: { appointmentId?: number; supplierId?: number; status?: SuggestionStatus } = {}) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
+  if (filters.appointmentId) conditions.push(eq(appointmentSuggestions.appointmentId, filters.appointmentId));
   if (filters.supplierId) conditions.push(eq(appointmentSuggestions.supplierId, filters.supplierId));
   if (filters.status) conditions.push(eq(appointmentSuggestions.status, filters.status));
   const query = db
@@ -371,6 +376,16 @@ export async function updateAppointmentStatus(input: {
       handledBy: input.handledBy,
       eventNote: input.eventNote ?? null,
     });
+  });
+  return getAppointmentById(input.appointmentId);
+}
+
+export async function confirmAppointmentPreNote(input: { appointmentId: number; status: AppointmentStatus; operatorId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.transaction(async tx => {
+    await tx.update(appointments).set({ preNoteConfirmedAt: new Date(), preNoteConfirmedBy: input.operatorId, updatedAt: new Date() }).where(eq(appointments.id, input.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({ appointmentId: input.appointmentId, previousStatus: input.status, nextStatus: input.status, handledBy: input.operatorId, eventNote: "Pré-nota confirmada pelo operador." });
   });
   return getAppointmentById(input.appointmentId);
 }
