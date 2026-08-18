@@ -187,6 +187,26 @@ export const appRouter = router({
         }
         return listAppointmentHistory(input.appointmentId);
       }),
+    receiptCertificate: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
+        if (ctx.user.role === "supplier" && appointment.supplierId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode emitir este comprovante." });
+        }
+        if (appointment.status !== "received" && appointment.status !== "completed") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "O comprovante fica disponível após a confirmação de recebimento." });
+        }
+        const history = await listAppointmentHistory(appointment.id);
+        const receiptEvent = [...history].reverse().find(event => event.nextStatus === "received");
+        return {
+          appointment,
+          confirmedByName: receiptEvent?.handlerName || "Operador RVD Saúde",
+          confirmedByLogin: receiptEvent?.handlerEmail || "Login não informado",
+          receivedAt: appointment.receivedAt || receiptEvent?.createdAt || appointment.updatedAt,
+        };
+      }),
     delete: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {

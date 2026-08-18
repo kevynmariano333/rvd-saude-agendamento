@@ -162,3 +162,7 @@
 - [ ] Aplicar a mesma ocultação de data não confirmada ao histórico do Fornecedor.
 - [x] Remover qualquer data da coluna de agendamento quando a nota estiver Pendente.
 - [x] Validar tecnicamente que a aba Pendente mostra apenas “Aguardando confirmação”.
+- [x] Criar comprovante de recebimento em PDF com identidade visual da RVD Saúde.
+- [x] Incluir no PDF número da nota, data/hora do recebimento e nome/login de quem confirmou.
+- [x] Disponibilizar o download do PDF apenas para notas Recebidas ou Concluídas do Fornecedor.
+- [x] Validar tecnicamente o PDF como documento para entrega junto com a nota fiscal.

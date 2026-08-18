@@ -125,6 +125,15 @@ describe("procedures de agendamento", () => {
     expect(mocks.listAppointmentHistory).toHaveBeenCalledWith(1);
   });
 
+  it("permite ao fornecedor emitir o comprovante de uma nota recebida", async () => {
+    const receivedAt = new Date("2030-09-01T13:37:00.000Z");
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "received", receivedAt, updatedAt: receivedAt });
+    mocks.listAppointmentHistory.mockResolvedValue([{ nextStatus: "received", createdAt: receivedAt, handlerName: "Operador RVD", handlerEmail: "operador@rvdsaude.com.br" }]);
+    const caller = appRouter.createCaller(context("supplier"));
+    const result = await caller.appointments.receiptCertificate({ appointmentId: 1 });
+    expect(result).toMatchObject({ confirmedByName: "Operador RVD", confirmedByLogin: "operador@rvdsaude.com.br", receivedAt });
+  });
+
   it("permite ao operador filtrar sugestões pelo agendamento no histórico de datas", async () => {
     const caller = appRouter.createCaller(context("operator"));
     await caller.suggestions.list({ appointmentId: 1 });
