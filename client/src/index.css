@@ -24,6 +24,10 @@
   button, input, select, textarea { font: inherit; }
   button { cursor: pointer; }
   :focus-visible { outline: 3px solid #88B8D0; outline-offset: 3px; }
+  main table th:not(:last-child), main table td:not(:last-child) { padding-right: 1.5rem; }
+  main table th:first-child, main table td:first-child { min-width: 13rem; }
+  main table th:nth-child(3), main table td:nth-child(3) { min-width: 8rem; }
+  main table th:nth-child(4), main table td:nth-child(4) { min-width: 9rem; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

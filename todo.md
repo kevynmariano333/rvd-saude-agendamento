@@ -17,3 +17,58 @@
 - [x] Registrar a verificação dos fluxos por perfil na interface autenticada, incluindo solicitação, aprovação, rejeição e conclusão.
 - [x] Expor e validar a consulta auditável do histórico de status com responsável operacional.
 - [x] Preparar uma validação interativa por perfil no navegador sem manter dados temporários após o teste.
+- [x] Criar fluxo de Agendamento Manual que aceite exclusivamente arquivo XML de nota fiscal.
+- [x] Extrair e apresentar dados úteis do XML sem exigir preenchimento manual de campos da nota.
+- [x] Armazenar o XML de forma segura e associá-lo ao agendamento criado.
+- [x] Permitir que o operador identifique agendamentos originados de XML no painel.
+- [x] Cobrir a leitura e as validações essenciais de XML com testes Vitest.
+- [x] Ajustar a nomenclatura, a sequência e a apresentação dos status para o modelo operacional da referência Agiliza.
+- [x] Validar as transições de status atualizadas nos painéis de fornecedor e operador.
+- [x] Substituir o status simplificado pelo ciclo confirmado da referência: Pendente, Agendado, Recebido, Concluído, Backlog e Rejeitado.
+- [x] Atualizar as ações operacionais e os filtros para suportar todos os seis estados do modelo de referência.
+- [x] Validar as transições do novo ciclo e sua exibição nos dois painéis.
+- [x] Ajustar o espaçamento das colunas do painel operacional para manter a leitura dos status e ações em telas largas.
+- [x] Validar visualmente no painel do fornecedor os estados Agendado, Recebido, Concluído, Backlog e Rejeitado.
+- [x] Criar uma aba de Calendário com visualização interativa dos agendamentos por data, horário e status.
+- [x] Registrar sugestões de data e horário enviadas por fornecedores em cada solicitação.
+- [x] Permitir que o operador aceite uma sugestão de fornecedor para agendar o atendimento.
+- [x] Criar um Dashboard operacional com indicadores de volume e distribuição de status.
+- [x] Criar uma aba de Relatórios com recortes por status e fornecedor.
+- [x] Cobrir as regras de sugestão e agenda com testes Vitest.
+- [x] Extrair e armazenar o CNPJ do destinatário quando disponível no XML da nota.
+- [x] Adicionar filtros por número da nota, nome do fornecedor e CNPJ do destinatário.
+- [x] Exibir os dados fiscais relevantes na listagem operacional e nos relatórios.
+- [x] Cobrir a leitura de CNPJ e as regras de filtragem com testes Vitest.
+- [x] Omitir o Código SAP do painel de filtros, mantendo somente os campos fiscais e operacionais solicitados.
+- [x] Criar o botão Agendamentos do Dia para aplicar automaticamente o filtro da data atual e exibir a lista correspondente.
+- [x] Reestruturar a tabela de agendamentos com abas de status, colunas fiscais, ícones de ação e botão Agendar conforme a referência visual.
+- [x] Destacar a aba Todos como visão geral da tabela operacional, seguindo o modelo visual enviado.
+- [x] Extrair e exibir o pedido vinculado à nota quando o XML disponibilizar essa informação.
+- [x] Incluir ações de Recebido, Rejeitado e Reagendar para itens no status Agendado.
+- [x] Registrar no histórico as alterações de data realizadas pelo reagendamento.
+- [x] Exibir os itens concluídos em modo de consulta, sem botão de ação operacional principal.
+- [x] Registrar e exibir o motivo da recusa para itens rejeitados.
+- [x] Permitir resgatar um item rejeitado, retornando-o ao fluxo de tratamento com histórico auditável.
+- [x] Manter filtros, abas e ações operacionais avançadas restritos ao painel do Operador.
+- [x] Abrir modal de Agendar ao clicar na ação da tabela, com data, hora e confirmação pelo operador.
+- [x] Exibir no modal os agendamentos ativos do mesmo fornecedor.
+- [x] Remover a área de sugestões pendentes da aba de Calendário do operador.
+- [x] Exibir horários na grade semanal do calendário, posicionando os agendamentos no dia e na hora correspondentes.
+- [x] Ajustar o rótulo do status inicial para Pendente na central do operador.
+- [x] Criar tela de carregamento com caminhão estilizado e logo RVD Saúde pequeno, inspirada no fluxo da referência.
+- [x] Validar visualmente o painel do fornecedor com evidência dos estados Agendado, Recebido, Concluído, Backlog e Rejeitado.
+- [x] Substituir a navegação lateral por uma barra superior ampla para o painel do operador.
+- [x] Exibir usuário logado, perfil, notificações e logout na barra superior para ambos os perfis.
+- [x] Validar a responsividade e as rotas da nova navegação superior.
+- [x] Validar em mobile a nova navegação superior, incluindo abertura do menu e leitura do cabeçalho.
+- [x] Validar as rotas da navegação superior em operador e fornecedor com evidência verificável.
+- [x] Adicionar botão Recebimento sem Agendamento na central exclusiva do Operador.
+- [x] Abrir modal para carregar XML e registrar automaticamente a nota recebida sem agendamento prévio.
+- [x] Armazenar o XML e os dados fiscais do recebimento avulso com status Recebido e trilha auditável.
+- [x] Cobrir e validar o fluxo de recebimento sem agendamento por XML.
+- [x] Exibir visualmente no histórico do fornecedor os estados Agendado, Recebido, Concluído, Backlog e Rejeitado antes da limpeza dos dados temporários.
+- [x] Capturar pela pré-visualização do projeto os cinco estados do fornecedor exibidos simultaneamente no histórico antes da limpeza.
+- [x] Registrar no contexto uma captura verificável mostrando simultaneamente Agendado, Recebido, Concluído, Backlog e Rejeitado no histórico fornecedor.
+- [x] Documentar textualmente a revisão da captura com os cinco estados visíveis no histórico fornecedor.
+- [x] Adicionar testes Vitest para os filtros de número da nota, fornecedor e CNPJ destinatário.
+- [x] Persistir no histórico auditável a data/hora anterior e nova em cada reagendamento, com testes de validação.

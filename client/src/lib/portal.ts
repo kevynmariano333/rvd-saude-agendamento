@@ -1,11 +1,13 @@
 export type PortalRole = "admin" | "operator" | "supplier";
-export type PortalStatus = "pending" | "approved" | "rejected" | "completed";
+export type PortalStatus = "pending" | "scheduled" | "received" | "completed" | "backlog" | "rejected";
 
 export const statusCopy: Record<PortalStatus, string> = {
   pending: "Pendente",
-  approved: "Aprovado",
-  rejected: "Rejeitado",
+  scheduled: "Agendado",
+  received: "Recebido",
   completed: "Concluído",
+  backlog: "Backlog",
+  rejected: "Rejeitado",
 };
 
 export function isPortalOperator(role: PortalRole) {

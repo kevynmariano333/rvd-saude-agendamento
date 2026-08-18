@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canRequestAppointment, canTransitionAppointment, isOperator } from "./permissions";
+import { canRequestAppointment, canRescueAppointment, canScheduleAppointment, canTransitionAppointment, isOperator } from "./permissions";
 
 describe("regras de perfil e status", () => {
   it("restringe o tratamento operacional aos perfis permitidos", () => {
@@ -11,11 +11,21 @@ describe("regras de perfil e status", () => {
   });
 
   it("permite somente as transições de status definidas", () => {
-    expect(canTransitionAppointment("pending", "approved")).toBe(true);
+    expect(canTransitionAppointment("pending", "scheduled")).toBe(true);
     expect(canTransitionAppointment("pending", "rejected")).toBe(true);
-    expect(canTransitionAppointment("approved", "completed")).toBe(true);
+    expect(canTransitionAppointment("scheduled", "received")).toBe(true);
+    expect(canTransitionAppointment("received", "completed")).toBe(true);
+    expect(canTransitionAppointment("pending", "backlog")).toBe(true);
     expect(canTransitionAppointment("pending", "completed")).toBe(false);
-    expect(canTransitionAppointment("rejected", "approved")).toBe(false);
+    expect(canTransitionAppointment("rejected", "scheduled")).toBe(false);
+  });
+
+  it("restringe o agendamento, o reagendamento e o resgate aos estados corretos", () => {
+    expect(canScheduleAppointment("pending")).toBe(true);
+    expect(canScheduleAppointment("backlog")).toBe(true);
+    expect(canScheduleAppointment("scheduled")).toBe(true);
+    expect(canScheduleAppointment("received")).toBe(false);
+    expect(canRescueAppointment("rejected")).toBe(true);
+    expect(canRescueAppointment("pending")).toBe(false);
   });
 });
-

@@ -1,0 +1,3 @@
+ALTER TABLE `appointmentStatusHistory` MODIFY COLUMN `previousStatus` enum('pending','scheduled','received','completed','backlog','rejected');--> statement-breakpoint
+ALTER TABLE `appointmentStatusHistory` MODIFY COLUMN `nextStatus` enum('pending','scheduled','received','completed','backlog','rejected') NOT NULL;--> statement-breakpoint
+ALTER TABLE `appointments` MODIFY COLUMN `status` enum('pending','scheduled','received','completed','backlog','rejected') NOT NULL DEFAULT 'pending';

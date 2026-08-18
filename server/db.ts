@@ -1,15 +1,18 @@
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, like, lte, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { nanoid } from "nanoid";
 import {
   appointments,
   appointmentStatusHistory,
+  appointmentSuggestions,
   type AppointmentStatus,
   type InsertUser,
+  type SuggestionStatus,
   type UserRole,
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { normalizeCnpj } from "./fiscalFilters";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -97,6 +100,9 @@ export type AppointmentFilters = {
   supplierId?: number;
   status?: AppointmentStatus;
   date?: string;
+  invoiceNumber?: string;
+  supplierName?: string;
+  recipientCnpj?: string;
 };
 
 export async function listAppointments(filters: AppointmentFilters = {}) {
@@ -106,6 +112,12 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
   const conditions = [];
   if (filters.supplierId) conditions.push(eq(appointments.supplierId, filters.supplierId));
   if (filters.status) conditions.push(eq(appointments.status, filters.status));
+  if (filters.invoiceNumber) conditions.push(like(appointments.invoiceNumber, `%${filters.invoiceNumber.trim()}%`));
+  if (filters.supplierName) {
+    const supplierName = `%${filters.supplierName.trim()}%`;
+    conditions.push(or(like(users.name, supplierName), like(appointments.invoiceSupplierName, supplierName)));
+  }
+  if (filters.recipientCnpj) conditions.push(like(appointments.recipientCnpj, `%${normalizeCnpj(filters.recipientCnpj)}%`));
   if (filters.date) {
     const start = new Date(`${filters.date}T00:00:00`);
     const end = new Date(`${filters.date}T23:59:59.999`);
@@ -121,6 +133,16 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       serviceType: appointments.serviceType,
       scheduledFor: appointments.scheduledFor,
       notes: appointments.notes,
+      source: appointments.source,
+      xmlUrl: appointments.xmlUrl,
+      xmlFileName: appointments.xmlFileName,
+      invoiceNumber: appointments.invoiceNumber,
+      invoiceAccessKey: appointments.invoiceAccessKey,
+      purchaseOrder: appointments.purchaseOrder,
+      invoiceSupplierName: appointments.invoiceSupplierName,
+      recipientCnpj: appointments.recipientCnpj,
+      invoiceIssuedAt: appointments.invoiceIssuedAt,
+      rejectionReason: appointments.rejectionReason,
       status: appointments.status,
       createdAt: appointments.createdAt,
     })
@@ -150,11 +172,103 @@ export async function listAppointmentHistory(appointmentId: number) {
       handledBy: appointmentStatusHistory.handledBy,
       handlerName: users.name,
       handlerEmail: users.email,
+      eventNote: appointmentStatusHistory.eventNote,
+      previousScheduledFor: appointmentStatusHistory.previousScheduledFor,
+      nextScheduledFor: appointmentStatusHistory.nextScheduledFor,
     })
     .from(appointmentStatusHistory)
     .leftJoin(users, eq(appointmentStatusHistory.handledBy, users.id))
     .where(eq(appointmentStatusHistory.appointmentId, appointmentId))
     .orderBy(appointmentStatusHistory.createdAt, appointmentStatusHistory.id);
+}
+
+export async function listAppointmentsBetween(start: Date, end: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: appointments.id,
+      supplierId: appointments.supplierId,
+      supplierName: users.name,
+      supplierEmail: users.email,
+      serviceType: appointments.serviceType,
+      scheduledFor: appointments.scheduledFor,
+      notes: appointments.notes,
+      source: appointments.source,
+      xmlUrl: appointments.xmlUrl,
+      xmlFileName: appointments.xmlFileName,
+      invoiceNumber: appointments.invoiceNumber,
+      invoiceAccessKey: appointments.invoiceAccessKey,
+      purchaseOrder: appointments.purchaseOrder,
+      invoiceSupplierName: appointments.invoiceSupplierName,
+      recipientCnpj: appointments.recipientCnpj,
+      invoiceIssuedAt: appointments.invoiceIssuedAt,
+      rejectionReason: appointments.rejectionReason,
+      status: appointments.status,
+      createdAt: appointments.createdAt,
+    })
+    .from(appointments)
+    .innerJoin(users, eq(appointments.supplierId, users.id))
+    .where(and(gte(appointments.scheduledFor, start), lte(appointments.scheduledFor, end)))
+    .orderBy(appointments.scheduledFor);
+}
+
+export async function createAppointmentSuggestion(input: {
+  appointmentId: number;
+  supplierId: number;
+  suggestedFor: Date;
+  notes?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const result = await db.insert(appointmentSuggestions).values({ ...input, notes: input.notes || null, status: "pending" });
+  return getSuggestionById(Number(result[0].insertId));
+}
+
+export async function getSuggestionById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(appointmentSuggestions).where(eq(appointmentSuggestions.id, id)).limit(1);
+  return result[0];
+}
+
+export async function listAppointmentSuggestions(filters: { supplierId?: number; status?: SuggestionStatus } = {}) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (filters.supplierId) conditions.push(eq(appointmentSuggestions.supplierId, filters.supplierId));
+  if (filters.status) conditions.push(eq(appointmentSuggestions.status, filters.status));
+  const query = db
+    .select({
+      id: appointmentSuggestions.id,
+      appointmentId: appointmentSuggestions.appointmentId,
+      suggestedFor: appointmentSuggestions.suggestedFor,
+      notes: appointmentSuggestions.notes,
+      status: appointmentSuggestions.status,
+      createdAt: appointmentSuggestions.createdAt,
+      supplierName: users.name,
+      supplierEmail: users.email,
+      serviceType: appointments.serviceType,
+      appointmentStatus: appointments.status,
+    })
+    .from(appointmentSuggestions)
+    .innerJoin(appointments, eq(appointmentSuggestions.appointmentId, appointments.id))
+    .innerJoin(users, eq(appointmentSuggestions.supplierId, users.id));
+  const filtered = conditions.length ? query.where(and(...conditions)) : query;
+  return filtered.orderBy(desc(appointmentSuggestions.createdAt));
+}
+
+export async function acceptAppointmentSuggestion(input: { suggestionId: number; appointmentStatus: AppointmentStatus; handledBy: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const suggestion = await getSuggestionById(input.suggestionId);
+  if (!suggestion) return undefined;
+  await db.transaction(async tx => {
+    await tx.update(appointmentSuggestions).set({ status: "accepted", handledBy: input.handledBy, respondedAt: new Date() }).where(eq(appointmentSuggestions.id, input.suggestionId));
+    await tx.update(appointments).set({ scheduledFor: suggestion.suggestedFor, status: "scheduled", handledBy: input.handledBy, updatedAt: new Date() }).where(eq(appointments.id, suggestion.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({ appointmentId: suggestion.appointmentId, previousStatus: input.appointmentStatus, nextStatus: "scheduled", handledBy: input.handledBy });
+  });
+  return getAppointmentById(suggestion.appointmentId);
 }
 
 export async function createAppointment(input: {
@@ -183,25 +297,148 @@ export async function createAppointment(input: {
   return getAppointmentById(result);
 }
 
+export async function createManualXmlAppointment(input: {
+  supplierId: number;
+  xmlStorageKey: string;
+  xmlUrl: string;
+  xmlFileName: string;
+  invoiceNumber: string | null;
+  invoiceAccessKey: string | null;
+  purchaseOrder: string | null;
+  invoiceSupplierName: string | null;
+  recipientCnpj: string | null;
+  invoiceIssuedAt: Date | null;
+  serviceDescription: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+
+  const result = await db.transaction(async tx => {
+    const serviceType = input.serviceDescription || (input.invoiceNumber ? `Nota fiscal ${input.invoiceNumber}` : "Nota fiscal XML");
+    const inserted = await tx.insert(appointments).values({
+      supplierId: input.supplierId,
+      serviceType: serviceType.slice(0, 80),
+      scheduledFor: input.invoiceIssuedAt ?? new Date(),
+      notes: "Agendamento manual gerado exclusivamente pelo XML da nota fiscal.",
+      source: "manual_xml",
+      xmlStorageKey: input.xmlStorageKey,
+      xmlUrl: input.xmlUrl,
+      xmlFileName: input.xmlFileName,
+      invoiceNumber: input.invoiceNumber,
+      invoiceAccessKey: input.invoiceAccessKey,
+      purchaseOrder: input.purchaseOrder,
+      invoiceSupplierName: input.invoiceSupplierName,
+      recipientCnpj: input.recipientCnpj,
+      invoiceIssuedAt: input.invoiceIssuedAt,
+      status: "pending",
+    });
+    const appointmentId = Number(inserted[0].insertId);
+    await tx.insert(appointmentStatusHistory).values({
+      appointmentId,
+      previousStatus: null,
+      nextStatus: "pending",
+      handledBy: null,
+    });
+    return appointmentId;
+  });
+  return getAppointmentById(result);
+}
+
 export async function updateAppointmentStatus(input: {
   appointmentId: number;
   previousStatus: AppointmentStatus;
   status: Exclude<AppointmentStatus, "pending">;
   handledBy: number;
+  rejectionReason?: string;
+  eventNote?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
   await db.transaction(async tx => {
     await tx
       .update(appointments)
-      .set({ status: input.status, handledBy: input.handledBy, updatedAt: new Date() })
+      .set({
+        status: input.status,
+        handledBy: input.handledBy,
+        updatedAt: new Date(),
+        ...(input.status === "rejected" ? { rejectionReason: input.rejectionReason?.trim() || "Motivo não informado" } : {}),
+      })
       .where(eq(appointments.id, input.appointmentId));
     await tx.insert(appointmentStatusHistory).values({
       appointmentId: input.appointmentId,
       previousStatus: input.previousStatus,
       nextStatus: input.status,
       handledBy: input.handledBy,
+      eventNote: input.eventNote ?? null,
     });
   });
   return getAppointmentById(input.appointmentId);
+}
+
+export async function scheduleAppointment(input: { appointmentId: number; previousStatus: AppointmentStatus; previousScheduledFor: Date; scheduledFor: Date; handledBy: number; rescheduled: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.transaction(async tx => {
+    await tx.update(appointments).set({ status: "scheduled", scheduledFor: input.scheduledFor, handledBy: input.handledBy, updatedAt: new Date() }).where(eq(appointments.id, input.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({ appointmentId: input.appointmentId, previousStatus: input.previousStatus, nextStatus: "scheduled", handledBy: input.handledBy, eventNote: input.rescheduled ? "Agendamento reagendado pelo operador." : "Agendamento confirmado pelo operador.", previousScheduledFor: input.previousScheduledFor, nextScheduledFor: input.scheduledFor });
+  });
+  return getAppointmentById(input.appointmentId);
+}
+
+export async function rescueAppointment(input: { appointmentId: number; handledBy: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.transaction(async tx => {
+    await tx.update(appointments).set({ status: "pending", rejectionReason: null, handledBy: input.handledBy, updatedAt: new Date() }).where(eq(appointments.id, input.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({ appointmentId: input.appointmentId, previousStatus: "rejected", nextStatus: "pending", handledBy: input.handledBy, eventNote: "Item resgatado para novo tratamento." });
+  });
+  return getAppointmentById(input.appointmentId);
+}
+
+export async function listSupplierActiveAppointments(supplierId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: appointments.id, serviceType: appointments.serviceType, scheduledFor: appointments.scheduledFor, status: appointments.status }).from(appointments).where(and(eq(appointments.supplierId, supplierId), or(eq(appointments.status, "scheduled"), eq(appointments.status, "received")))).orderBy(appointments.scheduledFor);
+}
+
+export async function createUnscheduledReceipt(input: {
+  operatorId: number;
+  xmlStorageKey: string;
+  xmlUrl: string;
+  xmlFileName: string;
+  invoiceNumber: string | null;
+  invoiceAccessKey: string | null;
+  purchaseOrder: string | null;
+  invoiceSupplierName: string | null;
+  recipientCnpj: string | null;
+  invoiceIssuedAt: Date | null;
+  serviceDescription: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const result = await db.transaction(async tx => {
+    const serviceType = input.serviceDescription || (input.invoiceNumber ? `Recebimento NF ${input.invoiceNumber}` : "Recebimento avulso");
+    const inserted = await tx.insert(appointments).values({
+      supplierId: input.operatorId,
+      serviceType: serviceType.slice(0, 80),
+      scheduledFor: input.invoiceIssuedAt ?? new Date(),
+      notes: "Recebimento registrado sem agendamento prévio, a partir do XML da nota fiscal.",
+      source: "manual_xml",
+      xmlStorageKey: input.xmlStorageKey,
+      xmlUrl: input.xmlUrl,
+      xmlFileName: input.xmlFileName,
+      invoiceNumber: input.invoiceNumber,
+      invoiceAccessKey: input.invoiceAccessKey,
+      purchaseOrder: input.purchaseOrder,
+      invoiceSupplierName: input.invoiceSupplierName,
+      recipientCnpj: input.recipientCnpj,
+      invoiceIssuedAt: input.invoiceIssuedAt,
+      status: "received",
+      handledBy: input.operatorId,
+    });
+    const appointmentId = Number(inserted[0].insertId);
+    await tx.insert(appointmentStatusHistory).values({ appointmentId, previousStatus: null, nextStatus: "received", handledBy: input.operatorId, eventNote: "Recebimento registrado sem agendamento prévio." });
+    return appointmentId;
+  });
+  return getAppointmentById(result);
 }

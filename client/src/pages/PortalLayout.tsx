@@ -1,75 +1,20 @@
 import { Button } from "@/components/ui/button";
 import { type PortalRole, isPortalOperator } from "@/lib/portal";
-import { CalendarDays, ClipboardList, LogOut, Menu, X } from "lucide-react";
+import { BarChart3, Bell, CalendarDays, ChevronDown, ClipboardList, LayoutDashboard, Lightbulb, LogOut, Menu, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 
 type PortalUser = { id: number; name: string | null; email: string | null; role: string };
 
-export default function PortalLayout({
-  user,
-  title,
-  subtitle,
-  children,
-  onLogout,
-}: {
-  user: PortalUser;
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-  onLogout: () => void;
-}) {
-  const [open, setOpen] = useState(false);
+export default function PortalLayout({ user, title, subtitle, children, onLogout }: { user: PortalUser; title: string; subtitle: string; children: React.ReactNode; onLogout: () => void }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [location, setLocation] = useLocation();
   const role = user.role as PortalRole;
   const isOperator = isPortalOperator(role);
   const nav = isOperator
-    ? [{ label: "Agendamentos", path: "/operador", icon: ClipboardList }]
-    : [{ label: "Meus agendamentos", path: "/fornecedor", icon: CalendarDays }];
-
-  return (
-    <div className="min-h-screen bg-white">
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-rvd-plum-soft bg-white px-5 py-6 transition-transform duration-200 ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}>
-        <div className="flex items-center justify-between gap-3 border-b border-rvd-plum-soft pb-6">
-          <button onClick={() => setLocation(isOperator ? "/operador" : "/fornecedor")} className="flex min-w-0 items-center gap-3 text-left">
-            <img src="/manus-storage/RVD-Saude_f78a565b.png" alt="RVD Saúde" className="h-11 w-11 rounded-full object-cover" />
-            <div className="min-w-0">
-              <p className="font-display text-sm font-extrabold leading-none text-rvd-plum">RVD Saúde</p>
-              <p className="mt-1 text-xs font-medium text-rvd-plum">Agendamento</p>
-            </div>
-          </button>
-          <button onClick={() => setOpen(false)} className="rounded-xl p-2 text-rvd-plum lg:hidden" aria-label="Fechar menu"><X className="size-5" /></button>
-        </div>
-
-        <p className="mt-8 px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-rvd-plum">Navegação</p>
-        <nav className="mt-3 space-y-1">
-          {nav.map(item => {
-            const active = location === item.path;
-            return <button key={item.path} onClick={() => { setLocation(item.path); setOpen(false); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold transition ${active ? "bg-rvd-plum text-white" : "text-rvd-plum hover:bg-rvd-plum-pale"}`}>
-              <item.icon className="size-4" />{item.label}
-            </button>;
-          })}
-        </nav>
-
-        <div className="mt-auto rounded-2xl bg-rvd-blue-pale p-4">
-          <p className="truncate text-sm font-bold text-rvd-plum">{user.name || "Acesso RVD"}</p>
-          <p className="mt-1 truncate text-xs text-rvd-plum">{user.email}</p>
-          <p className="mt-3 inline-flex rounded-full bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-rvd-plum">{isOperator ? "Operador" : "Fornecedor"}</p>
-          <Button onClick={onLogout} variant="ghost" className="mt-4 h-auto w-full justify-start gap-2 px-0 py-1 text-rvd-plum hover:bg-transparent hover:text-rvd-plum"><LogOut className="size-4" />Encerrar sessão</Button>
-        </div>
-      </aside>
-
-      {open && <button className="fixed inset-0 z-40 bg-rvd-plum/30 lg:hidden" onClick={() => setOpen(false)} aria-label="Fechar navegação" />}
-      <main className="min-h-screen lg:pl-72">
-        <header className="flex min-h-24 items-center justify-between border-b border-rvd-plum-soft px-5 py-5 sm:px-8 lg:px-10">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setOpen(true)} className="rounded-xl border border-rvd-plum-soft p-2 text-rvd-plum lg:hidden" aria-label="Abrir menu"><Menu className="size-5" /></button>
-            <div><h1 className="font-display text-xl font-extrabold tracking-tight text-rvd-plum sm:text-2xl">{title}</h1><p className="mt-1 text-sm text-rvd-plum">{subtitle}</p></div>
-          </div>
-          <div className="hidden rounded-full bg-rvd-plum-pale px-4 py-2 text-xs font-bold text-rvd-plum sm:block">RVD Saúde Agendamento</div>
-        </header>
-        <div className="mx-auto max-w-7xl p-5 sm:p-8 lg:p-10">{children}</div>
-      </main>
-    </div>
-  );
+    ? [{ label: "Dashboard", path: "/operador/dashboard", icon: LayoutDashboard }, { label: "Agendamentos", path: "/operador", icon: ClipboardList }, { label: "Calendário", path: "/operador/calendario", icon: CalendarDays }, { label: "Relatórios", path: "/operador/relatorios", icon: BarChart3 }]
+    : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }, { label: "Sugestões", path: "/fornecedor/sugestoes", icon: Lightbulb }];
+  const go = (path: string) => { setLocation(path); setMobileOpen(false); };
+  return <div className="min-h-screen bg-white"><header className="sticky top-0 z-50 border-b border-rvd-plum-soft bg-white/95 backdrop-blur"><div className="mx-auto flex min-h-24 max-w-[1440px] items-center gap-4 px-5 sm:px-8"><button onClick={() => go(isOperator ? "/operador/dashboard" : "/fornecedor")} className="flex shrink-0 items-center gap-3 text-left"><img src="/manus-storage/RVD-Saude_f78a565b.png" alt="RVD Saúde" className="size-11 rounded-2xl object-cover shadow-sm" /><div className="hidden min-w-0 sm:block"><p className="font-display text-base font-extrabold leading-none text-rvd-plum">RVD Saúde</p><p className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-rvd-plum">Agendamento</p></div></button><nav className="hidden min-w-0 flex-1 items-center justify-center lg:flex"><div className="flex items-center gap-1 rounded-2xl bg-rvd-plum-pale p-1.5">{nav.map(item => { const active = location === item.path || (item.path === "/operador" && location === "/operador"); const Icon = item.icon; return <button key={item.path} onClick={() => go(item.path)} className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition ${active ? "bg-white text-rvd-plum shadow-sm" : "text-rvd-plum hover:bg-white/70"}`}><Icon className="size-4" />{item.label}</button>; })}</div></nav><div className="ml-auto flex shrink-0 items-center gap-2"><button onClick={() => setMobileOpen(value => !value)} className="rounded-xl border border-rvd-plum-soft p-2 text-rvd-plum lg:hidden" aria-label="Abrir navegação">{mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}</button><button title="Notificações" className="relative hidden rounded-xl p-2.5 text-rvd-plum hover:bg-rvd-plum-pale sm:block"><Bell className="size-5" /><span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-rvd-plum" /></button><button onClick={() => setProfileOpen(value => !value)} className="flex items-center gap-2 rounded-xl border border-rvd-plum-soft p-1.5 text-left hover:bg-rvd-plum-pale"><span className="flex size-9 items-center justify-center rounded-lg bg-rvd-blue text-rvd-plum"><UserRound className="size-5" /></span><span className="hidden max-w-36 sm:block"><span className="block truncate text-sm font-bold text-rvd-plum">{user.name || "Acesso RVD"}</span><span className="block text-[10px] font-bold uppercase tracking-wide text-rvd-plum">{isOperator ? "Operador" : "Fornecedor"}</span></span><ChevronDown className="mr-1 hidden size-4 text-rvd-plum sm:block" /></button></div></div>{mobileOpen && <div className="border-t border-rvd-plum-soft bg-white px-5 py-3 lg:hidden"><nav className="flex flex-wrap gap-2">{nav.map(item => { const Icon = item.icon; const active = location === item.path; return <button key={item.path} onClick={() => go(item.path)} className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold ${active ? "bg-rvd-plum text-white" : "bg-rvd-plum-pale text-rvd-plum"}`}><Icon className="size-4" />{item.label}</button>; })}</nav></div>}{profileOpen && <div className="absolute right-5 top-[5.5rem] w-72 rounded-2xl border border-rvd-plum-soft bg-white p-4 shadow-xl sm:right-8"><p className="truncate font-display text-sm font-extrabold text-rvd-plum">{user.name || "Acesso RVD"}</p><p className="mt-1 truncate text-xs text-rvd-plum">{user.email}</p><p className="mt-3 inline-flex rounded-full bg-rvd-plum-pale px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">{isOperator ? "Operador" : "Fornecedor"}</p><Button onClick={onLogout} variant="ghost" className="mt-4 w-full justify-start text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"><LogOut className="size-4" />Encerrar sessão</Button></div>}</header><main><div className="mx-auto max-w-[1440px] px-5 py-7 sm:px-8 lg:px-10"><div className="flex flex-col gap-2 border-b border-rvd-plum-soft pb-6 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="font-display text-2xl font-extrabold tracking-tight text-rvd-plum sm:text-3xl">{title}</h1><p className="mt-1 text-sm text-rvd-plum">{subtitle}</p></div><div className="hidden rounded-full bg-rvd-plum-pale px-4 py-2 text-xs font-bold text-rvd-plum md:block">RVD Saúde Agendamento</div></div><div className="pt-7">{children}</div></div></main></div>;
 }
