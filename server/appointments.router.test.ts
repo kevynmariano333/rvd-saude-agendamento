@@ -3,12 +3,16 @@ import type { User } from "../drizzle/schema";
 
 const mocks = vi.hoisted(() => ({
   createAppointment: vi.fn(),
+  createAppointmentMessage: vi.fn(),
   confirmAppointmentPreNote: vi.fn(),
   getAppointmentById: vi.fn(),
   getUserByEmail: vi.fn(),
   listAppointmentHistory: vi.fn(),
+  listAppointmentMessages: vi.fn(),
   listAppointments: vi.fn(),
   listAppointmentSuggestions: vi.fn(),
+  listUnreadAppointmentMessages: vi.fn(),
+  markAppointmentMessagesRead: vi.fn(),
   touchUserSignIn: vi.fn(),
   updateAppointmentStatus: vi.fn(),
   createLocalUser: vi.fn(),
@@ -41,6 +45,7 @@ describe("procedures de agendamento", () => {
     mocks.createAppointment.mockResolvedValue({ id: 1, status: "pending" });
     mocks.confirmAppointmentPreNote.mockResolvedValue({ id: 1, status: "scheduled", preNoteConfirmedAt: new Date() });
     mocks.listAppointmentHistory.mockResolvedValue([]);
+    mocks.listAppointmentMessages.mockResolvedValue([]);
     mocks.listAppointments.mockResolvedValue([]);
     mocks.listAppointmentSuggestions.mockResolvedValue([]);
   });
@@ -124,5 +129,29 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("operator"));
     await caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml });
     expect(mocks.createUnscheduledReceipt).toHaveBeenCalledWith(expect.objectContaining({ operatorId: 24, invoiceNumber: "987654", invoiceSupplierName: "Fornecedor XML", recipientCnpj: "12345678000199" }));
+  });
+
+  it("permite que o fornecedor envie uma mensagem no próprio agendamento", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.createAppointmentMessage.mockResolvedValue(17);
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.messages.send({ appointmentId: 1, body: "Posso antecipar a entrega?" });
+    expect(mocks.createAppointmentMessage).toHaveBeenCalledWith({ appointmentId: 1, senderId: 12, body: "Posso antecipar a entrega?", senderIsOperator: false });
+  });
+
+  it("bloqueia o chat de um agendamento que não pertence ao fornecedor", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 99, status: "scheduled" });
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.messages.list({ appointmentId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("marca mensagens como lidas e entrega as notificações do perfil atual", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.listUnreadAppointmentMessages.mockResolvedValue([]);
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.messages.list({ appointmentId: 1 });
+    await caller.messages.notifications();
+    expect(mocks.markAppointmentMessagesRead).toHaveBeenCalledWith({ appointmentId: 1, userId: 24, isOperator: true });
+    expect(mocks.listUnreadAppointmentMessages).toHaveBeenCalledWith({ userId: 24, isOperator: true });
   });
 });

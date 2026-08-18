@@ -1,8 +1,9 @@
-import { and, desc, eq, gte, like, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, like, lte, ne, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { nanoid } from "nanoid";
 import {
   appointments,
+  appointmentMessages,
   appointmentStatusHistory,
   appointmentSuggestions,
   type AppointmentStatus,
@@ -183,6 +184,47 @@ export async function listAppointmentHistory(appointmentId: number) {
     .leftJoin(users, eq(appointmentStatusHistory.handledBy, users.id))
     .where(eq(appointmentStatusHistory.appointmentId, appointmentId))
     .orderBy(appointmentStatusHistory.createdAt, appointmentStatusHistory.id);
+}
+
+export async function listAppointmentMessages(appointmentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({ id: appointmentMessages.id, appointmentId: appointmentMessages.appointmentId, senderId: appointmentMessages.senderId, senderName: users.name, senderRole: users.role, body: appointmentMessages.body, createdAt: appointmentMessages.createdAt })
+    .from(appointmentMessages)
+    .innerJoin(users, eq(appointmentMessages.senderId, users.id))
+    .where(eq(appointmentMessages.appointmentId, appointmentId))
+    .orderBy(appointmentMessages.createdAt, appointmentMessages.id);
+}
+
+export async function createAppointmentMessage(input: { appointmentId: number; senderId: number; body: string; senderIsOperator: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const now = new Date();
+  const result = await db.insert(appointmentMessages).values({ appointmentId: input.appointmentId, senderId: input.senderId, body: input.body, operatorReadAt: input.senderIsOperator ? now : null, supplierReadAt: input.senderIsOperator ? null : now });
+  return Number(result[0].insertId);
+}
+
+export async function markAppointmentMessagesRead(input: { appointmentId: number; userId: number; isOperator: boolean }) {
+  const db = await getDb();
+  if (!db) return;
+  const unreadColumn = input.isOperator ? appointmentMessages.operatorReadAt : appointmentMessages.supplierReadAt;
+  await db.update(appointmentMessages).set(input.isOperator ? { operatorReadAt: new Date() } : { supplierReadAt: new Date() }).where(and(eq(appointmentMessages.appointmentId, input.appointmentId), ne(appointmentMessages.senderId, input.userId), isNull(unreadColumn)));
+}
+
+export async function listUnreadAppointmentMessages(input: { userId: number; isOperator: boolean }) {
+  const db = await getDb();
+  if (!db) return [];
+  const unreadColumn = input.isOperator ? appointmentMessages.operatorReadAt : appointmentMessages.supplierReadAt;
+  const scope = input.isOperator ? [] : [eq(appointments.supplierId, input.userId)];
+  return db
+    .select({ id: appointmentMessages.id, appointmentId: appointmentMessages.appointmentId, invoiceNumber: appointments.invoiceNumber, serviceType: appointments.serviceType, senderName: users.name, body: appointmentMessages.body, createdAt: appointmentMessages.createdAt })
+    .from(appointmentMessages)
+    .innerJoin(appointments, eq(appointmentMessages.appointmentId, appointments.id))
+    .innerJoin(users, eq(appointmentMessages.senderId, users.id))
+    .where(and(ne(appointmentMessages.senderId, input.userId), isNull(unreadColumn), ...scope))
+    .orderBy(desc(appointmentMessages.createdAt))
+    .limit(8);
 }
 
 export async function listAppointmentsBetween(start: Date, end: Date) {

@@ -112,9 +112,28 @@ export const appointmentSuggestions = mysqlTable(
   ]
 );
 
+export const appointmentMessages = mysqlTable(
+  "appointmentMessages",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    appointmentId: int("appointmentId")
+      .notNull()
+      .references(() => appointments.id, { onDelete: "cascade" }),
+    senderId: int("senderId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    operatorReadAt: datetime("operatorReadAt", { mode: "date" }),
+    supplierReadAt: datetime("supplierReadAt", { mode: "date" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [index("appointment_messages_appointment_idx").on(table.appointmentId, table.createdAt)]
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Appointment = typeof appointments.$inferSelect;
 export type InsertAppointment = typeof appointments.$inferInsert;
 export type AppointmentStatusHistory = typeof appointmentStatusHistory.$inferSelect;
 export type AppointmentSuggestion = typeof appointmentSuggestions.$inferSelect;
+export type AppointmentMessage = typeof appointmentMessages.$inferSelect;

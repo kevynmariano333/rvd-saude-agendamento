@@ -8,15 +8,19 @@ import {
   createManualXmlAppointment,
   createUnscheduledReceipt,
   confirmAppointmentPreNote,
+  createAppointmentMessage,
   createLocalUser,
   acceptAppointmentSuggestion,
   getAppointmentById,
   getUserByEmail,
   listAppointmentHistory,
+  listAppointmentMessages,
   listAppointments,
   listAppointmentsBetween,
   listAppointmentSuggestions,
+  listUnreadAppointmentMessages,
   listSupplierActiveAppointments,
+  markAppointmentMessagesRead,
   rescueAppointment,
   scheduleAppointment,
   touchUserSignIn,
@@ -54,6 +58,15 @@ function publicUser(user: { id: number; name: string | null; email: string | nul
 
 function assertOperator(role: "admin" | "operator" | "supplier") {
   if (!isOperator(role)) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito ao perfil de operador." });
+}
+
+async function getAccessibleAppointment(user: { id: number; role: "admin" | "operator" | "supplier" }, appointmentId: number) {
+  const appointment = await getAppointmentById(appointmentId);
+  if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+  if (!isOperator(user.role) && appointment.supplierId !== user.id) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode acessar as mensagens deste agendamento." });
+  }
+  return appointment;
 }
 
 function decodeXmlBase64(value: string) {
@@ -264,6 +277,23 @@ export const appRouter = router({
         if (!canApplySuggestion(suggestion.appointmentStatus)) throw new TRPCError({ code: "BAD_REQUEST", message: "O agendamento não pode receber esta sugestão." });
         return acceptAppointmentSuggestion({ suggestionId: input.suggestionId, appointmentStatus: suggestion.appointmentStatus, handledBy: ctx.user.id });
       }),
+  }),
+  messages: router({
+    list: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        await getAccessibleAppointment(ctx.user, input.appointmentId);
+        await markAppointmentMessagesRead({ appointmentId: input.appointmentId, userId: ctx.user.id, isOperator: isOperator(ctx.user.role) });
+        return listAppointmentMessages(input.appointmentId);
+      }),
+    send: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive(), body: z.string().trim().min(1, "Digite uma mensagem.").max(1000) }))
+      .mutation(async ({ ctx, input }) => {
+        await getAccessibleAppointment(ctx.user, input.appointmentId);
+        const id = await createAppointmentMessage({ appointmentId: input.appointmentId, senderId: ctx.user.id, body: input.body.trim(), senderIsOperator: isOperator(ctx.user.role) });
+        return { id };
+      }),
+    notifications: protectedProcedure.query(({ ctx }) => listUnreadAppointmentMessages({ userId: ctx.user.id, isOperator: isOperator(ctx.user.role) })),
   }),
   calendar: router({
     list: protectedProcedure

@@ -85,3 +85,6 @@
 - [x] Usar a data e hora do registro do XML, em vez da emissão da NF, no recebimento sem agendamento.
 - [x] Cobrir a data de registro do recebimento avulso com teste automatizado.
 - [x] Exibir os contadores numéricos apenas nas abas Pendente e Agendado da central do Operador.
+- [x] Criar mensagens persistentes vinculadas a cada agendamento, com autorização para fornecedor e operador.
+- [x] Abrir o chat do agendamento pelo ícone de mensagem da tabela e permitir o envio entre os dois perfis.
+- [x] Exibir no sino da barra superior a contagem e a lista de mensagens novas das notas/agendamentos.
