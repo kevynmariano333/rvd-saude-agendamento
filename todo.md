@@ -117,6 +117,9 @@
 - [ ] Validar no navegador o login de uma conta de Operador já existente antes do teste, sem criar cadastro de Operador no mesmo fluxo.
 - [ ] Registrar evidência persistida e verificável do login de Operador não demo já existente, incluindo identificação da conta e abertura do painel `/operador`.
 - [ ] Retomar a validação da conta existente de Operador quando o usuário tiver uma senha disponível.
+- [ ] Validar no navegador o login de uma conta de Operador previamente existente no banco antes desta rodada, sem usar `admin/admin` e sem criar novo cadastro.
+- [ ] Registrar evidência persistida do login dessa conta de Operador previamente existente, incluindo identificação da conta e abertura de `/operador`.
+- [ ] Registrar o bloqueio da validação caso o usuário não disponha da senha da conta existente.
 - [ ] Identificar e registrar as notas de teste nº 5676 com seus registros vinculados antes da exclusão.
 - [x] Remover as duas notas de teste nº 5676 com seus históricos e mensagens vinculados.
 - [x] Criar uma área de exclusão de notas exclusiva para Administrador.

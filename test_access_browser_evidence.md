@@ -37,3 +37,9 @@ No menu da conta, o painel confirmou a razão social **Fornecedor de Validação
 A sessão do novo Fornecedor foi encerrada e, na tela de acesso, as credenciais persistidas foram preenchidas com o perfil **Fornecedor** já selecionado. O próximo envio validará a abertura do painel sem criação de conta adicional.
 
 O login da conta já cadastrada foi enviado em uma nova sessão. O navegador abriu `/fornecedor` e mostrou novamente **Fornecedor de Validação RVD**, o perfil **Fornecedor**, suas abas e o formulário de solicitações. O cadastro, o novo login e a abertura do painel do Fornecedor foram, assim, validados em sessão isolada.
+
+Em 18 de agosto de 2026, a persistência da conta não demonstrativa **Operador de Validação RVD** foi confirmada no banco antes da nova autenticação. A sessão administrativa foi aberta apenas para encerrar o perfil atual e iniciar essa validação em uma sessão separada.
+
+A sessão administrativa foi encerrada e o perfil Operador foi selecionado na tela de login. A autenticação seguinte usará o e-mail da conta persistida, não o login de demonstração `admin`.
+
+Após a confirmação de que a conta já existia no banco, suas credenciais foram enviadas em uma sessão nova. O navegador abriu `/operador` e exibiu **Operador de Validação RVD** com o perfil **Operador**, sem disparar nenhum cadastro novo e sem usar o acesso `admin/admin`. Essa evidência é distinta do fluxo de demonstração.
