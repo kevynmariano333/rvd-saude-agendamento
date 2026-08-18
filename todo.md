@@ -151,3 +151,12 @@
 - [x] Validar tecnicamente o envio unificado com sugestão no painel do Fornecedor.
 - [x] Preservar o histórico de agendamentos no painel do Fornecedor.
 - [x] Reorganizar o histórico para facilitar o entendimento de status, datas e próximas ações pelo Fornecedor.
+- [ ] Ocultar data e hora de agendamento para notas Pendentes ou em Backlog.
+- [ ] Mostrar “Aguardando confirmação” antes de o Operador confirmar data e horário.
+- [ ] Exibir data e hora somente para itens Agendados, Recebidos ou Concluídos.
+- [ ] Cobrir a regra de exibição de data confirmada com testes Vitest.
+- [ ] Atualizar o histórico do Fornecedor e os detalhes da nota para mostrar “Aguardando confirmação” antes do agendamento.
+- [ ] Adicionar cobertura de componente para a apresentação de data confirmada e de aguardo nos painéis afetados.
+- [x] Corrigir a coluna de agendamento do Operador para exibir “Aguardando confirmação” em notas Pendentes ou Backlog.
+- [x] Ajustar os detalhes da nota para não exibir data e hora antes da confirmação do agendamento.
+- [ ] Aplicar a mesma ocultação de data não confirmada ao histórico do Fornecedor.

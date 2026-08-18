@@ -25,3 +25,7 @@ export function formatAppointmentDate(value: Date | string) {
 export function getAppointmentMomentForDisplay(input: { status: PortalStatus; scheduledFor: Date | string; receivedAt?: Date | string | null }) {
   return input.status === "received" && input.receivedAt ? input.receivedAt : input.scheduledFor;
 }
+
+export function hasConfirmedAppointmentMoment(status: PortalStatus) {
+  return status === "scheduled" || status === "received" || status === "completed";
+}
