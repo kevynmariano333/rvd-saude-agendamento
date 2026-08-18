@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { type PortalRole, isPortalAdmin, isPortalOperator } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
-import { BarChart3, Bell, CalendarDays, ChevronDown, ClipboardList, LayoutDashboard, Lightbulb, LogOut, Menu, MessageCircle, ShieldCheck, UserRound, X } from "lucide-react";
+import { BarChart3, Bell, CalendarDays, ChevronDown, ClipboardList, LayoutDashboard, LogOut, Menu, MessageCircle, ShieldCheck, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 
@@ -21,7 +21,7 @@ export default function PortalLayout({ user, title, subtitle, children, onLogout
   const unreadCount = notifications.data?.length ?? 0;
   const nav = isOperator
     ? [{ label: "Dashboard", path: "/operador/dashboard", icon: LayoutDashboard }, { label: "Agendamentos", path: "/operador", icon: ClipboardList }, { label: "Calendário", path: "/operador/calendario", icon: CalendarDays }, { label: "Relatórios", path: "/operador/relatorios", icon: BarChart3 }, ...(isAdmin ? [{ label: "Administrar notas", path: "/operador/notas", icon: ShieldCheck }] : [])]
-    : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }, { label: "Sugestões", path: "/fornecedor/sugestoes", icon: Lightbulb }];
+    : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }];
   const go = (path: string) => { setLocation(path); setMobileOpen(false); };
   const finishLogout = async () => {
     try {

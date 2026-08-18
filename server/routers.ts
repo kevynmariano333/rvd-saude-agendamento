@@ -215,13 +215,17 @@ export const appRouter = router({
         return createAppointment({ ...input, scheduledFor: date, supplierId: ctx.user.id });
       }),
     createManualXml: protectedProcedure
-      .input(z.object({ fileName: z.string().min(5).max(255), xmlBase64: z.string().min(4).max(2_800_000) }))
+      .input(z.object({ fileName: z.string().min(5).max(255), xmlBase64: z.string().min(4).max(2_800_000), suggestedFor: z.string().datetime().optional(), suggestionNotes: z.string().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {
         if (!canRequestAppointment(ctx.user.role)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Somente fornecedores podem criar agendamentos manuais." });
         }
         if (!input.fileName.toLowerCase().endsWith(".xml")) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Envie apenas o arquivo XML da nota fiscal." });
+        }
+        const suggestedFor = input.suggestedFor ? new Date(input.suggestedFor) : undefined;
+        if (suggestedFor && (Number.isNaN(suggestedFor.getTime()) || suggestedFor.getTime() <= Date.now())) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A sugestão de data e horário precisa ser futura." });
         }
         const content = decodeXmlBase64(input.xmlBase64);
         let invoice;
@@ -244,6 +248,8 @@ export const appRouter = router({
           recipientCnpj: invoice.recipientCnpj,
           invoiceIssuedAt: invoice.issuedAt,
           serviceDescription: invoice.serviceDescription,
+          suggestedFor,
+          suggestionNotes: input.suggestionNotes,
         });
       }),
     registerUnscheduledReceipt: protectedProcedure

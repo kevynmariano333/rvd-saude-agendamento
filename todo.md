@@ -145,3 +145,9 @@
 - [x] Registrar evidência verificável da atualização automática sem reload nos painéis de Operador e Fornecedor.
 - [x] Adicionar teste de integração para confirmar que o recebimento persiste e retorna `receivedAt` na listagem.
 - [x] Validar tecnicamente o ciclo de atualização em dois perfis que usam o mesmo cliente de consultas global.
+- [x] Requisito revisado: não manter o XML como único fluxo isolado no painel do Fornecedor.
+- [x] Unificar o envio de agendamento do Fornecedor com sugestão de data e horário no mesmo formulário.
+- [x] Remover a opção Portal separada e simplificar a navegação de solicitação do Fornecedor.
+- [x] Validar tecnicamente o envio unificado com sugestão no painel do Fornecedor.
+- [x] Preservar o histórico de agendamentos no painel do Fornecedor.
+- [x] Reorganizar o histórico para facilitar o entendimento de status, datas e próximas ações pelo Fornecedor.

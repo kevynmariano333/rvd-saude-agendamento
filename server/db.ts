@@ -377,6 +377,8 @@ export async function createManualXmlAppointment(input: {
   recipientCnpj: string | null;
   invoiceIssuedAt: Date | null;
   serviceDescription: string | null;
+  suggestedFor?: Date;
+  suggestionNotes?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
@@ -407,6 +409,15 @@ export async function createManualXmlAppointment(input: {
       nextStatus: "pending",
       handledBy: null,
     });
+    if (input.suggestedFor) {
+      await tx.insert(appointmentSuggestions).values({
+        appointmentId,
+        supplierId: input.supplierId,
+        suggestedFor: input.suggestedFor,
+        notes: input.suggestionNotes?.trim() || null,
+        status: "pending",
+      });
+    }
     return appointmentId;
   });
   return getAppointmentById(result);

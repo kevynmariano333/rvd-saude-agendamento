@@ -4,6 +4,7 @@ import type { User } from "../drizzle/schema";
 const mocks = vi.hoisted(() => ({
   createAppointment: vi.fn(),
   createAppointmentSuggestion: vi.fn(),
+  createManualXmlAppointment: vi.fn(),
   createAppointmentMessage: vi.fn(),
   confirmAppointmentPreNote: vi.fn(),
   getAppointmentById: vi.fn(),
@@ -199,6 +200,14 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("operator"));
     await caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml });
     expect(mocks.createUnscheduledReceipt).toHaveBeenCalledWith(expect.objectContaining({ operatorId: 24, invoiceNumber: "987654", invoiceSupplierName: "Fornecedor XML", recipientCnpj: "12345678000199" }));
+  });
+
+  it("permite ao fornecedor enviar XML com sugestão opcional de data e horário", async () => {
+    mocks.createManualXmlAppointment.mockResolvedValue({ id: 11, status: "pending" });
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><emit><xNome>Fornecedor XML</xNome></emit><dest><CNPJ>12.345.678/0001-99</CNPJ></dest></infNFe></NFe>').toString("base64");
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, suggestedFor: "2030-09-01T10:00:00.000Z", suggestionNotes: "Preferência pela manhã" });
+    expect(mocks.createManualXmlAppointment).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 12, suggestedFor: new Date("2030-09-01T10:00:00.000Z"), suggestionNotes: "Preferência pela manhã" }));
   });
 
   it("permite que o fornecedor envie uma mensagem no próprio agendamento", async () => {
