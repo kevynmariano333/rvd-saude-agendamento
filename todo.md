@@ -88,3 +88,4 @@
 - [x] Criar mensagens persistentes vinculadas a cada agendamento, com autorização para fornecedor e operador.
 - [x] Abrir o chat do agendamento pelo ícone de mensagem da tabela e permitir o envio entre os dois perfis.
 - [x] Exibir no sino da barra superior a contagem e a lista de mensagens novas das notas/agendamentos.
+- [x] Exibir o ícone de agendar ou reagendar somente para notas com status Agendado.
