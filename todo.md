@@ -173,3 +173,6 @@
 - [x] Exibir o botão de PDF ao lado de Conversar para a nota Agendada.
 - [x] Inserir o logo oficial da RVD Saúde no cabeçalho do PDF de agendamento.
 - [x] Validar tecnicamente o PDF com o logo e a identidade visual da marca.
+- [x] Corrigir o carregamento, o tamanho e o alinhamento do logo oficial no cabeçalho do PDF.
+- [x] Inserir um QR de validação no PDF para confirmação do agendamento pelo celular.
+- [x] Disponibilizar uma página pública e assinada de confirmação acessada pelo QR do comprovante.

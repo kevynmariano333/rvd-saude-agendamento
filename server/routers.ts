@@ -39,6 +39,8 @@ import { scryptSync, timingSafeEqual } from "node:crypto";
 import { nanoid } from "nanoid";
 import { storagePut } from "./storage";
 import { MAX_XML_BYTES, parseInvoiceXml } from "./xmlInvoice";
+import { ENV } from "./_core/env";
+import { createAppointmentValidationToken, readAppointmentValidationToken } from "./appointmentValidation";
 
 const localProfileSchema = z.enum(["operator", "supplier"]);
 const statusSchema = z.enum(appointmentStatuses);
@@ -170,6 +172,16 @@ export const appRouter = router({
     }),
   }),
   appointments: router({
+    publicConfirmation: publicProcedure
+      .input(z.object({ token: z.string().min(1).max(1000) }))
+      .query(async ({ input }) => {
+        const validation = readAppointmentValidationToken(input.token, ENV.cookieSecret);
+        if (!validation) return { valid: false as const };
+        const appointment = await getAppointmentById(validation.appointmentId);
+        const scheduledFor = appointment?.scheduledFor;
+        if (!appointment || appointment.status !== "scheduled" || !scheduledFor || scheduledFor.getTime() !== validation.scheduledForTimestamp) return { valid: false as const };
+        return { valid: true as const, invoiceNumber: appointment.invoiceNumber, scheduledFor };
+      }),
     list: protectedProcedure
       .input(z.object({ date: z.string().optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional() }).optional())
       .query(async ({ ctx, input }) => {
@@ -206,6 +218,7 @@ export const appRouter = router({
           confirmedByLogin: scheduleEvent?.handlerEmail || "Login não informado",
           confirmedAt: scheduleEvent?.createdAt || appointment.updatedAt,
           scheduledFor: appointment.scheduledFor,
+          validationToken: createAppointmentValidationToken({ appointmentId: appointment.id, scheduledForTimestamp: appointment.scheduledFor.getTime() }, ENV.cookieSecret),
         };
       }),
     delete: protectedProcedure

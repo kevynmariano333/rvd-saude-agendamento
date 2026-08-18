@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import QRCode from "qrcode";
 
 export type ReceiptCertificateData = {
   invoiceNumber: string | null;
@@ -8,6 +9,7 @@ export type ReceiptCertificateData = {
   scheduledFor: Date | string;
   confirmedByName: string;
   confirmedByLogin: string;
+  validationUrl: string;
 };
 
 function formatDateTime(value: Date | string) {
@@ -18,37 +20,54 @@ export function receiptCertificateFileName(invoiceNumber: string | null) {
   return `comprovante-agendamento-rvd-nf-${invoiceNumber || "sem-numero"}.pdf`;
 }
 
-async function getRvdLogoDataUrl() {
-  const response = await fetch("/manus-storage/RVD-Saude_f78a565b.png");
-  if (!response.ok) throw new Error("Não foi possível carregar o logo da RVD Saúde.");
-  const blob = await response.blob();
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Não foi possível preparar o logo da RVD Saúde."));
-    reader.readAsDataURL(blob);
+let logoDataUrlPromise: Promise<string> | undefined;
+
+function getRvdLogoDataUrl() {
+  if (logoDataUrlPromise) return logoDataUrlPromise;
+  logoDataUrlPromise = new Promise<string>((resolve, reject) => {
+    const logo = new Image();
+    logo.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = logo.naturalWidth;
+      canvas.height = logo.naturalHeight;
+      const context = canvas.getContext("2d");
+      if (!context) return reject(new Error("Não foi possível preparar o logo da RVD Saúde."));
+      context.drawImage(logo, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    logo.onerror = () => reject(new Error("Não foi possível carregar o logo da RVD Saúde."));
+    logo.src = new URL("/manus-storage/RVD-Saude_f78a565b.png", window.location.origin).toString();
   });
+  return logoDataUrlPromise;
 }
 
 export async function generateReceiptCertificatePdf(data: ReceiptCertificateData) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const plum: [number, number, number] = [120, 32, 120];
   const blue: [number, number, number] = [142, 193, 217];
-  doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 42, "F");
-  try { doc.addImage(await getRvdLogoDataUrl(), "PNG", 16, 6, 27, 27); } catch { doc.setFillColor(...blue); doc.roundedRect(16, 12, 12, 12, 3, 3, "F"); }
-  doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text("RVD Saúde", 49, 19); doc.setFontSize(10); doc.text("AGENDAMENTO · COMPROVANTE PARA ENTREGA", 49, 27);
-  doc.setFillColor(...plum); doc.rect(0, 38, 210, 4, "F");
-  doc.setTextColor(...plum); doc.setFontSize(19); doc.text("Comprovante de agendamento", 16, 62);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(70, 50, 70); doc.text("Documento para acompanhar a entrega da nota fiscal agendada.", 16, 70);
-  doc.setDrawColor(...blue); doc.setLineWidth(0.7); doc.line(16, 77, 194, 77);
+  doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 46, "F");
+  doc.setFillColor(247, 242, 247); doc.roundedRect(11, 5, 40, 32, 5, 5, "F");
+  try { doc.addImage(await getRvdLogoDataUrl(), "PNG", 14, 6.5, 34, 29); } catch { doc.setFillColor(...blue); doc.roundedRect(20, 13, 14, 14, 4, 4, "F"); }
+  doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(19); doc.text("RVD Saúde", 57, 20); doc.setFontSize(10); doc.text("AGENDAMENTO · COMPROVANTE PARA ENTREGA", 57, 28);
+  doc.setFont("helvetica", "normal"); doc.setTextColor(100, 75, 100); doc.setFontSize(8); doc.text("Documento digital de confirmação", 57, 34);
+  doc.setFillColor(...plum); doc.rect(0, 42, 210, 4, "F");
+  doc.setTextColor(...plum); doc.setFontSize(19); doc.text("Comprovante de agendamento", 16, 64);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(70, 50, 70); doc.text("Documento para acompanhar a entrega da nota fiscal agendada.", 16, 72);
+  doc.setDrawColor(...blue); doc.setLineWidth(0.7); doc.line(16, 79, 194, 79);
   const rows = [["Nota fiscal", data.invoiceNumber || "Não informado"], ["Fornecedor", data.supplierName || "Não informado"], ["Pedido", data.purchaseOrder || "Não informado"], ["CNPJ destinatário", data.recipientCnpj || "Não informado"], ["Data e hora da entrega", formatDateTime(data.scheduledFor)], ["Agendamento confirmado por", data.confirmedByName], ["Login do confirmador", data.confirmedByLogin]];
-  let y = 91;
+  let y = 93;
   for (const [label, value] of rows) {
     doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...plum); doc.text(label, 18, y);
     doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(45, 35, 45); const text = doc.splitTextToSize(value, 112); doc.text(text, 76, y); y += Math.max(11, text.length * 5 + 5);
     doc.setDrawColor(230, 215, 230); doc.setLineWidth(0.25); doc.line(18, y - 4, 192, y - 4);
   }
-  doc.setFillColor(247, 242, 247); doc.roundedRect(16, y + 8, 178, 33, 4, 4, "F"); doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("IMPORTANTE", 22, y + 18); doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(70, 50, 70); doc.text("Apresente este comprovante junto à nota fiscal no momento da entrega.", 22, y + 26);
+  const qrCode = await QRCode.toDataURL(data.validationUrl, { errorCorrectionLevel: "M", margin: 1, width: 240, color: { dark: "#782078", light: "#FFFFFF" } });
+  const confirmationY = y + 8;
+  doc.setFillColor(247, 242, 247); doc.roundedRect(16, confirmationY, 178, 46, 4, 4, "F");
+  doc.addImage(qrCode, "PNG", 151, confirmationY + 5, 35, 35);
+  doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("AGENDAMENTO CONFIRMADO", 22, confirmationY + 14);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(70, 50, 70); doc.text("Apresente este comprovante junto à nota fiscal no momento da entrega.", 22, confirmationY + 23);
+  doc.setFontSize(8); doc.text("Aponte a câmera do celular para o QR ao lado", 22, confirmationY + 32); doc.text("e confirme este agendamento no portal RVD Saúde.", 22, confirmationY + 38);
   doc.setTextColor(120, 100, 120); doc.setFontSize(8); doc.text("RVD Saúde Agendamento · documento emitido pelo portal", 16, 282); doc.text(`Emitido em ${formatDateTime(new Date())}`, 194, 282, { align: "right" });
   doc.save(receiptCertificateFileName(data.invoiceNumber));
 }

@@ -22,8 +22,14 @@ function ReceiptCertificateButton({ appointmentId }: { appointmentId: number }) 
   const download = async () => {
     const result = await certificate.refetch();
     if (!result.data) return toast.error(result.error?.message || "Não foi possível gerar o comprovante.");
-    const { appointment, confirmedByName, confirmedByLogin, scheduledFor } = result.data;
-    await generateReceiptCertificatePdf({ invoiceNumber: appointment.invoiceNumber, supplierName: appointment.invoiceSupplierName, recipientCnpj: appointment.recipientCnpj, purchaseOrder: appointment.purchaseOrder, scheduledFor, confirmedByName, confirmedByLogin });
+    const { appointment, confirmedByName, confirmedByLogin, scheduledFor, validationToken } = result.data;
+    const validationUrl = new URL("/validar-agendamento", window.location.origin);
+    validationUrl.searchParams.set("codigo", validationToken);
+    try {
+      await generateReceiptCertificatePdf({ invoiceNumber: appointment.invoiceNumber, supplierName: appointment.invoiceSupplierName, recipientCnpj: appointment.recipientCnpj, purchaseOrder: appointment.purchaseOrder, scheduledFor, confirmedByName, confirmedByLogin, validationUrl: validationUrl.toString() });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível gerar o comprovante.");
+    }
   };
   return <Button onClick={download} disabled={certificate.isFetching} variant="ghost" className="h-9 rounded-xl border border-rvd-plum-soft px-3 text-xs font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"><Download className="size-4" />{certificate.isFetching ? "Gerando..." : "Comprovante PDF"}</Button>;
 }
