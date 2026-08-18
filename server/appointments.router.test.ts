@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   touchUserSignIn: vi.fn(),
   updateAppointmentStatus: vi.fn(),
   createLocalUser: vi.fn(),
+  deleteAppointmentById: vi.fn(),
   scheduleAppointment: vi.fn(),
   createUnscheduledReceipt: vi.fn(),
 }));
@@ -74,12 +75,22 @@ describe("procedures de agendamento", () => {
     expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ name: "Operador Exemplo", email: "novo@operador.com", role: "operator", companyName: undefined, companyCnpj: undefined }));
   });
 
+  it("restringe a exclusão definitiva de nota ao Administrador", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 71, supplierId: 12, status: "received" });
+    const operatorCaller = appRouter.createCaller(context("operator"));
+    await expect(operatorCaller.appointments.delete({ appointmentId: 71 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const adminCaller = appRouter.createCaller(context("admin"));
+    await adminCaller.appointments.delete({ appointmentId: 71 });
+    expect(mocks.deleteAppointmentById).toHaveBeenCalledWith(71);
+  });
+
   it("provisiona o acesso de teste admin para operador e fornecedor conforme o perfil", async () => {
     mocks.getUserByEmail.mockResolvedValue(undefined);
     mocks.createLocalUser.mockResolvedValue(user("operator"));
     const operatorCaller = appRouter.createCaller(context("supplier"));
     await operatorCaller.auth.login({ email: "admin", password: "admin", profile: "operator" });
-    expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ email: "teste.operador@rvdsaude.local", role: "operator", name: "Operador de Teste RVD Saúde" }));
+    expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ email: "teste.operador@rvdsaude.local", role: "admin", name: "Operador de Teste RVD Saúde" }));
 
     mocks.createLocalUser.mockResolvedValue(user("supplier"));
     const supplierCaller = appRouter.createCaller(context("operator"));

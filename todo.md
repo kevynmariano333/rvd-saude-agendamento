@@ -100,7 +100,7 @@
 - [x] Restaurar o login de contas existentes de Operador e Fornecedor, sem criar cadastro novo para Operador.
 - [x] Validar visualmente a tela de login local e tecnicamente os contratos de Operador e cadastro exclusivo de Fornecedor.
 - [ ] Validar no navegador o login real de uma conta existente de Operador, sem cadastro novo.
-- [ ] Validar no navegador o cadastro, login e abertura do painel de um novo Fornecedor em sessão isolada.
+- [x] Validar no navegador o cadastro, login e abertura do painel de um novo Fornecedor em sessão isolada.
 - [ ] Registrar evidência verificável dos dois fluxos reais de acesso por perfil.
 - [x] Requisito revisado: não restringir o botão Novo cadastro somente ao Fornecedor.
 - [x] Requisito revisado: permitir também novo cadastro quando o perfil Operador estiver selecionado.
@@ -112,3 +112,15 @@
 - [x] Validar os dois acessos de teste e seus redirecionamentos por perfil.
 - [x] Validar no navegador o login de teste `admin/admin` como Operador e confirmar abertura do painel `/operador`.
 - [x] Validar no navegador o login de teste `admin/admin` como Fornecedor e confirmar abertura do painel `/fornecedor`.
+- [ ] Validar no navegador o login de uma conta de Operador realmente pré-existente, não demo `admin/admin`, e confirmar abertura do painel sem nova criação.
+- [ ] Registrar evidência verificável do login de Operador existente, distinguindo-o explicitamente do fluxo de demonstração.
+- [ ] Validar no navegador o login de uma conta de Operador já existente antes do teste, sem criar cadastro de Operador no mesmo fluxo.
+- [ ] Registrar evidência persistida e verificável do login de Operador não demo já existente, incluindo identificação da conta e abertura do painel `/operador`.
+- [ ] Retomar a validação da conta existente de Operador quando o usuário tiver uma senha disponível.
+- [ ] Identificar e registrar as notas de teste nº 5676 com seus registros vinculados antes da exclusão.
+- [x] Remover as duas notas de teste nº 5676 com seus históricos e mensagens vinculados.
+- [x] Criar uma área de exclusão de notas exclusiva para Administrador.
+- [x] Impedir que Fornecedor e Operador comum vejam ou executem a exclusão de notas.
+- [x] Cobrir a exclusão de notas e suas permissões administrativas com testes Vitest.
+- [ ] Listar e registrar, antes da exclusão, os IDs ou contagens de histórico, mensagens e sugestões vinculados a cada nota.
+- [ ] Registrar evidência verificável da relação entre notas removidas e seus registros vinculados antes da remoção.

@@ -14,6 +14,10 @@ export function isPortalOperator(role: PortalRole) {
   return role === "operator" || role === "admin";
 }
 
+export function isPortalAdmin(role: PortalRole) {
+  return role === "admin";
+}
+
 export function formatAppointmentDate(value: Date | string) {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }

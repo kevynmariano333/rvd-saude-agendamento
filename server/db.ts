@@ -80,7 +80,7 @@ export async function getUserByCompanyCnpj(companyCnpj: string) {
 
 export async function createLocalUser(input: {
   email: string;
-  role: Exclude<UserRole, "admin">;
+  role: UserRole;
   passwordHash: string;
   name?: string;
   companyName?: string;
@@ -174,6 +174,12 @@ export async function getAppointmentById(id: number) {
   if (!db) return undefined;
   const result = await db.select().from(appointments).where(eq(appointments.id, id)).limit(1);
   return result[0];
+}
+
+export async function deleteAppointmentById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.delete(appointments).where(eq(appointments.id, id));
 }
 
 export async function listAppointmentHistory(appointmentId: number) {

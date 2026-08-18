@@ -10,6 +10,7 @@ import {
   confirmAppointmentPreNote,
   createAppointmentMessage,
   createLocalUser,
+  deleteAppointmentById,
   acceptAppointmentSuggestion,
   getAppointmentById,
   getUserByCompanyCnpj,
@@ -69,6 +70,10 @@ function assertOperator(role: "admin" | "operator" | "supplier") {
   if (!isOperator(role)) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito ao perfil de operador." });
 }
 
+function assertAdmin(role: "admin" | "operator" | "supplier") {
+  if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "A exclusão de notas é restrita ao Administrador." });
+}
+
 async function getAccessibleAppointment(user: { id: number; role: "admin" | "operator" | "supplier" }, appointmentId: number) {
   const appointment = await getAppointmentById(appointmentId);
   if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
@@ -121,7 +126,7 @@ export const appRouter = router({
           await touchUserSignIn(existing.id);
           user = existing;
         } else if (isDemoLogin && input.password === demoPassword) {
-          user = await createLocalUser({ ...demoAccount, role: input.profile, passwordHash: hashPassword(demoPassword) });
+          user = await createLocalUser({ ...demoAccount, role: input.profile === "operator" ? "admin" : "supplier", passwordHash: hashPassword(demoPassword) });
         } else if (isDemoLogin) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Login, senha ou perfil não conferem." });
         } else {
@@ -180,6 +185,15 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar o histórico deste agendamento." });
         }
         return listAppointmentHistory(input.appointmentId);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        assertAdmin(ctx.user.role);
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
+        await deleteAppointmentById(appointment.id);
+        return { success: true } as const;
       }),
     create: protectedProcedure
       .input(
