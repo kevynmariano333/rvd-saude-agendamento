@@ -160,3 +160,5 @@
 - [x] Corrigir a coluna de agendamento do Operador para exibir “Aguardando confirmação” em notas Pendentes ou Backlog.
 - [x] Ajustar os detalhes da nota para não exibir data e hora antes da confirmação do agendamento.
 - [ ] Aplicar a mesma ocultação de data não confirmada ao histórico do Fornecedor.
+- [x] Remover qualquer data da coluna de agendamento quando a nota estiver Pendente.
+- [x] Validar tecnicamente que a aba Pendente mostra apenas “Aguardando confirmação”.
