@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   createAppointmentMessage: vi.fn(),
   confirmAppointmentPreNote: vi.fn(),
   getAppointmentById: vi.fn(),
+  getUserByCompanyCnpj: vi.fn(),
   getUserByEmail: vi.fn(),
   listAppointmentHistory: vi.fn(),
   listAppointmentMessages: vi.fn(),
@@ -54,6 +55,15 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("supplier"));
     await caller.appointments.create({ serviceType: "Consulta", scheduledFor: new Date(Date.now() + 86_400_000).toISOString(), notes: "Preferência pela manhã" });
     expect(mocks.createAppointment).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 12, serviceType: "Consulta" }));
+  });
+
+  it("permite o cadastro autônomo de um fornecedor", async () => {
+    mocks.getUserByEmail.mockResolvedValue(undefined);
+    mocks.getUserByCompanyCnpj.mockResolvedValue(undefined);
+    mocks.createLocalUser.mockResolvedValue(user("supplier"));
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.auth.registerSupplier({ companyName: "Fornecedor Exemplo", companyCnpj: "12.345.678/0001-99", email: "novo@fornecedor.com", password: "senha123" });
+    expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ name: "Fornecedor Exemplo", companyName: "Fornecedor Exemplo", companyCnpj: "12345678000199", email: "novo@fornecedor.com", role: "supplier" }));
   });
 
   it("bloqueia a criação de solicitações pelo operador", async () => {

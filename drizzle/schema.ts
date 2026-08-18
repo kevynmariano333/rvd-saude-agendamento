@@ -27,6 +27,8 @@ export const users = mysqlTable(
     openId: varchar("openId", { length: 64 }).notNull().unique(),
     name: text("name"),
     email: varchar("email", { length: 320 }),
+    companyName: varchar("companyName", { length: 255 }),
+    companyCnpj: varchar("companyCnpj", { length: 20 }),
     loginMethod: varchar("loginMethod", { length: 64 }),
     passwordHash: varchar("passwordHash", { length: 255 }),
     role: mysqlEnum("role", userRoles).default("supplier").notNull(),
@@ -34,7 +36,20 @@ export const users = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
     lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   },
-  table => [uniqueIndex("users_email_unique").on(table.email)]
+  table => [uniqueIndex("users_email_unique").on(table.email), uniqueIndex("users_company_cnpj_unique").on(table.companyCnpj)]
+);
+
+export const passwordResetTokens = mysqlTable(
+  "passwordResetTokens",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: varchar("tokenHash", { length: 128 }).notNull().unique(),
+    expiresAt: datetime("expiresAt", { mode: "date" }).notNull(),
+    usedAt: datetime("usedAt", { mode: "date" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [index("password_reset_tokens_user_idx").on(table.userId), index("password_reset_tokens_expiry_idx").on(table.expiresAt)]
 );
 
 export const appointments = mysqlTable(

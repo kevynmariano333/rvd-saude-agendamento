@@ -89,3 +89,11 @@
 - [x] Abrir o chat do agendamento pelo ícone de mensagem da tabela e permitir o envio entre os dois perfis.
 - [x] Exibir no sino da barra superior a contagem e a lista de mensagens novas das notas/agendamentos.
 - [x] Exibir o ícone de agendar ou reagendar somente para notas com status Agendado.
+- [x] Corrigir a limpeza da sessão ao encerrar o perfil para permitir novo login como Fornecedor.
+- [x] Permitir que o fornecedor crie sua própria conta por uma tela de cadastro antes do login.
+- [x] Validar o cadastro, o login do fornecedor recém-criado e a troca de perfil após logout.
+- [x] Coletar nome da empresa, CNPJ, e-mail e senha no cadastro próprio de fornecedor.
+- [x] Retirar do escopo a recuperação de senha por e-mail, conforme solicitação do usuário.
+- [x] Remover as referências à recuperação de senha da interface de acesso.
+- [ ] Validar no navegador o logout, o retorno ao login, o cadastro de fornecedor e a abertura do painel do novo perfil.
+- [ ] Registrar evidência verificável da validação ponta a ponta dos fluxos de fornecedor.

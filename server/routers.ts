@@ -12,6 +12,7 @@ import {
   createLocalUser,
   acceptAppointmentSuggestion,
   getAppointmentById,
+  getUserByCompanyCnpj,
   getUserByEmail,
   listAppointmentHistory,
   listAppointmentMessages,
@@ -106,13 +107,22 @@ export const appRouter = router({
           await touchUserSignIn(existing.id);
           user = existing;
         } else {
-          user = await createLocalUser({
-            email,
-            role: input.profile,
-            passwordHash: hashPassword(input.password),
-          });
+          throw new TRPCError({ code: "NOT_FOUND", message: input.profile === "supplier" ? "Fornecedor não encontrado. Faça seu cadastro antes de entrar." : "Acesso de operador não encontrado." });
         }
 
+        await createRvdSession(ctx.res, user);
+        return publicUser(user);
+      }),
+    registerSupplier: publicProcedure
+      .input(z.object({ companyName: z.string().trim().min(2, "Informe a razão social.").max(255), companyCnpj: z.string().min(14, "Informe o CNPJ.").max(20), email: z.string().email("Informe um e-mail válido."), password: z.string().min(6, "A senha deve conter pelo menos 6 caracteres.") }))
+      .mutation(async ({ ctx, input }) => {
+        const email = input.email.trim().toLowerCase();
+        const companyCnpj = input.companyCnpj.replace(/\D/g, "");
+        if (companyCnpj.length !== 14) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe um CNPJ válido com 14 dígitos." });
+        const existing = await getUserByEmail(email);
+        if (existing) throw new TRPCError({ code: "CONFLICT", message: "Este e-mail já possui uma conta. Entre pelo formulário de acesso." });
+        if (await getUserByCompanyCnpj(companyCnpj)) throw new TRPCError({ code: "CONFLICT", message: "Este CNPJ já possui uma conta de fornecedor." });
+        const user = await createLocalUser({ email, name: input.companyName.trim(), companyName: input.companyName.trim(), companyCnpj, role: "supplier", passwordHash: hashPassword(input.password) });
         await createRvdSession(ctx.res, user);
         return publicUser(user);
       }),

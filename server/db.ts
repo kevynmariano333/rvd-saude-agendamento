@@ -71,10 +71,20 @@ export async function getUserByEmail(email: string) {
   return result[0];
 }
 
+export async function getUserByCompanyCnpj(companyCnpj: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.companyCnpj, companyCnpj)).limit(1);
+  return result[0];
+}
+
 export async function createLocalUser(input: {
   email: string;
   role: Exclude<UserRole, "admin">;
   passwordHash: string;
+  name?: string;
+  companyName?: string;
+  companyCnpj?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
@@ -82,7 +92,9 @@ export async function createLocalUser(input: {
   const values: InsertUser = {
     openId: `rvd-${nanoid(18)}`,
     email: input.email,
-    name: input.email.split("@")[0],
+    name: input.name?.trim() || input.email.split("@")[0],
+    companyName: input.companyName?.trim() || null,
+    companyCnpj: input.companyCnpj || null,
     loginMethod: "rvd-password",
     passwordHash: input.passwordHash,
     role: input.role,
