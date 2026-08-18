@@ -66,6 +66,27 @@ describe("procedures de agendamento", () => {
     expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ name: "Fornecedor Exemplo", companyName: "Fornecedor Exemplo", companyCnpj: "12345678000199", email: "novo@fornecedor.com", role: "supplier" }));
   });
 
+  it("permite o cadastro de operador sem exigir CNPJ", async () => {
+    mocks.getUserByEmail.mockResolvedValue(undefined);
+    mocks.createLocalUser.mockResolvedValue(user("operator"));
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.auth.register({ profile: "operator", name: "Operador Exemplo", email: "novo@operador.com", password: "senha123" });
+    expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ name: "Operador Exemplo", email: "novo@operador.com", role: "operator", companyName: undefined, companyCnpj: undefined }));
+  });
+
+  it("provisiona o acesso de teste admin para operador e fornecedor conforme o perfil", async () => {
+    mocks.getUserByEmail.mockResolvedValue(undefined);
+    mocks.createLocalUser.mockResolvedValue(user("operator"));
+    const operatorCaller = appRouter.createCaller(context("supplier"));
+    await operatorCaller.auth.login({ email: "admin", password: "admin", profile: "operator" });
+    expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ email: "teste.operador@rvdsaude.local", role: "operator", name: "Operador de Teste RVD Saúde" }));
+
+    mocks.createLocalUser.mockResolvedValue(user("supplier"));
+    const supplierCaller = appRouter.createCaller(context("operator"));
+    await supplierCaller.auth.login({ email: "admin", password: "admin", profile: "supplier" });
+    expect(mocks.createLocalUser).toHaveBeenLastCalledWith(expect.objectContaining({ email: "teste.fornecedor@rvdsaude.local", role: "supplier", companyCnpj: "00000000000000" }));
+  });
+
   it("bloqueia a criação de solicitações pelo operador", async () => {
     const caller = appRouter.createCaller(context("operator"));
     await expect(caller.appointments.create({ serviceType: "Consulta", scheduledFor: new Date(Date.now() + 86_400_000).toISOString() })).rejects.toMatchObject({ code: "FORBIDDEN" });

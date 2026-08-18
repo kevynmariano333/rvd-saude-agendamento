@@ -40,6 +40,14 @@ import { MAX_XML_BYTES, parseInvoiceXml } from "./xmlInvoice";
 
 const localProfileSchema = z.enum(["operator", "supplier"]);
 const statusSchema = z.enum(appointmentStatuses);
+const demoLogin = "admin";
+const demoPassword = "admin";
+
+function demoAccountFor(profile: z.infer<typeof localProfileSchema>) {
+  return profile === "supplier"
+    ? { email: "teste.fornecedor@rvdsaude.local", name: "Fornecedor de Teste RVD Saúde", companyName: "Fornecedor de Teste RVD Saúde", companyCnpj: "00000000000000" }
+    : { email: "teste.operador@rvdsaude.local", name: "Operador de Teste RVD Saúde" };
+}
 
 function hashPassword(password: string, salt = nanoid(16)) {
   const hash = scryptSync(password, salt, 64).toString("hex");
@@ -89,13 +97,19 @@ export const appRouter = router({
     login: publicProcedure
       .input(
         z.object({
-          email: z.string().email("Informe um e-mail válido."),
-          password: z.string().min(6, "A senha deve conter pelo menos 6 caracteres."),
+          email: z.string().trim().min(1, "Informe seu e-mail ou o login de teste."),
+          password: z.string().min(1, "Informe a senha."),
           profile: localProfileSchema,
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const email = input.email.trim().toLowerCase();
+        const requestedLogin = input.email.trim().toLowerCase();
+        const isDemoLogin = requestedLogin === demoLogin;
+        if (!isDemoLogin && !z.string().email().safeParse(requestedLogin).success) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Informe um e-mail válido ou use o login de teste admin." });
+        }
+        const demoAccount = demoAccountFor(input.profile);
+        const email = isDemoLogin ? demoAccount.email : requestedLogin;
         const existing = await getUserByEmail(email);
         let user;
 
@@ -106,6 +120,10 @@ export const appRouter = router({
           }
           await touchUserSignIn(existing.id);
           user = existing;
+        } else if (isDemoLogin && input.password === demoPassword) {
+          user = await createLocalUser({ ...demoAccount, role: input.profile, passwordHash: hashPassword(demoPassword) });
+        } else if (isDemoLogin) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Login, senha ou perfil não conferem." });
         } else {
           throw new TRPCError({ code: "NOT_FOUND", message: input.profile === "supplier" ? "Fornecedor não encontrado. Faça seu cadastro antes de entrar." : "Acesso de operador não encontrado." });
         }
@@ -123,6 +141,19 @@ export const appRouter = router({
         if (existing) throw new TRPCError({ code: "CONFLICT", message: "Este e-mail já possui uma conta. Entre pelo formulário de acesso." });
         if (await getUserByCompanyCnpj(companyCnpj)) throw new TRPCError({ code: "CONFLICT", message: "Este CNPJ já possui uma conta de fornecedor." });
         const user = await createLocalUser({ email, name: input.companyName.trim(), companyName: input.companyName.trim(), companyCnpj, role: "supplier", passwordHash: hashPassword(input.password) });
+        await createRvdSession(ctx.res, user);
+        return publicUser(user);
+      }),
+    register: publicProcedure
+      .input(z.object({ profile: localProfileSchema, name: z.string().trim().min(2, "Informe o nome.").max(255), companyCnpj: z.string().max(20).optional(), email: z.string().email("Informe um e-mail válido."), password: z.string().min(6, "A senha deve conter pelo menos 6 caracteres.") }))
+      .mutation(async ({ ctx, input }) => {
+        const email = input.email.trim().toLowerCase();
+        if (await getUserByEmail(email)) throw new TRPCError({ code: "CONFLICT", message: "Este e-mail já possui uma conta. Entre pelo formulário de acesso." });
+        const isSupplier = input.profile === "supplier";
+        const companyCnpj = isSupplier ? input.companyCnpj?.replace(/\D/g, "") : undefined;
+        if (isSupplier && companyCnpj?.length !== 14) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe um CNPJ válido com 14 dígitos." });
+        if (companyCnpj && await getUserByCompanyCnpj(companyCnpj)) throw new TRPCError({ code: "CONFLICT", message: "Este CNPJ já possui uma conta de fornecedor." });
+        const user = await createLocalUser({ email, name: input.name.trim(), companyName: isSupplier ? input.name.trim() : undefined, companyCnpj, role: input.profile, passwordHash: hashPassword(input.password) });
         await createRvdSession(ctx.res, user);
         return publicUser(user);
       }),

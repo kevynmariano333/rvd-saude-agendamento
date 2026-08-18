@@ -95,5 +95,20 @@
 - [x] Coletar nome da empresa, CNPJ, e-mail e senha no cadastro próprio de fornecedor.
 - [x] Retirar do escopo a recuperação de senha por e-mail, conforme solicitação do usuário.
 - [x] Remover as referências à recuperação de senha da interface de acesso.
-- [ ] Validar no navegador o logout, o retorno ao login, o cadastro de fornecedor e a abertura do painel do novo perfil.
-- [ ] Registrar evidência verificável da validação ponta a ponta dos fluxos de fornecedor.
+- [x] Preparar a validação manual no navegador do logout, retorno ao login, cadastro e abertura do perfil fornecedor; execução adiada pelo usuário.
+- [x] Registrar evidência técnica e visual do cadastro de fornecedor, com a validação manual ponta a ponta adiada pelo usuário.
+- [x] Restaurar o login de contas existentes de Operador e Fornecedor, sem criar cadastro novo para Operador.
+- [x] Validar visualmente a tela de login local e tecnicamente os contratos de Operador e cadastro exclusivo de Fornecedor.
+- [ ] Validar no navegador o login real de uma conta existente de Operador, sem cadastro novo.
+- [ ] Validar no navegador o cadastro, login e abertura do painel de um novo Fornecedor em sessão isolada.
+- [ ] Registrar evidência verificável dos dois fluxos reais de acesso por perfil.
+- [x] Requisito revisado: não restringir o botão Novo cadastro somente ao Fornecedor.
+- [x] Requisito revisado: permitir também novo cadastro quando o perfil Operador estiver selecionado.
+- [x] Exibir o botão Novo cadastro com o rótulo correspondente ao perfil selecionado.
+- [x] Permitir o cadastro de Operador e Fornecedor com os campos e o perfil corretos.
+- [x] Disponibilizar o login de teste `admin` com senha `admin` para o perfil Operador.
+- [x] Disponibilizar o login de teste `admin` com senha `admin` para o perfil Fornecedor.
+- [x] Exibir as instruções dos dois acessos de teste na tela de login.
+- [x] Validar os dois acessos de teste e seus redirecionamentos por perfil.
+- [x] Validar no navegador o login de teste `admin/admin` como Operador e confirmar abertura do painel `/operador`.
+- [x] Validar no navegador o login de teste `admin/admin` como Fornecedor e confirmar abertura do painel `/fornecedor`.
