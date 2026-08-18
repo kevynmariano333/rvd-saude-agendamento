@@ -178,3 +178,5 @@
 - [x] Inserir um QR de validação no PDF para confirmação do agendamento pelo celular.
 - [x] Disponibilizar uma página pública e assinada de confirmação acessada pelo QR do comprovante.
 - [x] Cobrir explicitamente o status Concluído na regra de exibição de data confirmada.
+- [x] Reproduzir e corrigir o acesso ao comprovante PDF pelo perfil de Fornecedor.
+- [x] Validar o download do comprovante de uma nota Agendada no navegador.

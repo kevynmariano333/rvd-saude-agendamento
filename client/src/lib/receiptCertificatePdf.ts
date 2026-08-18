@@ -24,20 +24,21 @@ let logoDataUrlPromise: Promise<string> | undefined;
 
 function getRvdLogoDataUrl() {
   if (logoDataUrlPromise) return logoDataUrlPromise;
-  logoDataUrlPromise = new Promise<string>((resolve, reject) => {
-    const logo = new Image();
-    logo.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = logo.naturalWidth;
-      canvas.height = logo.naturalHeight;
-      const context = canvas.getContext("2d");
-      if (!context) return reject(new Error("Não foi possível preparar o logo da RVD Saúde."));
-      context.drawImage(logo, 0, 0);
-      resolve(canvas.toDataURL("image/png"));
-    };
-    logo.onerror = () => reject(new Error("Não foi possível carregar o logo da RVD Saúde."));
-    logo.src = new URL("/manus-storage/RVD-Saude_f78a565b.png", window.location.origin).toString();
-  });
+  logoDataUrlPromise = fetch("/manus-storage/RVD-Saude_f78a565b.png")
+    .then(async response => {
+      if (!response.ok) throw new Error("Não foi possível carregar o logo da RVD Saúde.");
+      const blob = await response.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Não foi possível preparar o logo da RVD Saúde."));
+        reader.readAsDataURL(blob);
+      });
+    })
+    .catch(error => {
+      logoDataUrlPromise = undefined;
+      throw error;
+    });
   return logoDataUrlPromise;
 }
 
