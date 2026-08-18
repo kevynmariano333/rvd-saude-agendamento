@@ -195,16 +195,17 @@ export const appRouter = router({
         if (ctx.user.role === "supplier" && appointment.supplierId !== ctx.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode emitir este comprovante." });
         }
-        if (appointment.status !== "received" && appointment.status !== "completed") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "O comprovante fica disponível após a confirmação de recebimento." });
+        if (appointment.status !== "scheduled") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "O PDF de entrega fica disponível somente para notas Agendadas." });
         }
         const history = await listAppointmentHistory(appointment.id);
-        const receiptEvent = [...history].reverse().find(event => event.nextStatus === "received");
+        const scheduleEvent = [...history].reverse().find(event => event.nextStatus === "scheduled");
         return {
           appointment,
-          confirmedByName: receiptEvent?.handlerName || "Operador RVD Saúde",
-          confirmedByLogin: receiptEvent?.handlerEmail || "Login não informado",
-          receivedAt: appointment.receivedAt || receiptEvent?.createdAt || appointment.updatedAt,
+          confirmedByName: scheduleEvent?.handlerName || "Operador RVD Saúde",
+          confirmedByLogin: scheduleEvent?.handlerEmail || "Login não informado",
+          confirmedAt: scheduleEvent?.createdAt || appointment.updatedAt,
+          scheduledFor: appointment.scheduledFor,
         };
       }),
     delete: protectedProcedure

@@ -5,7 +5,7 @@ export type ReceiptCertificateData = {
   supplierName: string | null;
   recipientCnpj: string | null;
   purchaseOrder: string | null;
-  receivedAt: Date | string;
+  scheduledFor: Date | string;
   confirmedByName: string;
   confirmedByLogin: string;
 };
@@ -15,7 +15,7 @@ function formatDateTime(value: Date | string) {
 }
 
 export function receiptCertificateFileName(invoiceNumber: string | null) {
-  return `comprovante-recebimento-rvd-nf-${invoiceNumber || "sem-numero"}.pdf`;
+  return `comprovante-agendamento-rvd-nf-${invoiceNumber || "sem-numero"}.pdf`;
 }
 
 export function generateReceiptCertificatePdf(data: ReceiptCertificateData) {
@@ -24,11 +24,11 @@ export function generateReceiptCertificatePdf(data: ReceiptCertificateData) {
   const blue: [number, number, number] = [142, 193, 217];
   doc.setFillColor(...plum); doc.rect(0, 0, 210, 42, "F");
   doc.setFillColor(...blue); doc.roundedRect(16, 12, 12, 12, 3, 3, "F");
-  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text("RVD Saúde", 34, 20); doc.setFontSize(10); doc.text("AGENDAMENTO · COMPROVANTE DE RECEBIMENTO", 34, 28);
-  doc.setTextColor(...plum); doc.setFontSize(19); doc.text("Comprovante de recebimento", 16, 62);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(70, 50, 70); doc.text("Documento para acompanhar a entrega da nota fiscal.", 16, 70);
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text("RVD Saúde", 34, 20); doc.setFontSize(10); doc.text("AGENDAMENTO · COMPROVANTE PARA ENTREGA", 34, 28);
+  doc.setTextColor(...plum); doc.setFontSize(19); doc.text("Comprovante de agendamento", 16, 62);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(70, 50, 70); doc.text("Documento para acompanhar a entrega da nota fiscal agendada.", 16, 70);
   doc.setDrawColor(...blue); doc.setLineWidth(0.7); doc.line(16, 77, 194, 77);
-  const rows = [["Nota fiscal", data.invoiceNumber || "Não informado"], ["Fornecedor", data.supplierName || "Não informado"], ["Pedido", data.purchaseOrder || "Não informado"], ["CNPJ destinatário", data.recipientCnpj || "Não informado"], ["Recebimento confirmado em", formatDateTime(data.receivedAt)], ["Confirmado por", data.confirmedByName], ["Login do confirmador", data.confirmedByLogin]];
+  const rows = [["Nota fiscal", data.invoiceNumber || "Não informado"], ["Fornecedor", data.supplierName || "Não informado"], ["Pedido", data.purchaseOrder || "Não informado"], ["CNPJ destinatário", data.recipientCnpj || "Não informado"], ["Data e hora da entrega", formatDateTime(data.scheduledFor)], ["Agendamento confirmado por", data.confirmedByName], ["Login do confirmador", data.confirmedByLogin]];
   let y = 91;
   for (const [label, value] of rows) {
     doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...plum); doc.text(label, 18, y);

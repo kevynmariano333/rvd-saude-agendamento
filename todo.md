@@ -166,3 +166,8 @@
 - [x] Incluir no PDF número da nota, data/hora do recebimento e nome/login de quem confirmou.
 - [x] Disponibilizar o download do PDF apenas para notas Recebidas ou Concluídas do Fornecedor.
 - [x] Validar tecnicamente o PDF como documento para entrega junto com a nota fiscal.
+- [x] Exibir o PDF exclusivamente no histórico do modo Fornecedor para notas Agendadas.
+- [x] Garantir que o PDF contenha a data e a hora confirmadas do agendamento para entrega.
+- [x] Disponibilizar o PDF de entrega somente para notas Agendadas no histórico do Fornecedor.
+- [x] Ocultar o botão de PDF em notas Recebidas e Concluídas.
+- [x] Exibir o botão de PDF ao lado de Conversar para a nota Agendada.
