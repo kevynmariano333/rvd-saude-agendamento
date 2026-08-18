@@ -9,7 +9,7 @@ export function canRequestAppointment(role: UserRole) {
 }
 
 export function canApplySuggestion(status: AppointmentStatus) {
-  return status === "pending" || status === "backlog";
+  return status === "pending" || status === "backlog" || status === "scheduled";
 }
 
 export function canScheduleAppointment(status: AppointmentStatus) {

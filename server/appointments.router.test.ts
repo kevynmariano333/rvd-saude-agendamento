@@ -3,9 +3,11 @@ import type { User } from "../drizzle/schema";
 
 const mocks = vi.hoisted(() => ({
   createAppointment: vi.fn(),
+  createAppointmentSuggestion: vi.fn(),
   createAppointmentMessage: vi.fn(),
   confirmAppointmentPreNote: vi.fn(),
   getAppointmentById: vi.fn(),
+  getSuggestionById: vi.fn(),
   getUserByCompanyCnpj: vi.fn(),
   getUserByEmail: vi.fn(),
   listAppointmentHistory: vi.fn(),
@@ -128,6 +130,14 @@ describe("procedures de agendamento", () => {
     expect(mocks.listAppointmentSuggestions).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1 }));
   });
 
+  it("permite ao fornecedor sugerir novo horário para um item agendado", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.createAppointmentSuggestion.mockResolvedValue({ id: 8, status: "pending" });
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-01T10:00:00.000Z", notes: "Prefiro este horário" });
+    expect(mocks.createAppointmentSuggestion).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, supplierId: 12, notes: "Prefiro este horário" }));
+  });
+
   it("bloqueia o histórico de outro fornecedor", async () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 99, status: "pending" });
     const caller = appRouter.createCaller(context("supplier"));
@@ -149,6 +159,14 @@ describe("procedures de agendamento", () => {
     expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, status: "scheduled", previousStatus: "pending", handledBy: 24 }));
   });
 
+  it("registra a confirmação de recebimento com o responsável operacional", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, status: "scheduled" });
+    mocks.updateAppointmentStatus.mockResolvedValue({ id: 1, status: "received", receivedAt: new Date() });
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.updateStatus({ appointmentId: 1, status: "received" });
+    expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, status: "received", previousStatus: "scheduled", handledBy: 24, eventNote: "Recebimento confirmado pelo operador." }));
+  });
+
   it("permite ao operador confirmar a pré-nota e registra o responsável", async () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 1, status: "scheduled", preNoteConfirmedAt: null });
     const caller = appRouter.createCaller(context("operator"));
@@ -163,6 +181,16 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("operator"));
     await caller.appointments.schedule({ appointmentId: 1, scheduledFor: "2030-09-01T10:00:00.000Z" });
     expect(mocks.scheduleAppointment).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, previousScheduledFor, scheduledFor: new Date("2030-09-01T10:00:00.000Z"), rescheduled: true }));
+  });
+
+  it("confirma o agendamento e registra a sugestão aceita", async () => {
+    const previousScheduledFor = new Date("2030-09-01T09:00:00.000Z");
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, status: "pending", scheduledFor: previousScheduledFor });
+    mocks.getSuggestionById.mockResolvedValue({ id: 5, appointmentId: 1, status: "pending" });
+    mocks.scheduleAppointment.mockResolvedValue({ id: 1, status: "scheduled" });
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.schedule({ appointmentId: 1, scheduledFor: "2030-09-01T10:00:00.000Z", acceptedSuggestionId: 5 });
+    expect(mocks.scheduleAppointment).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, acceptedSuggestionId: 5, scheduledFor: new Date("2030-09-01T10:00:00.000Z") }));
   });
 
   it("permite ao operador registrar um recebimento avulso pelo XML", async () => {

@@ -15,6 +15,7 @@ import {
 import { ENV } from "./_core/env";
 import { normalizeCnpj } from "./fiscalFilters";
 import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
+import { getReceiptTimestampForStatus } from "./receiptStatus";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -158,6 +159,7 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       invoiceSupplierName: appointments.invoiceSupplierName,
       recipientCnpj: appointments.recipientCnpj,
       invoiceIssuedAt: appointments.invoiceIssuedAt,
+      receivedAt: appointments.receivedAt,
       rejectionReason: appointments.rejectionReason,
       status: appointments.status,
       createdAt: appointments.createdAt,
@@ -420,6 +422,7 @@ export async function updateAppointmentStatus(input: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
+  const receivedAt = getReceiptTimestampForStatus(input.status);
   await db.transaction(async tx => {
     await tx
       .update(appointments)
@@ -427,6 +430,7 @@ export async function updateAppointmentStatus(input: {
         status: input.status,
         handledBy: input.handledBy,
         updatedAt: new Date(),
+        ...(receivedAt ? { receivedAt } : {}),
         ...(input.status === "rejected" ? { rejectionReason: input.rejectionReason?.trim() || "Motivo não informado" } : {}),
       })
       .where(eq(appointments.id, input.appointmentId));
@@ -451,11 +455,14 @@ export async function confirmAppointmentPreNote(input: { appointmentId: number; 
   return getAppointmentById(input.appointmentId);
 }
 
-export async function scheduleAppointment(input: { appointmentId: number; previousStatus: AppointmentStatus; previousScheduledFor: Date; scheduledFor: Date; handledBy: number; rescheduled: boolean }) {
+export async function scheduleAppointment(input: { appointmentId: number; previousStatus: AppointmentStatus; previousScheduledFor: Date; scheduledFor: Date; handledBy: number; rescheduled: boolean; acceptedSuggestionId?: number }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
   await db.transaction(async tx => {
     await tx.update(appointments).set({ status: "scheduled", scheduledFor: input.scheduledFor, handledBy: input.handledBy, updatedAt: new Date() }).where(eq(appointments.id, input.appointmentId));
+    if (input.acceptedSuggestionId) {
+      await tx.update(appointmentSuggestions).set({ status: "accepted", handledBy: input.handledBy, respondedAt: new Date() }).where(eq(appointmentSuggestions.id, input.acceptedSuggestionId));
+    }
     await tx.insert(appointmentStatusHistory).values({ appointmentId: input.appointmentId, previousStatus: input.previousStatus, nextStatus: "scheduled", handledBy: input.handledBy, eventNote: input.rescheduled ? "Agendamento reagendado pelo operador." : "Agendamento confirmado pelo operador.", previousScheduledFor: input.previousScheduledFor, nextScheduledFor: input.scheduledFor });
   });
   return getAppointmentById(input.appointmentId);
@@ -492,12 +499,14 @@ export async function createUnscheduledReceipt(input: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
+  const registeredAt = getUnscheduledReceiptRegisteredAt();
   const result = await db.transaction(async tx => {
     const serviceType = input.serviceDescription || (input.invoiceNumber ? `Recebimento NF ${input.invoiceNumber}` : "Recebimento avulso");
     const inserted = await tx.insert(appointments).values({
       supplierId: input.operatorId,
       serviceType: serviceType.slice(0, 80),
-      scheduledFor: getUnscheduledReceiptRegisteredAt(),
+      scheduledFor: registeredAt,
+      receivedAt: registeredAt,
       notes: "Recebimento registrado sem agendamento prévio, a partir do XML da nota fiscal.",
       source: "manual_xml",
       xmlStorageKey: input.xmlStorageKey,

@@ -13,6 +13,7 @@ import {
   deleteAppointmentById,
   acceptAppointmentSuggestion,
   getAppointmentById,
+  getSuggestionById,
   getUserByCompanyCnpj,
   getUserByEmail,
   listAppointmentHistory,
@@ -281,7 +282,7 @@ export const appRouter = router({
       .input(z.object({ supplierId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => { assertOperator(ctx.user.role); return listSupplierActiveAppointments(input.supplierId); }),
     schedule: protectedProcedure
-      .input(z.object({ appointmentId: z.number().int().positive(), scheduledFor: z.string().datetime() }))
+      .input(z.object({ appointmentId: z.number().int().positive(), scheduledFor: z.string().datetime(), acceptedSuggestionId: z.number().int().positive().optional() }))
       .mutation(async ({ ctx, input }) => {
         assertOperator(ctx.user.role);
         const appointment = await getAppointmentById(input.appointmentId);
@@ -289,7 +290,11 @@ export const appRouter = router({
         if (!canScheduleAppointment(appointment.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Este item não pode ser agendado." });
         const scheduledFor = new Date(input.scheduledFor);
         if (Number.isNaN(scheduledFor.getTime())) throw new TRPCError({ code: "BAD_REQUEST", message: "Data e horário inválidos." });
-        return scheduleAppointment({ appointmentId: appointment.id, previousStatus: appointment.status, previousScheduledFor: appointment.scheduledFor, scheduledFor, handledBy: ctx.user.id, rescheduled: appointment.status === "scheduled" });
+        if (input.acceptedSuggestionId) {
+          const suggestion = await getSuggestionById(input.acceptedSuggestionId);
+          if (!suggestion || suggestion.appointmentId !== appointment.id || suggestion.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "A sugestão selecionada não está disponível." });
+        }
+        return scheduleAppointment({ appointmentId: appointment.id, previousStatus: appointment.status, previousScheduledFor: appointment.scheduledFor, scheduledFor, handledBy: ctx.user.id, rescheduled: appointment.status === "scheduled", acceptedSuggestionId: input.acceptedSuggestionId });
       }),
     rescue: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))

@@ -21,3 +21,7 @@ export function isPortalAdmin(role: PortalRole) {
 export function formatAppointmentDate(value: Date | string) {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
+
+export function getAppointmentMomentForDisplay(input: { status: PortalStatus; scheduledFor: Date | string; receivedAt?: Date | string | null }) {
+  return input.status === "received" && input.receivedAt ? input.receivedAt : input.scheduledFor;
+}

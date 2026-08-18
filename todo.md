@@ -127,3 +127,21 @@
 - [x] Cobrir a exclusão de notas e suas permissões administrativas com testes Vitest.
 - [ ] Listar e registrar, antes da exclusão, os IDs ou contagens de histórico, mensagens e sugestões vinculados a cada nota.
 - [ ] Registrar evidência verificável da relação entre notas removidas e seus registros vinculados antes da remoção.
+- [x] Registrar a data e a hora reais quando uma nota passa para o status Recebido.
+- [x] Exibir a data e a hora reais de recebimento no lugar do horário agendado para notas Recebidas.
+- [x] Cobrir com testes o registro e a exibição do momento de recebimento.
+- [x] Diagnosticar por que o Fornecedor não consegue enviar sugestão de agendamento.
+- [x] Corrigir o envio e a persistência de sugestões pelo Fornecedor.
+- [x] Exibir sugestões recém-enviadas no histórico do Fornecedor e para o Operador.
+- [x] Cobrir o fluxo corrigido de sugestão com testes Vitest.
+- [x] Atualizar automaticamente agendamentos, status, sugestões e mensagens para usuários com o portal aberto.
+- [x] Validar tecnicamente que o painel do Operador e o painel do Fornecedor reflitam atualizações sem recarregar a página.
+- [x] Exibir a sugestão pendente do Fornecedor destacada no modal de agendamento do Operador, com ação Aceitar.
+- [x] Abrir o modal de agendamento com os campos de data e hora vazios para preenchimento manual.
+- [x] Ajustar a apresentação do modal de agendamento ao modelo visual enviado pelo usuário.
+- [x] Preencher data e hora do agendamento somente ao aceitar a sugestão do Fornecedor.
+- [x] Atualizar o painel do Fornecedor para exibir `receivedAt` quando a nota estiver Recebida.
+- [x] Adicionar testes para a persistência/leitura de `receivedAt` e sua exibição nas telas relevantes.
+- [x] Registrar evidência verificável da atualização automática sem reload nos painéis de Operador e Fornecedor.
+- [x] Adicionar teste de integração para confirmar que o recebimento persiste e retorna `receivedAt` na listagem.
+- [x] Validar tecnicamente o ciclo de atualização em dois perfis que usam o mesmo cliente de consultas global.
