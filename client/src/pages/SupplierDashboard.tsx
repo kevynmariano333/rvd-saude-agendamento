@@ -23,7 +23,7 @@ function ReceiptCertificateButton({ appointmentId }: { appointmentId: number }) 
     const result = await certificate.refetch();
     if (!result.data) return toast.error(result.error?.message || "Não foi possível gerar o comprovante.");
     const { appointment, confirmedByName, confirmedByLogin, scheduledFor } = result.data;
-    generateReceiptCertificatePdf({ invoiceNumber: appointment.invoiceNumber, supplierName: appointment.invoiceSupplierName, recipientCnpj: appointment.recipientCnpj, purchaseOrder: appointment.purchaseOrder, scheduledFor, confirmedByName, confirmedByLogin });
+    await generateReceiptCertificatePdf({ invoiceNumber: appointment.invoiceNumber, supplierName: appointment.invoiceSupplierName, recipientCnpj: appointment.recipientCnpj, purchaseOrder: appointment.purchaseOrder, scheduledFor, confirmedByName, confirmedByLogin });
   };
   return <Button onClick={download} disabled={certificate.isFetching} variant="ghost" className="h-9 rounded-xl border border-rvd-plum-soft px-3 text-xs font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"><Download className="size-4" />{certificate.isFetching ? "Gerando..." : "Comprovante PDF"}</Button>;
 }

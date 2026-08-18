@@ -171,3 +171,5 @@
 - [x] Disponibilizar o PDF de entrega somente para notas Agendadas no histórico do Fornecedor.
 - [x] Ocultar o botão de PDF em notas Recebidas e Concluídas.
 - [x] Exibir o botão de PDF ao lado de Conversar para a nota Agendada.
+- [x] Inserir o logo oficial da RVD Saúde no cabeçalho do PDF de agendamento.
+- [x] Validar tecnicamente o PDF com o logo e a identidade visual da marca.

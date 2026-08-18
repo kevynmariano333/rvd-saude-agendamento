@@ -18,13 +18,26 @@ export function receiptCertificateFileName(invoiceNumber: string | null) {
   return `comprovante-agendamento-rvd-nf-${invoiceNumber || "sem-numero"}.pdf`;
 }
 
-export function generateReceiptCertificatePdf(data: ReceiptCertificateData) {
+async function getRvdLogoDataUrl() {
+  const response = await fetch("/manus-storage/RVD-Saude_f78a565b.png");
+  if (!response.ok) throw new Error("Não foi possível carregar o logo da RVD Saúde.");
+  const blob = await response.blob();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Não foi possível preparar o logo da RVD Saúde."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export async function generateReceiptCertificatePdf(data: ReceiptCertificateData) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const plum: [number, number, number] = [120, 32, 120];
   const blue: [number, number, number] = [142, 193, 217];
-  doc.setFillColor(...plum); doc.rect(0, 0, 210, 42, "F");
-  doc.setFillColor(...blue); doc.roundedRect(16, 12, 12, 12, 3, 3, "F");
-  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text("RVD Saúde", 34, 20); doc.setFontSize(10); doc.text("AGENDAMENTO · COMPROVANTE PARA ENTREGA", 34, 28);
+  doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 42, "F");
+  try { doc.addImage(await getRvdLogoDataUrl(), "PNG", 16, 6, 27, 27); } catch { doc.setFillColor(...blue); doc.roundedRect(16, 12, 12, 12, 3, 3, "F"); }
+  doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text("RVD Saúde", 49, 19); doc.setFontSize(10); doc.text("AGENDAMENTO · COMPROVANTE PARA ENTREGA", 49, 27);
+  doc.setFillColor(...plum); doc.rect(0, 38, 210, 4, "F");
   doc.setTextColor(...plum); doc.setFontSize(19); doc.text("Comprovante de agendamento", 16, 62);
   doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(70, 50, 70); doc.text("Documento para acompanhar a entrega da nota fiscal agendada.", 16, 70);
   doc.setDrawColor(...blue); doc.setLineWidth(0.7); doc.line(16, 77, 194, 77);
