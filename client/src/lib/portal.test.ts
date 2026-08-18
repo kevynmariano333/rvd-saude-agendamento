@@ -18,5 +18,6 @@ describe("momento exibido do agendamento", () => {
     expect(hasConfirmedAppointmentMoment("backlog")).toBe(false);
     expect(hasConfirmedAppointmentMoment("scheduled")).toBe(true);
     expect(hasConfirmedAppointmentMoment("received")).toBe(true);
+    expect(hasConfirmedAppointmentMoment("completed")).toBe(true);
   });
 });

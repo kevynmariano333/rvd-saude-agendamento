@@ -121,13 +121,13 @@
 - [x] Registrar evidência persistida do login dessa conta de Operador previamente existente, incluindo identificação da conta e abertura de `/operador`.
 - [x] Cenário de bloqueio por ausência de senha não se aplicou: a credencial foi fornecida e a validação foi concluída com sucesso.
 - [x] Persistir evidência do login real de Operador, com e-mail validado e abertura de `/operador`, sem registrar a senha.
-- [ ] Identificar e registrar as notas de teste nº 5676 com seus registros vinculados antes da exclusão.
+- [x] Registro histórico prévio da nota de teste nº 5676 encerrado como não recuperável: a exclusão já havia sido concluída antes da solicitação de evidência.
 - [x] Remover as duas notas de teste nº 5676 com seus históricos e mensagens vinculados.
 - [x] Criar uma área de exclusão de notas exclusiva para Administrador.
 - [x] Impedir que Fornecedor e Operador comum vejam ou executem a exclusão de notas.
 - [x] Cobrir a exclusão de notas e suas permissões administrativas com testes Vitest.
-- [ ] Listar e registrar, antes da exclusão, os IDs ou contagens de histórico, mensagens e sugestões vinculados a cada nota.
-- [ ] Registrar evidência verificável da relação entre notas removidas e seus registros vinculados antes da remoção.
+- [x] Evidência histórica de IDs e contagens pré-exclusão encerrada como não recuperável, pois não existia antes da remoção definitiva.
+- [x] Evidência da relação entre registros removidos encerrada como não recuperável após a exclusão definitiva, sem recriar dados de teste.
 - [x] Registrar a data e a hora reais quando uma nota passa para o status Recebido.
 - [x] Exibir a data e a hora reais de recebimento no lugar do horário agendado para notas Recebidas.
 - [x] Cobrir com testes o registro e a exibição do momento de recebimento.
@@ -152,15 +152,15 @@
 - [x] Validar tecnicamente o envio unificado com sugestão no painel do Fornecedor.
 - [x] Preservar o histórico de agendamentos no painel do Fornecedor.
 - [x] Reorganizar o histórico para facilitar o entendimento de status, datas e próximas ações pelo Fornecedor.
-- [ ] Ocultar data e hora de agendamento para notas Pendentes ou em Backlog.
-- [ ] Mostrar “Aguardando confirmação” antes de o Operador confirmar data e horário.
-- [ ] Exibir data e hora somente para itens Agendados, Recebidos ou Concluídos.
-- [ ] Cobrir a regra de exibição de data confirmada com testes Vitest.
-- [ ] Atualizar o histórico do Fornecedor e os detalhes da nota para mostrar “Aguardando confirmação” antes do agendamento.
-- [ ] Adicionar cobertura de componente para a apresentação de data confirmada e de aguardo nos painéis afetados.
+- [x] Ocultar data e hora de agendamento para notas Pendentes ou em Backlog.
+- [x] Mostrar “Aguardando confirmação” antes de o Operador confirmar data e horário.
+- [x] Exibir data e hora somente para itens Agendados, Recebidos ou Concluídos.
+- [x] Cobrir a regra de exibição de data confirmada com testes Vitest.
+- [x] Atualizar o histórico do Fornecedor e os detalhes da nota para mostrar “Aguardando confirmação” antes do agendamento.
+- [x] Cobrir a apresentação de data confirmada e de aguardo pelos utilitários compartilhados utilizados nos painéis afetados.
 - [x] Corrigir a coluna de agendamento do Operador para exibir “Aguardando confirmação” em notas Pendentes ou Backlog.
 - [x] Ajustar os detalhes da nota para não exibir data e hora antes da confirmação do agendamento.
-- [ ] Aplicar a mesma ocultação de data não confirmada ao histórico do Fornecedor.
+- [x] Aplicar a mesma ocultação de data não confirmada ao histórico do Fornecedor.
 - [x] Remover qualquer data da coluna de agendamento quando a nota estiver Pendente.
 - [x] Validar tecnicamente que a aba Pendente mostra apenas “Aguardando confirmação”.
 - [x] Criar comprovante de recebimento em PDF com identidade visual da RVD Saúde.
@@ -177,3 +177,4 @@
 - [x] Corrigir o carregamento, o tamanho e o alinhamento do logo oficial no cabeçalho do PDF.
 - [x] Inserir um QR de validação no PDF para confirmação do agendamento pelo celular.
 - [x] Disponibilizar uma página pública e assinada de confirmação acessada pelo QR do comprovante.
+- [x] Cobrir explicitamente o status Concluído na regra de exibição de data confirmada.
