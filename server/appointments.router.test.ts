@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   listAppointmentSuggestions: vi.fn(),
   listUnreadAppointmentMessages: vi.fn(),
   markAppointmentMessagesRead: vi.fn(),
+  returnAppointmentForRescheduling: vi.fn(),
   touchUserSignIn: vi.fn(),
   updateAppointmentStatus: vi.fn(),
   createLocalUser: vi.fn(),
@@ -86,6 +87,26 @@ describe("procedures de agendamento", () => {
     const adminCaller = appRouter.createCaller(context("admin"));
     await adminCaller.appointments.delete({ appointmentId: 71 });
     expect(mocks.deleteAppointmentById).toHaveBeenCalledWith(71);
+  });
+
+  it("permite somente ao Administrador retornar nota recebida para novo agendamento", async () => {
+    const scheduledFor = new Date("2030-09-01T10:00:00.000Z");
+    mocks.getAppointmentById.mockResolvedValue({ id: 72, supplierId: 12, status: "received", scheduledFor });
+    mocks.returnAppointmentForRescheduling.mockResolvedValue({ id: 72, status: "scheduled" });
+
+    const operatorCaller = appRouter.createCaller(context("operator"));
+    await expect(operatorCaller.appointments.returnForRescheduling({ appointmentId: 72 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const adminCaller = appRouter.createCaller(context("admin"));
+    await adminCaller.appointments.returnForRescheduling({ appointmentId: 72 });
+    expect(mocks.returnAppointmentForRescheduling).toHaveBeenCalledWith({ appointmentId: 72, previousStatus: "received", previousScheduledFor: scheduledFor, handledBy: 24 });
+  });
+
+  it("impede retorno administrativo para novo agendamento fora de Recebido ou Concluído", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 73, supplierId: 12, status: "scheduled", scheduledFor: new Date("2030-09-01T10:00:00.000Z") });
+    const adminCaller = appRouter.createCaller(context("admin"));
+    await expect(adminCaller.appointments.returnForRescheduling({ appointmentId: 73 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.returnAppointmentForRescheduling).not.toHaveBeenCalled();
   });
 
   it("provisiona o acesso de teste admin para operador e fornecedor conforme o perfil", async () => {

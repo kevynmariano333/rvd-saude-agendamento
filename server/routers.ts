@@ -24,6 +24,7 @@ import {
   listUnreadAppointmentMessages,
   listSupplierActiveAppointments,
   markAppointmentMessagesRead,
+  returnAppointmentForRescheduling,
   rescueAppointment,
   scheduleAppointment,
   touchUserSignIn,
@@ -75,7 +76,7 @@ function assertOperator(role: "admin" | "operator" | "supplier") {
 }
 
 function assertAdmin(role: "admin" | "operator" | "supplier") {
-  if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "A exclusão de notas é restrita ao Administrador." });
+  if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Ação restrita ao Administrador." });
 }
 
 async function getAccessibleAppointment(user: { id: number; role: "admin" | "operator" | "supplier" }, appointmentId: number) {
@@ -230,6 +231,22 @@ export const appRouter = router({
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
         await deleteAppointmentById(appointment.id);
         return { success: true } as const;
+      }),
+    returnForRescheduling: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        assertAdmin(ctx.user.role);
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
+        if (appointment.status !== "received" && appointment.status !== "completed") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Somente notas Recebidas ou Concluídas podem retornar para agendamento." });
+        }
+        return returnAppointmentForRescheduling({
+          appointmentId: appointment.id,
+          previousStatus: appointment.status,
+          previousScheduledFor: appointment.scheduledFor,
+          handledBy: ctx.user.id,
+        });
       }),
     create: protectedProcedure
       .input(

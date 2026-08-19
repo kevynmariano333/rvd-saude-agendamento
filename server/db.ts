@@ -463,6 +463,39 @@ export async function updateAppointmentStatus(input: {
   return getAppointmentById(input.appointmentId);
 }
 
+export async function returnAppointmentForRescheduling(input: {
+  appointmentId: number;
+  previousStatus: "received" | "completed";
+  previousScheduledFor: Date;
+  handledBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.transaction(async tx => {
+    await tx
+      .update(appointments)
+      .set({
+        status: "scheduled",
+        receivedAt: null,
+        preNoteConfirmedAt: null,
+        preNoteConfirmedBy: null,
+        handledBy: input.handledBy,
+        updatedAt: new Date(),
+      })
+      .where(eq(appointments.id, input.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({
+      appointmentId: input.appointmentId,
+      previousStatus: input.previousStatus,
+      nextStatus: "scheduled",
+      handledBy: input.handledBy,
+      eventNote: "Status corrigido pelo administrador. Nota retornada para novo agendamento.",
+      previousScheduledFor: input.previousScheduledFor,
+      nextScheduledFor: input.previousScheduledFor,
+    });
+  });
+  return getAppointmentById(input.appointmentId);
+}
+
 export async function confirmAppointmentPreNote(input: { appointmentId: number; status: AppointmentStatus; operatorId: number }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");

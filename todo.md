@@ -236,3 +236,7 @@
 - [x] Validar que a tela de login mantém somente acesso e cadastro de fornecedor após a remoção.
 - [x] Remover o selo RVD Saúde Agendamento do cabeçalho da central de Agendamentos.
 - [x] Validar visualmente o cabeçalho da central sem o selo.
+- [x] Permitir que apenas Administradores retornem notas Recebidas ou Concluídas para Agendado.
+- [x] Registrar a volta administrativa de status no histórico da nota.
+- [x] Adicionar a ação de correção na tela Administrar notas somente para status Recebido e Concluído.
+- [x] Cobrir e validar a volta administrativa para novo agendamento.
