@@ -184,7 +184,7 @@ export const appRouter = router({
         return { valid: true as const, invoiceNumber: appointment.invoiceNumber, scheduledFor };
       }),
     list: protectedProcedure
-      .input(z.object({ date: z.string().optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional() }).optional())
+      .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional() }).optional())
       .query(async ({ ctx, input }) => {
         const filters: AppointmentFilters = { date: input?.date, status: input?.status as AppointmentStatus | undefined, invoiceNumber: input?.invoiceNumber, supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj };
         if (!isOperator(ctx.user.role)) filters.supplierId = ctx.user.id;

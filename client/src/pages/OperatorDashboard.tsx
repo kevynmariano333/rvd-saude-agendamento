@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { trpc } from "@/lib/trpc";
 import { getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, type PortalStatus, formatAppointmentDate, statusCopy } from "@/lib/portal";
 import { toggleTodayFilter } from "@/lib/agendaFilters";
+import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardCheck, FileText, Filter, Grid2X2, MessageSquare, RefreshCw, RotateCcw, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -25,7 +26,7 @@ const tabs: { id: StatusTab; label: string; icon: typeof Grid2X2 }[] = [
 ];
 const statusStyle: Record<PortalStatus, string> = { pending: "bg-rvd-blue-pale text-rvd-plum", scheduled: "bg-rvd-plum-pale text-rvd-plum", received: "bg-rvd-lilac-blue text-rvd-plum", completed: "bg-rvd-blue text-rvd-plum", backlog: "bg-rvd-plum-pale text-rvd-plum", rejected: "bg-rvd-lilac-blue text-rvd-plum" };
 
-function todayValue() { return new Date().toLocaleDateString("en-CA"); }
+function todayValue() { return formatSaoPauloDateKey(); }
 function datePart(value: Date | string) { return new Date(value).toLocaleDateString("en-CA"); }
 
 export default function OperatorDashboard() {

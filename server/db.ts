@@ -16,6 +16,7 @@ import { ENV } from "./_core/env";
 import { normalizeCnpj } from "./fiscalFilters";
 import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 import { getReceiptTimestampForStatus } from "./receiptStatus";
+import { getSaoPauloDayRange } from "../shared/dateFilters";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -134,9 +135,8 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
   }
   if (filters.recipientCnpj) conditions.push(like(appointments.recipientCnpj, `%${normalizeCnpj(filters.recipientCnpj)}%`));
   if (filters.date) {
-    const start = new Date(`${filters.date}T00:00:00`);
-    const end = new Date(`${filters.date}T23:59:59.999`);
-    conditions.push(gte(appointments.scheduledFor, start), lte(appointments.scheduledFor, end));
+    const range = getSaoPauloDayRange(filters.date);
+    if (range) conditions.push(gte(appointments.scheduledFor, range.start), lte(appointments.scheduledFor, range.end));
   }
 
   const query = db

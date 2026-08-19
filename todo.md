@@ -220,3 +220,5 @@
 - [x] Validar a tela de login e a autenticação sem erro de consulta de API.
 - [x] Tornar Agendamentos do Dia um filtro alternável, com destaque azul quando ativo.
 - [x] Validar no navegador a ativação e a desativação do filtro diário.
+- [x] Corrigir o filtro Agendamentos do Dia para localizar notas agendadas na data atual no fuso horário brasileiro.
+- [x] Validar no navegador que a NF agendada para hoje permanece visível quando o filtro diário está aplicado.
