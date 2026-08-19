@@ -234,3 +234,5 @@
 - [x] Validar no ambiente publicado que Agendamentos do Dia exclui a nota programada para amanhã.
 - [x] Remover o bloco Acesso de demonstração da tela de login.
 - [x] Validar que a tela de login mantém somente acesso e cadastro de fornecedor após a remoção.
+- [x] Remover o selo RVD Saúde Agendamento do cabeçalho da central de Agendamentos.
+- [x] Validar visualmente o cabeçalho da central sem o selo.

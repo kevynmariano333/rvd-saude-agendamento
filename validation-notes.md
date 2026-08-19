@@ -15,3 +15,4 @@
 - 2026-08-19: Em seguida, **Agendamentos de Amanhã aplicado** exibiu a NF 5676 programada para 20/08/2026. Os dois atalhos agora exibem somente suas respectivas datas programadas.
 - 2026-08-19: Com a verificação local estrita da data programada, **Agendamentos do Dia aplicado** deixou a tabela vazia e excluiu corretamente a NF 5676 programada para 20/08/2026.
 - 2026-08-19: **Agendamentos de Amanhã aplicado** continua exibindo a NF 5676 programada para 20/08/2026, confirmando a separação completa entre os dois atalhos.
+- 2026-08-19: O cabeçalho da central de Agendamentos foi revisado visualmente após a remoção do selo. Permanecem apenas o título Agendamentos e sua descrição, sem o rótulo RVD Saúde Agendamento à direita.
