@@ -41,6 +41,7 @@ import { storagePut } from "./storage";
 import { MAX_XML_BYTES, parseInvoiceXml } from "./xmlInvoice";
 import { ENV } from "./_core/env";
 import { createAppointmentValidationToken, readAppointmentValidationToken } from "./appointmentValidation";
+import { buildDashboardMetrics } from "./dashboardMetrics";
 
 const localProfileSchema = z.enum(["operator", "supplier"]);
 const statusSchema = z.enum(appointmentStatuses);
@@ -407,17 +408,10 @@ export const appRouter = router({
       }),
   }),
   analytics: router({
-    dashboard: protectedProcedure.query(async ({ ctx }) => {
+    dashboard: protectedProcedure.input(z.object({ month: z.number().int().min(1).max(12), year: z.number().int().min(2020).max(2100) })).query(async ({ ctx, input }) => {
       assertOperator(ctx.user.role);
       const items = (await listAppointments()).filter(item => item.status !== "backlog");
-      const statusCounts = { pending: 0, scheduled: 0, received: 0, completed: 0, backlog: 0, rejected: 0 };
-      const supplierCounts = new Map<string, number>();
-      items.forEach(item => {
-        statusCounts[item.status] += 1;
-        const name = item.supplierName || "Fornecedor";
-        supplierCounts.set(name, (supplierCounts.get(name) ?? 0) + 1);
-      });
-      return { total: items.length, statusCounts, topSuppliers: Array.from(supplierCounts, ([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total).slice(0, 5) };
+      return buildDashboardMetrics(items, input);
     }),
   }),
 });

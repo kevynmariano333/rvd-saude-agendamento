@@ -198,3 +198,9 @@
 - [x] Revisar os textos institucionais da tela de login para maior clareza e atratividade.
 - [x] Atualizar o subtítulo da marca da barra superior para Sistema de Agendamento.
 - [x] Validar que Sistema de Agendamento aparece abaixo de RVD Saúde na barra superior.
+- [x] Renomear o indicador Pendente para Pendentes de Agendamento no Dashboard.
+- [x] Adicionar filtros de mês e ano ao Dashboard operacional.
+- [x] Exibir notas recebidas por dia no período filtrado.
+- [x] Exibir ranking de Top Fornecedores com nome e quantidade de notas recebidas.
+- [x] Calcular e exibir o tempo médio de espera para agendamento.
+- [x] Cobrir os cálculos do Dashboard com testes automatizados e validar a visualização.
