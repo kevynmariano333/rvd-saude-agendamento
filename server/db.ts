@@ -165,6 +165,7 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       rejectionReason: appointments.rejectionReason,
       status: appointments.status,
       createdAt: appointments.createdAt,
+      updatedAt: appointments.updatedAt,
     })
     .from(appointments)
     .innerJoin(users, eq(appointments.supplierId, users.id));

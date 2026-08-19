@@ -222,3 +222,7 @@
 - [x] Validar no navegador a ativação e a desativação do filtro diário.
 - [x] Corrigir o filtro Agendamentos do Dia para localizar notas agendadas na data atual no fuso horário brasileiro.
 - [x] Validar no navegador que a NF agendada para hoje permanece visível quando o filtro diário está aplicado.
+- [x] Corrigir a divergência em que Agendado indica uma nota, mas Agendamentos do Dia deixa a tabela vazia.
+- [x] Validar que o filtro diário mostra na tabela a mesma nota contabilizada como Agendada.
+- [x] Incluir no filtro diário as notas registradas ou atualizadas hoje, além das agendadas para hoje.
+- [x] Validar no navegador a NF registrada hoje visível sob Agendamentos do Dia aplicado.
