@@ -180,3 +180,13 @@
 - [x] Cobrir explicitamente o status Concluído na regra de exibição de data confirmada.
 - [x] Reproduzir e corrigir o acesso ao comprovante PDF pelo perfil de Fornecedor.
 - [x] Validar o download do comprovante de uma nota Agendada no navegador.
+- [x] Criar relatório Consolidado com data de agendamento, data de recebimento e itens recebidos.
+- [x] Adicionar filtros de período de agendamento, status, fornecedor e CNPJ destinatário no Relatório.
+- [x] Redesenhar a área de Relatórios no padrão visual de cabeçalho e abas solicitado.
+- [x] Exportar o relatório consolidado filtrado em arquivo Excel.
+- [x] Cobrir a consulta e a exportação do consolidado com testes automatizados.
+- [x] Ocultar temporariamente o status Backlog nas abas, filtros, ações, calendário e Relatórios do portal.
+- [x] Requisito corrigido: não adicionar caminhão no cabeçalho de Relatórios.
+- [x] Requisito corrigido: não criar animação de carregamento inicial com caminhão.
+- [x] Requisito corrigido: não adicionar caminhão na faixa superior do painel.
+- [x] Adicionar um caminhão RVD animado no canto superior esquerdo da tela de login.

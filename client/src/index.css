@@ -32,8 +32,14 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .rvd-reveal { animation: rvd-reveal 460ms var(--ease-out) both; }
+  .rvd-login-truck { animation: rvd-login-truck-drive 3.8s var(--ease-in-out, ease-in-out) infinite; }
   @keyframes rvd-reveal {
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes rvd-login-truck-drive {
+    0%, 100% { transform: translateX(0) rotate(0deg); }
+    45% { transform: translateX(54px) rotate(1deg); }
+    55% { transform: translateX(54px) rotate(-1deg); }
   }
 }

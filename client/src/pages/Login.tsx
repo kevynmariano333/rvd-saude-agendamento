@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Building2, ChevronRight, CircleUserRound, LockKeyhole, Mail, Stethoscope, UserPlus } from "lucide-react";
+import { ArrowLeft, Building2, ChevronRight, CircleUserRound, LockKeyhole, Mail, Stethoscope, Truck, UserPlus } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -66,6 +66,7 @@ export default function Login() {
         <section className="relative overflow-hidden bg-rvd-plum px-7 py-10 text-white sm:px-12 lg:flex lg:flex-col lg:justify-between lg:px-14 lg:py-14">
           <div className="absolute right-[-6rem] top-[-5rem] h-64 w-64 rounded-full bg-rvd-blue" />
           <div className="absolute bottom-[-10rem] left-[-7rem] h-80 w-80 rounded-full bg-rvd-lilac-blue" />
+          <div className="absolute left-36 top-8 z-10 hidden sm:block" aria-hidden="true"><div className="absolute -bottom-2 -left-5 w-32 border-t border-dashed border-white/45" /><div className="rvd-login-truck relative flex items-center gap-1.5 rounded-xl bg-white px-2 py-1.5 text-rvd-plum shadow-lg"><Truck className="size-7" strokeWidth={2.4} /><img src="/manus-storage/RVD-Saude_f78a565b.png" alt="" className="size-5 rounded-md object-cover" /></div></div>
           <div className="relative z-10 flex items-center gap-4">
             <img src="/manus-storage/RVD-Saude_f78a565b.png" alt="Logo RVD Saúde" className="h-16 w-16 rounded-full border-4 border-white object-cover" />
             <div><p className="font-display text-xl font-extrabold">RVD Saúde</p><p className="mt-1 text-sm font-medium">Agendamento</p></div>

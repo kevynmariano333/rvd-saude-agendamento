@@ -409,7 +409,7 @@ export const appRouter = router({
   analytics: router({
     dashboard: protectedProcedure.query(async ({ ctx }) => {
       assertOperator(ctx.user.role);
-      const items = await listAppointments();
+      const items = (await listAppointments()).filter(item => item.status !== "backlog");
       const statusCounts = { pending: 0, scheduled: 0, received: 0, completed: 0, backlog: 0, rejected: 0 };
       const supplierCounts = new Map<string, number>();
       items.forEach(item => {
