@@ -7,6 +7,7 @@ import superjson from "superjson";
 import App from "./App";
 import { startLogin } from "./const";
 import { realtimeQueryDefaults } from "./lib/realtime";
+import { isUnexpectedHtmlApiResponse } from "./lib/apiResponse";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -69,11 +70,26 @@ const trpcClient = trpc.createClient({
         }
         return {};
       },
-      fetch(input, init) {
-        return globalThis.fetch(input, {
+      async fetch(input, init) {
+        const headers = new Headers(init?.headers);
+        headers.set("Accept", "application/json");
+        const requestInit: RequestInit = {
           ...(init ?? {}),
           credentials: "include",
-        });
+          headers,
+        };
+        let response = await globalThis.fetch(input, requestInit);
+
+        // Durante reconexões do ambiente de desenvolvimento, o fallback do
+        // aplicativo pode responder uma única vez com index.html. Consultas
+        // GET podem ser repetidas com segurança para obter o JSON da API.
+        const method = (init?.method ?? "GET").toUpperCase();
+        if (method === "GET" && isUnexpectedHtmlApiResponse(response)) {
+          await new Promise(resolve => setTimeout(resolve, 150));
+          response = await globalThis.fetch(input, requestInit);
+        }
+
+        return response;
       },
     }),
   ],

@@ -44,6 +44,11 @@ async function startServer() {
       createContext,
     })
   );
+  // Nunca encaminhar uma rota de API não atendida para o fallback HTML do
+  // Vite. Isso mantém o contrato JSON do cliente e evita erros de parse.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "API endpoint not found" });
+  });
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);

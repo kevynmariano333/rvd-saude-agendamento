@@ -216,3 +216,5 @@
 - [x] Reler XMLs já armazenados para recuperar valor total e itens financeiros ausentes.
 - [x] Preencher e validar o valor financeiro da nota existente no Detalhamento da Nota.
 - [x] Cobrir a extração de valores de XMLs anteriores com testes automatizados.
+- [x] Reproduzir e corrigir a consulta tRPC que retorna HTML em vez de JSON na tela de login.
+- [x] Validar a tela de login e a autenticação sem erro de consulta de API.

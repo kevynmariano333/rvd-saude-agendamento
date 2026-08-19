@@ -29,3 +29,5 @@ O Detalhamento da Nota foi revisado depois da ampliação. A janela agora ocupa 
 O Histórico de datas foi validado visualmente com três registros reais. A nova linha do tempo apresenta cada evento em cartão próprio, com status, perfil, responsável, data, hora, tipo de registro e observação, sem a compressão da tabela anterior.
 
 A NF 5676 teve o XML armazenado relido e passou a mostrar o valor total de R$ 39.778,00, com 25 unidades do item ARTICAINE 1:100.000 a R$ 1.591,12 cada. A verificação também confirmou que não restaram XMLs armazenados sem total financeiro no banco atual.
+
+A rota de login com o parâmetro `from_webdev=1` foi reaberta após o reforço do transporte tRPC. A API respondeu JSON (`application/json`) e o console não apresentou erros novos de consulta.
