@@ -195,3 +195,6 @@
 - [x] Atualizar o subtítulo da marca na barra superior para Sistema de Agendamento.
 - [x] Alterar o fundo do emblema circular do caminhão RVD para branco.
 - [x] Remover o caminhão da barra superior e restaurar o logo original da RVD Saúde.
+- [x] Revisar os textos institucionais da tela de login para maior clareza e atratividade.
+- [x] Atualizar o subtítulo da marca da barra superior para Sistema de Agendamento.
+- [x] Validar que Sistema de Agendamento aparece abaixo de RVD Saúde na barra superior.

@@ -19,3 +19,5 @@ A barra superior foi validada visualmente no painel autenticado: o emblema à es
 O emblema foi ajustado novamente e validado com fundo branco, borda suave da paleta RVD e caminhão com a identificação RVD na caçamba.
 
 Por solicitação posterior, o caminhão foi removido da barra superior e o logo original da RVD Saúde foi restaurado como marca única.
+
+Os textos institucionais do login foram revisados e verificados visualmente, com a proposta de valor focada em agilidade, visibilidade e acompanhamento completo da nota. A marca no portal e na tela de login agora apresenta o subtítulo “Sistema de Agendamento”.
