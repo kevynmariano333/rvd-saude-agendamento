@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, type PortalStatus, formatAppointmentDate, statusCopy } from "@/lib/portal";
-import { toggleTodayFilter } from "@/lib/agendaFilters";
+import { isScheduledForDate, toggleTodayFilter } from "@/lib/agendaFilters";
 import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardCheck, FileText, Filter, Grid2X2, MessageSquare, RefreshCw, RotateCcw, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -69,7 +69,8 @@ export default function OperatorDashboard() {
     const appointment = allAgenda.data?.find(item => item.id === requestedId);
     if (appointment) setChatTarget(appointment);
   }, [allAgenda.data, location]);
-  const visibleAgenda = useMemo(() => agenda.data?.filter(item => item.status !== "backlog") ?? [], [agenda.data]);
+  const shortcutDate = dailyFilterDate || tomorrowFilterDate;
+  const visibleAgenda = useMemo(() => agenda.data?.filter(item => item.status !== "backlog" && (!shortcutDate || isScheduledForDate(item.scheduledFor, shortcutDate))) ?? [], [agenda.data, shortcutDate]);
   const counters = useMemo(() => ({ all: allAgenda.data?.filter(item => item.status !== "backlog").length ?? 0, pending: allAgenda.data?.filter(item => item.status === "pending").length ?? 0, scheduled: allAgenda.data?.filter(item => item.status === "scheduled").length ?? 0, received: allAgenda.data?.filter(item => item.status === "received").length ?? 0, completed: allAgenda.data?.filter(item => item.status === "completed").length ?? 0, backlog: 0, rejected: allAgenda.data?.filter(item => item.status === "rejected").length ?? 0 }), [allAgenda.data]);
   const isTodayFilterApplied = Boolean(dailyFilterDate);
   const isTomorrowFilterApplied = Boolean(tomorrowFilterDate);

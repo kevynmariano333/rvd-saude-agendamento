@@ -13,3 +13,5 @@
 - 2026-08-19: O atalho foi acionado novamente e retornou ao rótulo e à aparência normal, removendo o filtro de amanhã sem alterar a listagem geral.
 - 2026-08-19: Após a correção de separação, **Agendamentos do Dia aplicado** não exibiu a NF 5676 programada para 20/08/2026; a tabela ficou vazia para a data atual, como esperado.
 - 2026-08-19: Em seguida, **Agendamentos de Amanhã aplicado** exibiu a NF 5676 programada para 20/08/2026. Os dois atalhos agora exibem somente suas respectivas datas programadas.
+- 2026-08-19: Com a verificação local estrita da data programada, **Agendamentos do Dia aplicado** deixou a tabela vazia e excluiu corretamente a NF 5676 programada para 20/08/2026.
+- 2026-08-19: **Agendamentos de Amanhã aplicado** continua exibindo a NF 5676 programada para 20/08/2026, confirmando a separação completa entre os dois atalhos.

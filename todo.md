@@ -230,3 +230,5 @@
 - [x] Validar no navegador a aplicação e a remoção do filtro de amanhã.
 - [x] Restringir Agendamentos do Dia à data programada de hoje, sem incluir notas de amanhã criadas hoje.
 - [x] Validar no navegador que a nota de 20/08 aparece somente em Agendamentos de Amanhã.
+- [x] Diagnosticar por que o portal publicado ainda mostra a nota de 20/08 sob Agendamentos do Dia.
+- [x] Validar no ambiente publicado que Agendamentos do Dia exclui a nota programada para amanhã.
