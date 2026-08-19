@@ -12,6 +12,10 @@ describe("toggleTodayFilter", () => {
     expect(toggleTodayFilter(today, today)).toBe("");
   });
 
+  it("aplica a data de amanhã no mesmo comportamento de atalho alternável", () => {
+    expect(toggleTodayFilter(null, "2026-08-20")).toBe("2026-08-20");
+  });
+
   it("inclui a nota registrada hoje mesmo quando ela está marcada para outro dia", () => {
     expect(belongsToDailyAgenda({ createdAt: "2026-08-19T14:18:07.000Z", scheduledFor: "2026-08-20T21:00:00.000Z" }, today)).toBe(true);
   });

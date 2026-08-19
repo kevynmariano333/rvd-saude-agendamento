@@ -9,3 +9,5 @@
 - 2026-08-19: Com o relógio do navegador validado para 20/08/2026, o botão **Agendamentos do Dia aplicado** permaneceu azul e a NF 5676 ficou visível na tabela. Isso confirma a execução ponta a ponta do filtro diário para uma NF agendada na mesma data.
 - 2026-08-19: Após ajustar a regra para considerar também o registro no dia, o botão **Agendamentos do Dia aplicado** foi acionado na data atual. A NF 5676 permaneceu visível na tabela e o contador **Agendado 1** continuou consistente com a listagem.
 - 2026-08-19: Validação final após incluir também `updatedAt`: com **Agendamentos do Dia aplicado** em azul, a tabela exibiu a NF 5676 e o contador **Agendado 1**. Não houve divergência entre a quantidade indicada e o registro visível.
+- 2026-08-19: O novo atalho **Agendamentos de Amanhã aplicado** ficou azul no painel do Operador e retornou a NF 5676, programada para 20/08/2026. O atalho usa a data agendada do próximo dia.
+- 2026-08-19: O atalho foi acionado novamente e retornou ao rótulo e à aparência normal, removendo o filtro de amanhã sem alterar a listagem geral.

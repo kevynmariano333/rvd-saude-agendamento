@@ -226,3 +226,5 @@
 - [x] Validar que o filtro diário mostra na tabela a mesma nota contabilizada como Agendada.
 - [x] Incluir no filtro diário as notas registradas ou atualizadas hoje, além das agendadas para hoje.
 - [x] Validar no navegador a NF registrada hoje visível sob Agendamentos do Dia aplicado.
+- [x] Adicionar botão de atalho alternável para visualizar Agendamentos de Amanhã.
+- [x] Validar no navegador a aplicação e a remoção do filtro de amanhã.
