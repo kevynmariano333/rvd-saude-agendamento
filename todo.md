@@ -213,3 +213,6 @@
 - [x] Reorganizar o Histórico de datas em uma linha do tempo ampla e legível.
 - [x] Exibir status, responsável, data/hora e observações em cartões claros no Histórico de datas.
 - [x] Validar visualmente o novo layout do Histórico de datas.
+- [x] Reler XMLs já armazenados para recuperar valor total e itens financeiros ausentes.
+- [x] Preencher e validar o valor financeiro da nota existente no Detalhamento da Nota.
+- [x] Cobrir a extração de valores de XMLs anteriores com testes automatizados.

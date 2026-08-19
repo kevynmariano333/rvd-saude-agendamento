@@ -27,3 +27,5 @@ A central de agendamentos exibiu uma nota XML existente disponível para abrir o
 O Detalhamento da Nota foi revisado depois da ampliação. A janela agora ocupa largura ampla e apresenta uma faixa de resumo financeiro, além de tabela de itens com quantidade, valor unitário e valor total. Para XMLs anteriores, o sistema informa que os valores não estavam disponíveis; novos XMLs preenchem essas informações automaticamente.
 
 O Histórico de datas foi validado visualmente com três registros reais. A nova linha do tempo apresenta cada evento em cartão próprio, com status, perfil, responsável, data, hora, tipo de registro e observação, sem a compressão da tabela anterior.
+
+A NF 5676 teve o XML armazenado relido e passou a mostrar o valor total de R$ 39.778,00, com 25 unidades do item ARTICAINE 1:100.000 a R$ 1.591,12 cada. A verificação também confirmou que não restaram XMLs armazenados sem total financeiro no banco atual.
