@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, type PortalStatus, formatAppointmentDate, statusCopy } from "@/lib/portal";
-import { belongsToDailyAgenda, toggleTodayFilter } from "@/lib/agendaFilters";
+import { toggleTodayFilter } from "@/lib/agendaFilters";
 import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardCheck, FileText, Filter, Grid2X2, MessageSquare, RefreshCw, RotateCcw, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -52,7 +52,7 @@ export default function OperatorDashboard() {
   const [scheduleTime, setScheduleTime] = useState("09:00");
   const [acceptedSuggestionId, setAcceptedSuggestionId] = useState<number | undefined>();
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
-  const listInput = useMemo(() => ({ date: date || tomorrowFilterDate || undefined, status: activeStatus === "all" ? undefined : activeStatus, invoiceNumber: invoiceNumber || undefined, supplierName: supplierName || undefined, recipientCnpj: recipientCnpj || undefined }), [activeStatus, date, invoiceNumber, recipientCnpj, supplierName, tomorrowFilterDate]);
+  const listInput = useMemo(() => ({ date: date || dailyFilterDate || tomorrowFilterDate || undefined, status: activeStatus === "all" ? undefined : activeStatus, invoiceNumber: invoiceNumber || undefined, supplierName: supplierName || undefined, recipientCnpj: recipientCnpj || undefined }), [activeStatus, dailyFilterDate, date, invoiceNumber, recipientCnpj, supplierName, tomorrowFilterDate]);
   const agenda = trpc.appointments.list.useQuery(listInput);
   const allAgenda = trpc.appointments.list.useQuery();
   const activeSupplier = trpc.appointments.activeForSupplier.useQuery({ supplierId: selected?.supplierId ?? 1 }, { enabled: Boolean(selected) });
@@ -69,7 +69,7 @@ export default function OperatorDashboard() {
     const appointment = allAgenda.data?.find(item => item.id === requestedId);
     if (appointment) setChatTarget(appointment);
   }, [allAgenda.data, location]);
-  const visibleAgenda = useMemo(() => agenda.data?.filter(item => item.status !== "backlog" && (!dailyFilterDate || belongsToDailyAgenda(item, dailyFilterDate))) ?? [], [agenda.data, dailyFilterDate]);
+  const visibleAgenda = useMemo(() => agenda.data?.filter(item => item.status !== "backlog") ?? [], [agenda.data]);
   const counters = useMemo(() => ({ all: allAgenda.data?.filter(item => item.status !== "backlog").length ?? 0, pending: allAgenda.data?.filter(item => item.status === "pending").length ?? 0, scheduled: allAgenda.data?.filter(item => item.status === "scheduled").length ?? 0, received: allAgenda.data?.filter(item => item.status === "received").length ?? 0, completed: allAgenda.data?.filter(item => item.status === "completed").length ?? 0, backlog: 0, rejected: allAgenda.data?.filter(item => item.status === "rejected").length ?? 0 }), [allAgenda.data]);
   const isTodayFilterApplied = Boolean(dailyFilterDate);
   const isTomorrowFilterApplied = Boolean(tomorrowFilterDate);

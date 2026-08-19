@@ -228,3 +228,5 @@
 - [x] Validar no navegador a NF registrada hoje visível sob Agendamentos do Dia aplicado.
 - [x] Adicionar botão de atalho alternável para visualizar Agendamentos de Amanhã.
 - [x] Validar no navegador a aplicação e a remoção do filtro de amanhã.
+- [x] Restringir Agendamentos do Dia à data programada de hoje, sem incluir notas de amanhã criadas hoje.
+- [x] Validar no navegador que a nota de 20/08 aparece somente em Agendamentos de Amanhã.

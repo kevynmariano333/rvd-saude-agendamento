@@ -11,3 +11,5 @@
 - 2026-08-19: Validação final após incluir também `updatedAt`: com **Agendamentos do Dia aplicado** em azul, a tabela exibiu a NF 5676 e o contador **Agendado 1**. Não houve divergência entre a quantidade indicada e o registro visível.
 - 2026-08-19: O novo atalho **Agendamentos de Amanhã aplicado** ficou azul no painel do Operador e retornou a NF 5676, programada para 20/08/2026. O atalho usa a data agendada do próximo dia.
 - 2026-08-19: O atalho foi acionado novamente e retornou ao rótulo e à aparência normal, removendo o filtro de amanhã sem alterar a listagem geral.
+- 2026-08-19: Após a correção de separação, **Agendamentos do Dia aplicado** não exibiu a NF 5676 programada para 20/08/2026; a tabela ficou vazia para a data atual, como esperado.
+- 2026-08-19: Em seguida, **Agendamentos de Amanhã aplicado** exibiu a NF 5676 programada para 20/08/2026. Os dois atalhos agora exibem somente suas respectivas datas programadas.
