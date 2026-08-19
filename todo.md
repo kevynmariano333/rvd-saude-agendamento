@@ -232,3 +232,5 @@
 - [x] Validar no navegador que a nota de 20/08 aparece somente em Agendamentos de Amanhã.
 - [x] Diagnosticar por que o portal publicado ainda mostra a nota de 20/08 sob Agendamentos do Dia.
 - [x] Validar no ambiente publicado que Agendamentos do Dia exclui a nota programada para amanhã.
+- [x] Remover o bloco Acesso de demonstração da tela de login.
+- [x] Validar que a tela de login mantém somente acesso e cadastro de fornecedor após a remoção.

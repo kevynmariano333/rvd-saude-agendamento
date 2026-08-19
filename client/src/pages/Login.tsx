@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Building2, ChevronRight, CircleUserRound, LockKeyhole, Mail, Stethoscope, UserPlus } from "lucide-react";
+import { ArrowLeft, Building2, ChevronRight, LockKeyhole, Mail, Stethoscope, UserPlus } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -104,18 +104,16 @@ export default function Login() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-bold text-rvd-plum">{registering ? "E-mail" : "E-mail ou login de teste"}</Label>
-                <div className="relative"><Mail className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-rvd-plum" /><Input id="email" type={registering ? "email" : "text"} required value={email} onChange={event => setEmail(event.target.value)} placeholder={registering ? "nome@empresa.com" : "nome@empresa.com ou admin"} className="h-12 border-rvd-plum-soft bg-white pl-11 text-rvd-plum placeholder:text-rvd-plum/70" /></div>
+                <Label htmlFor="email" className="text-sm font-bold text-rvd-plum">E-mail ou login</Label>
+                <div className="relative"><Mail className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-rvd-plum" /><Input id="email" type={registering ? "email" : "text"} required value={email} onChange={event => setEmail(event.target.value)} placeholder="nome@empresa.com" className="h-12 border-rvd-plum-soft bg-white pl-11 text-rvd-plum placeholder:text-rvd-plum/70" /></div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-bold text-rvd-plum">Senha</Label>
-                <div className="relative"><LockKeyhole className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-rvd-plum" /><Input id="password" type="password" minLength={registering ? 6 : 1} required value={password} onChange={event => setPassword(event.target.value)} placeholder={registering ? "Mínimo de 6 caracteres" : "Sua senha ou admin no teste"} className="h-12 border-rvd-plum-soft bg-white pl-11 text-rvd-plum placeholder:text-rvd-plum/70" /></div>
+                <div className="relative"><LockKeyhole className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-rvd-plum" /><Input id="password" type="password" minLength={registering ? 6 : 1} required value={password} onChange={event => setPassword(event.target.value)} placeholder={registering ? "Mínimo de 6 caracteres" : "Sua senha"} className="h-12 border-rvd-plum-soft bg-white pl-11 text-rvd-plum placeholder:text-rvd-plum/70" /></div>
               </div>
               {registering && <div className="space-y-2"><Label htmlFor="passwordConfirmation" className="text-sm font-bold text-rvd-plum">Confirmar senha</Label><Input id="passwordConfirmation" type="password" minLength={6} required value={passwordConfirmation} onChange={event => setPasswordConfirmation(event.target.value)} placeholder="Repita a senha" className="h-12 border-rvd-plum-soft bg-white text-rvd-plum" /></div>}
               <Button type="submit" disabled={pending} className="h-12 w-full rounded-xl bg-rvd-plum text-sm font-bold text-white hover:bg-rvd-plum active:scale-[0.97]">{pending ? "Processando..." : registering ? <><UserPlus className="size-4" />Criar conta de {selectedProfileLabel}</> : <>Entrar no portal <ChevronRight className="size-4" /></>}</Button>
             </form>
-
-              {!registering && <div className="mt-5 rounded-2xl border border-rvd-blue/50 bg-rvd-blue-pale/60 p-4 text-rvd-plum"><div className="flex items-center gap-2 text-sm font-extrabold"><CircleUserRound className="size-4" />Acesso de demonstração</div><p className="mt-2 text-xs leading-5">Para conhecer o portal, selecione o perfil desejado e use <strong>login: admin</strong> e <strong>senha: admin</strong>. Cada perfil abre sua área correspondente.</p></div>}
             <div className="mt-5 text-center">{registering ? <button type="button" onClick={() => setMode("login")} className="inline-flex items-center gap-2 text-sm font-bold text-rvd-plum hover:underline"><ArrowLeft className="size-4" />Já tenho conta</button> : <button type="button" onClick={() => setMode("register")} className="inline-flex items-center gap-2 text-sm font-bold text-rvd-plum hover:underline"><UserPlus className="size-4" />Novo cadastro de {selectedProfileLabel}</button>}</div>
           </div>
         </section>
