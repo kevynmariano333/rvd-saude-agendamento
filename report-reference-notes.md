@@ -7,3 +7,5 @@ Na revisão do portal, o selo à direita do título das páginas passou a reunir
 Na tela de login, a composição do caminhão com miniatura do logo foi inserida no canto superior esquerdo do painel roxo, acima do título institucional. A animação usa apenas transformações e fica desabilitada para pessoas que optarem por movimento reduzido.
 
 Na central do Operador, a aba e o atalho de **Backlog** não são mais exibidos. As abas visíveis permanecem Todos, Pendente, Agendado, Recebido, Concluído e Rejeitado.
+
+A validação visual do caminhão na abertura foi preparada a partir de uma sessão de Operador, que foi encerrada antes da conferência do login público.

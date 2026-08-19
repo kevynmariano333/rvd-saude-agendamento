@@ -190,3 +190,4 @@
 - [x] Requisito corrigido: não criar animação de carregamento inicial com caminhão.
 - [x] Requisito corrigido: não adicionar caminhão na faixa superior do painel.
 - [x] Adicionar um caminhão RVD animado no canto superior esquerdo da tela de login.
+- [x] Remover a bolinha de logo e aplicar a marca RVD diretamente na caçamba do caminhão animado.
