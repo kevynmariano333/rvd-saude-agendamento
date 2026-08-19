@@ -218,3 +218,5 @@
 - [x] Cobrir a extração de valores de XMLs anteriores com testes automatizados.
 - [x] Reproduzir e corrigir a consulta tRPC que retorna HTML em vez de JSON na tela de login.
 - [x] Validar a tela de login e a autenticação sem erro de consulta de API.
+- [x] Tornar Agendamentos do Dia um filtro alternável, com destaque azul quando ativo.
+- [x] Validar no navegador a ativação e a desativação do filtro diário.
