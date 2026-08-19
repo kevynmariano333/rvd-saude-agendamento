@@ -210,3 +210,6 @@
 - [x] Exibir valor total da NF e valor unitário dos itens no detalhamento da nota.
 - [x] Cobrir valores fiscais e a apresentação financeira com testes automatizados.
 - [x] Validar visualmente a nova seção financeira ampliada no Detalhamento da Nota.
+- [x] Reorganizar o Histórico de datas em uma linha do tempo ampla e legível.
+- [x] Exibir status, responsável, data/hora e observações em cartões claros no Histórico de datas.
+- [x] Validar visualmente o novo layout do Histórico de datas.

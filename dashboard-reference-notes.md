@@ -25,3 +25,5 @@ O Dashboard foi revisado no perfil autenticado. Os filtros de mês e ano, os tr�
 A central de agendamentos exibiu uma nota XML existente disponível para abrir o Detalhamento da Nota. Esse registro é anterior às novas colunas financeiras, portanto serve para validar o layout ampliado e não apresenta valores retroativos; novos XMLs passam a persistir os valores extraídos.
 
 O Detalhamento da Nota foi revisado depois da ampliação. A janela agora ocupa largura ampla e apresenta uma faixa de resumo financeiro, além de tabela de itens com quantidade, valor unitário e valor total. Para XMLs anteriores, o sistema informa que os valores não estavam disponíveis; novos XMLs preenchem essas informações automaticamente.
+
+O Histórico de datas foi validado visualmente com três registros reais. A nova linha do tempo apresenta cada evento em cartão próprio, com status, perfil, responsável, data, hora, tipo de registro e observação, sem a compressão da tabela anterior.
