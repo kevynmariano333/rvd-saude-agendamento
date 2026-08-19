@@ -75,6 +75,8 @@ export const appointments = mysqlTable(
     invoiceSupplierName: varchar("invoiceSupplierName", { length: 255 }),
     recipientCnpj: varchar("recipientCnpj", { length: 20 }),
     invoiceIssuedAt: datetime("invoiceIssuedAt", { mode: "date" }),
+    invoiceTotalCents: int("invoiceTotalCents"),
+    invoiceItemsJson: text("invoiceItemsJson"),
     receivedAt: datetime("receivedAt", { mode: "date" }),
     status: mysqlEnum("status", appointmentStatuses).default("pending").notNull(),
     handledBy: int("handledBy").references(() => users.id, { onDelete: "set null" }),

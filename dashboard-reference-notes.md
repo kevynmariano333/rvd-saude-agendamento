@@ -21,3 +21,7 @@ O perfil Operador foi selecionado na tela de acesso para validar os novos indica
 O login de demonstração foi concluído no perfil de Operador Administrador. A navegação superior confirmou o acesso aos módulos Dashboard, Agendamentos, Calendário, Relatórios e Administrar notas.
 
 O Dashboard foi revisado no perfil autenticado. Os filtros de mês e ano, os três cartões de indicadores, o gráfico de recebimentos, o ranking de fornecedores e o cartão de espera foram exibidos corretamente; no período sem registros, os blocos mostram estados vazios explicativos sem dados simulados.
+
+A central de agendamentos exibiu uma nota XML existente disponível para abrir o Detalhamento da Nota. Esse registro é anterior às novas colunas financeiras, portanto serve para validar o layout ampliado e não apresenta valores retroativos; novos XMLs passam a persistir os valores extraídos.
+
+O Detalhamento da Nota foi revisado depois da ampliação. A janela agora ocupa largura ampla e apresenta uma faixa de resumo financeiro, além de tabela de itens com quantidade, valor unitário e valor total. Para XMLs anteriores, o sistema informa que os valores não estavam disponíveis; novos XMLs preenchem essas informações automaticamente.

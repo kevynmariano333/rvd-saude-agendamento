@@ -159,6 +159,8 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       invoiceSupplierName: appointments.invoiceSupplierName,
       recipientCnpj: appointments.recipientCnpj,
       invoiceIssuedAt: appointments.invoiceIssuedAt,
+      invoiceTotalCents: appointments.invoiceTotalCents,
+      invoiceItemsJson: appointments.invoiceItemsJson,
       receivedAt: appointments.receivedAt,
       rejectionReason: appointments.rejectionReason,
       status: appointments.status,
@@ -377,6 +379,8 @@ export async function createManualXmlAppointment(input: {
   recipientCnpj: string | null;
   invoiceIssuedAt: Date | null;
   serviceDescription: string | null;
+  invoiceTotalCents: number | null;
+  invoiceItemsJson: string | null;
   suggestedFor?: Date;
   suggestionNotes?: string;
 }) {
@@ -400,6 +404,8 @@ export async function createManualXmlAppointment(input: {
       invoiceSupplierName: input.invoiceSupplierName,
       recipientCnpj: input.recipientCnpj,
       invoiceIssuedAt: input.invoiceIssuedAt,
+      invoiceTotalCents: input.invoiceTotalCents,
+      invoiceItemsJson: input.invoiceItemsJson,
       status: "pending",
     });
     const appointmentId = Number(inserted[0].insertId);
@@ -507,6 +513,8 @@ export async function createUnscheduledReceipt(input: {
   recipientCnpj: string | null;
   invoiceIssuedAt: Date | null;
   serviceDescription: string | null;
+  invoiceTotalCents: number | null;
+  invoiceItemsJson: string | null;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
@@ -529,6 +537,8 @@ export async function createUnscheduledReceipt(input: {
       invoiceSupplierName: input.invoiceSupplierName,
       recipientCnpj: input.recipientCnpj,
       invoiceIssuedAt: input.invoiceIssuedAt,
+      invoiceTotalCents: input.invoiceTotalCents,
+      invoiceItemsJson: input.invoiceItemsJson,
       status: "received",
       handledBy: input.operatorId,
     });

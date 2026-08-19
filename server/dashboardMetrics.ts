@@ -7,6 +7,7 @@ export type DashboardAppointment = {
   createdAt: Date;
   supplierName: string | null;
   invoiceSupplierName: string | null;
+  invoiceTotalCents: number | null;
 };
 
 export type DashboardPeriod = {
@@ -35,7 +36,8 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
   }));
   const receivedBySupplier = new Map<string, number>();
   const pending = items.filter(item => item.status === "pending");
-  const scheduledCount = items.filter(item => item.status === "scheduled" && isWithinPeriod(item.scheduledFor, start, end)).length;
+  const scheduled = items.filter(item => item.status === "scheduled" && isWithinPeriod(item.scheduledFor, start, end));
+  const scheduledCount = scheduled.length;
   const received = items.filter(item => isWithinPeriod(item.receivedAt, start, end));
 
   received.forEach(item => {
@@ -54,6 +56,9 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
     pendingCount: pending.length,
     scheduledCount,
     receivedCount: received.length,
+    pendingTotalCents: pending.reduce((sum, item) => sum + (item.invoiceTotalCents ?? 0), 0),
+    scheduledTotalCents: scheduled.reduce((sum, item) => sum + (item.invoiceTotalCents ?? 0), 0),
+    receivedTotalCents: received.reduce((sum, item) => sum + (item.invoiceTotalCents ?? 0), 0),
     dailyReceived,
     topSuppliers: Array.from(receivedBySupplier, ([name, notesReceived]) => ({ name, notesReceived }))
       .sort((a, b) => b.notesReceived - a.notesReceived || a.name.localeCompare(b.name, "pt-BR"))
