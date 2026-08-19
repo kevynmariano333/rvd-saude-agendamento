@@ -17,3 +17,5 @@ A sessão de teste de Operador foi preparada para revisar a aplicação da nova 
 A barra superior foi validada visualmente no painel autenticado: o emblema à esquerda agora usa fundo escuro, caminhão com identificação “RVD” na caçamba e o subtítulo “Sistema de Agendamento”.
 
 O emblema foi ajustado novamente e validado com fundo branco, borda suave da paleta RVD e caminhão com a identificação RVD na caçamba.
+
+Por solicitação posterior, o caminhão foi removido da barra superior e o logo original da RVD Saúde foi restaurado como marca única.

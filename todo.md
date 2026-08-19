@@ -194,3 +194,4 @@
 - [x] Substituir o ícone circular de logo pelo caminhão com marca RVD na barra superior.
 - [x] Atualizar o subtítulo da marca na barra superior para Sistema de Agendamento.
 - [x] Alterar o fundo do emblema circular do caminhão RVD para branco.
+- [x] Remover o caminhão da barra superior e restaurar o logo original da RVD Saúde.
