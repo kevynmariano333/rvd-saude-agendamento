@@ -15,3 +15,5 @@ Na referência panorâmica da barra superior, a marca fica à esquerda da navega
 A sessão de teste de Operador foi preparada para revisar a aplicação da nova marca na barra superior após a autenticação.
 
 A barra superior foi validada visualmente no painel autenticado: o emblema à esquerda agora usa fundo escuro, caminhão com identificação “RVD” na caçamba e o subtítulo “Sistema de Agendamento”.
+
+O emblema foi ajustado novamente e validado com fundo branco, borda suave da paleta RVD e caminhão com a identificação RVD na caçamba.
