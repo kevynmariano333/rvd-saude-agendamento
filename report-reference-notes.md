@@ -9,3 +9,9 @@ Na tela de login, a composição do caminhão com miniatura do logo foi inserida
 Na central do Operador, a aba e o atalho de **Backlog** não são mais exibidos. As abas visíveis permanecem Todos, Pendente, Agendado, Recebido, Concluído e Rejeitado.
 
 A validação visual do caminhão na abertura foi preparada a partir de uma sessão de Operador, que foi encerrada antes da conferência do login público.
+
+Na referência panorâmica da barra superior, a marca fica à esquerda da navegação. A adaptação solicitada substituirá o ícone circular por um caminhão RVD, manterá “RVD Saúde” como título e exibirá “Sistema de Agendamento” como subtítulo em caixa alta.
+
+A sessão de teste de Operador foi preparada para revisar a aplicação da nova marca na barra superior após a autenticação.
+
+A barra superior foi validada visualmente no painel autenticado: o emblema à esquerda agora usa fundo escuro, caminhão com identificação “RVD” na caçamba e o subtítulo “Sistema de Agendamento”.

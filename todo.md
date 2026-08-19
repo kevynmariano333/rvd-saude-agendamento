@@ -191,3 +191,5 @@
 - [x] Requisito corrigido: não adicionar caminhão na faixa superior do painel.
 - [x] Adicionar um caminhão RVD animado no canto superior esquerdo da tela de login.
 - [x] Remover a bolinha de logo e aplicar a marca RVD diretamente na caçamba do caminhão animado.
+- [x] Substituir o ícone circular de logo pelo caminhão com marca RVD na barra superior.
+- [x] Atualizar o subtítulo da marca na barra superior para Sistema de Agendamento.
