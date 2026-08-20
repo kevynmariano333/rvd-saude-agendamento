@@ -17,3 +17,4 @@
 - 2026-08-19: **Agendamentos de Amanhã aplicado** continua exibindo a NF 5676 programada para 20/08/2026, confirmando a separação completa entre os dois atalhos.
 - 2026-08-19: O cabeçalho da central de Agendamentos foi revisado visualmente após a remoção do selo. Permanecem apenas o título Agendamentos e sua descrição, sem o rótulo RVD Saúde Agendamento à direita.
 - 2026-08-19: Na área Administrar notas, uma nota Concluída exibiu a ação Voltar para agendar. A janela de confirmação explicou a correção para Agendado, a remoção do recebimento e da pré-nota, além do registro auditável no histórico. A confirmação foi cancelada, preservando a nota de validação sem alteração.
+- 2026-08-20: O domínio público https://rvdagenda-rxambp57.manus.space foi acessado e carregou corretamente a tela de login do RVD Saúde Agendamento, incluindo seleção de perfil, campos de acesso e cadastro de fornecedor.

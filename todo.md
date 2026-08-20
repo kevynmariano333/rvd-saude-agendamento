@@ -240,3 +240,7 @@
 - [x] Registrar a volta administrativa de status no histórico da nota.
 - [x] Adicionar a ação de correção na tela Administrar notas somente para status Recebido e Concluído.
 - [x] Cobrir e validar a volta administrativa para novo agendamento.
+- [x] Verificar e sincronizar a versão publicada da área Administrar notas com a ação de retorno para agendamento.
+- [x] Validar no ambiente publicado a apresentação atualizada do status e das ações administrativas.
+- [x] Diagnosticar por que o link publicado do portal não está abrindo para o usuário.
+- [x] Validar o carregamento público do domínio publicado após a correção.
