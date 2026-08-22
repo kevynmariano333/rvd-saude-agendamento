@@ -3,8 +3,8 @@ import { MAX_XML_BYTES, parseInvoiceXml } from "./xmlInvoice";
 
 describe("leitura de XML de nota fiscal", () => {
   it("extrai os dados disponíveis de uma NF-e sem exigir campos manuais", () => {
-    const xml = Buffer.from(`<?xml version="1.0"?><NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>000001</nNF><dhEmi>2030-08-22T15:00:00-03:00</dhEmi></ide><emit><xNome>Fornecedor Saúde</xNome></emit><dest><CNPJ>12.345.678/0001-99</CNPJ></dest><det nItem="1"><prod><xProd>Consulta ocupacional</xProd><xPed>4504748409</xPed><qCom>2.0000</qCom><vUnCom>15.50</vUnCom><vProd>31.00</vProd></prod></det><total><ICMSTot><vNF>31.00</vNF></ICMSTot></total></infNFe></NFe>`);
-    expect(parseInvoiceXml(xml)).toMatchObject({ invoiceNumber: "000001", accessKey: "35260112345678901234550010000000011000000010", serviceDescription: "Consulta ocupacional", supplierName: "Fornecedor Saúde", recipientCnpj: "12345678000199", purchaseOrder: "4504748409", totalCents: 3100, items: [{ description: "Consulta ocupacional", quantity: 2, unitPriceCents: 1550, totalCents: 3100 }] });
+    const xml = Buffer.from(`<?xml version="1.0"?><NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>000001</nNF><dhEmi>2030-08-22T15:00:00-03:00</dhEmi></ide><emit><xNome>Fornecedor Saúde</xNome></emit><dest><CNPJ>12.345.678/0001-99</CNPJ></dest><det nItem="1"><prod><xProd>Consulta ocupacional</xProd><xPed>4504748409</xPed><qCom>2.0000</qCom><vUnCom>15.50</vUnCom><vProd>31.00</vProd></prod></det><total><ICMSTot><vNF>31.00</vNF></ICMSTot></total><transp><vol><qVol>3</qVol></vol><vol><qVol>2</qVol></vol></transp></infNFe></NFe>`);
+    expect(parseInvoiceXml(xml)).toMatchObject({ invoiceNumber: "000001", accessKey: "35260112345678901234550010000000011000000010", serviceDescription: "Consulta ocupacional", supplierName: "Fornecedor Saúde", recipientCnpj: "12345678000199", purchaseOrder: "4504748409", totalCents: 3100, volumeCount: 5, items: [{ description: "Consulta ocupacional", quantity: 2, unitPriceCents: 1550, totalCents: 3100 }] });
   });
 
   it("recusa estruturas XML que podem expandir entidades externas", () => {

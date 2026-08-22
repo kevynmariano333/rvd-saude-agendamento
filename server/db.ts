@@ -161,6 +161,7 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       invoiceIssuedAt: appointments.invoiceIssuedAt,
       invoiceTotalCents: appointments.invoiceTotalCents,
       invoiceItemsJson: appointments.invoiceItemsJson,
+      invoiceVolumeCount: appointments.invoiceVolumeCount,
       receivedAt: appointments.receivedAt,
       rejectionReason: appointments.rejectionReason,
       status: appointments.status,
@@ -382,6 +383,7 @@ export async function createManualXmlAppointment(input: {
   serviceDescription: string | null;
   invoiceTotalCents: number | null;
   invoiceItemsJson: string | null;
+  invoiceVolumeCount: number | null;
   suggestedFor?: Date;
   suggestionNotes?: string;
 }) {
@@ -407,6 +409,7 @@ export async function createManualXmlAppointment(input: {
       invoiceIssuedAt: input.invoiceIssuedAt,
       invoiceTotalCents: input.invoiceTotalCents,
       invoiceItemsJson: input.invoiceItemsJson,
+      invoiceVolumeCount: input.invoiceVolumeCount,
       status: "pending",
     });
     const appointmentId = Number(inserted[0].insertId);
@@ -549,6 +552,7 @@ export async function createUnscheduledReceipt(input: {
   serviceDescription: string | null;
   invoiceTotalCents: number | null;
   invoiceItemsJson: string | null;
+  invoiceVolumeCount: number | null;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
@@ -573,6 +577,7 @@ export async function createUnscheduledReceipt(input: {
       invoiceIssuedAt: input.invoiceIssuedAt,
       invoiceTotalCents: input.invoiceTotalCents,
       invoiceItemsJson: input.invoiceItemsJson,
+      invoiceVolumeCount: input.invoiceVolumeCount,
       status: "received",
       handledBy: input.operatorId,
     });

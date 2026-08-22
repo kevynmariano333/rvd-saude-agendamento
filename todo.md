@@ -244,3 +244,14 @@
 - [x] Validar no ambiente publicado a apresentação atualizada do status e das ações administrativas.
 - [x] Diagnosticar por que o link publicado do portal não está abrindo para o usuário.
 - [x] Validar o carregamento público do domínio publicado após a correção.
+- [x] Exportar registros reais e notas do banco em arquivos CSV, sem senhas ou credenciais.
+- [x] Incluir a estrutura das tabelas e um modelo seguro de variáveis de ambiente no pacote de exportação.
+- [x] Revisar e entregar o pacote CSV compactado ao usuário.
+- [x] Extrair a quantidade de volumes dos campos de transporte do XML da nota fiscal.
+- [x] Persistir a quantidade de volumes no agendamento e disponibilizá-la à interface.
+- [x] Exibir a quantidade de volumes no Detalhamento da nota.
+- [x] Cobrir e validar a extração de volumes em notas XML.
+- [x] Extrair a quantidade de volumes dos campos de transporte do XML da nota fiscal.
+- [x] Persistir a quantidade de volumes no agendamento e disponibilizá-la à interface.
+- [x] Exibir a quantidade de volumes no Detalhamento da nota.
+- [x] Cobrir e validar a extração de volumes em notas XML.

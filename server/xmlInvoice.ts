@@ -7,6 +7,7 @@ export type XmlInvoiceDetails = {
   recipientCnpj: string | null;
   purchaseOrder: string | null;
   totalCents: number | null;
+  volumeCount: number | null;
   items: Array<{ description: string; quantity: number | null; unitPriceCents: number | null; totalCents: number | null }>;
 };
 
@@ -65,6 +66,17 @@ function parseQuantity(value: string | null) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function parseVolumeCount(xml: string) {
+  const volumeBlocks = readScopes(xml, "vol");
+  const volumeValues = volumeBlocks
+    .map(scope => parseQuantity(readTag(scope, ["qVol", "qVolumes", "quantidadeVolumes", "QuantidadeVolumes"])))
+    .filter((value): value is number => value !== null);
+  if (volumeValues.length) return Math.round(volumeValues.reduce((sum, value) => sum + value, 0));
+
+  const directValue = parseQuantity(readTag(xml, ["qVol", "qVolumes", "quantidadeVolumes", "QuantidadeVolumes"]));
+  return directValue === null ? null : Math.round(directValue);
+}
+
 export function parseInvoiceXml(content: Buffer): XmlInvoiceDetails {
   if (!content.length || content.length > MAX_XML_BYTES) throw new Error("O XML deve ter até 2 MB.");
   const xml = content.toString("utf8").replace(/^\uFEFF/, "");
@@ -83,6 +95,7 @@ export function parseInvoiceXml(content: Buffer): XmlInvoiceDetails {
     totalCents: parseMoneyToCents(readTag(scope, ["vProd", "vServ", "vItem", "ValorTotalItem"])),
   }));
   const totalCents = parseMoneyToCents(readTag(xml, ["vNF", "vServ", "ValorTotal", "vLiq"])) ?? (items.length && items.every(item => item.totalCents !== null) ? items.reduce((sum, item) => sum + (item.totalCents ?? 0), 0) : null);
+  const volumeCount = parseVolumeCount(xml);
   const idMatch = xml.match(/<(?:(?:\w+:)?infNFe)\b[^>]*\bId=["'](?:NFe)?([^"']+)["']/i);
   const accessKey = readTag(xml, ["chNFe", "ChaveAcesso"]) ?? idMatch?.[1] ?? null;
   if (!invoiceNumber && !accessKey) throw new Error("Não foi possível identificar a nota fiscal no XML enviado.");
@@ -96,6 +109,7 @@ export function parseInvoiceXml(content: Buffer): XmlInvoiceDetails {
     recipientCnpj: recipientCnpj?.replace(/\D/g, "").slice(0, 20) ?? null,
     purchaseOrder: purchaseOrder?.slice(0, 100) ?? null,
     totalCents,
+    volumeCount,
     items: items.slice(0, 50),
   };
 }
