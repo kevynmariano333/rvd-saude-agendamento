@@ -110,16 +110,32 @@ describe("procedures de agendamento", () => {
   });
 
   it("provisiona o acesso de teste admin para operador e fornecedor conforme o perfil", async () => {
+    const configuredAdminPassword = process.env.RVD_ADMIN_TEST_PASSWORD;
+    expect(configuredAdminPassword).toBeTruthy();
     mocks.getUserByEmail.mockResolvedValue(undefined);
     mocks.createLocalUser.mockResolvedValue(user("operator"));
     const operatorCaller = appRouter.createCaller(context("supplier"));
-    await operatorCaller.auth.login({ email: "admin", password: "admin", profile: "operator" });
+    await operatorCaller.auth.login({ email: "admin", password: configuredAdminPassword!, profile: "operator" });
     expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ email: "teste.operador@rvdsaude.local", role: "admin", name: "Operador de Teste RVD Saúde" }));
 
     mocks.createLocalUser.mockResolvedValue(user("supplier"));
     const supplierCaller = appRouter.createCaller(context("operator"));
-    await supplierCaller.auth.login({ email: "admin", password: "admin", profile: "supplier" });
+    await supplierCaller.auth.login({ email: "admin", password: configuredAdminPassword!, profile: "supplier" });
     expect(mocks.createLocalUser).toHaveBeenLastCalledWith(expect.objectContaining({ email: "teste.fornecedor@rvdsaude.local", role: "supplier", companyCnpj: "00000000000000" }));
+  });
+
+  it("envia valores do Dashboard apenas ao Administrador", async () => {
+    mocks.listAppointments.mockResolvedValue([
+      { status: "received", createdAt: new Date("2026-08-02T09:00:00"), scheduledFor: new Date("2026-08-05T09:00:00"), receivedAt: new Date("2026-08-05T11:00:00"), supplierName: "Fornecedor", invoiceSupplierName: null, invoiceTotalCents: 4500 },
+    ]);
+
+    const operatorMetrics = await appRouter.createCaller(context("operator")).analytics.dashboard({ month: 8, year: 2026 });
+    expect(operatorMetrics).toMatchObject({ canViewFinancial: false, receivedTotalCents: null });
+    expect(operatorMetrics.dailyReceived[4]?.totalCents).toBeNull();
+
+    const adminMetrics = await appRouter.createCaller(context("admin")).analytics.dashboard({ month: 8, year: 2026 });
+    expect(adminMetrics).toMatchObject({ canViewFinancial: true, receivedTotalCents: 4500 });
+    expect(adminMetrics.dailyReceived[4]?.totalCents).toBe(4500);
   });
 
   it("bloqueia a criação de solicitações pelo operador", async () => {

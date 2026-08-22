@@ -18,7 +18,7 @@ describe("buildDashboardMetrics", () => {
     expect(metrics.pendingTotalCents).toBe(20000);
     expect(metrics.scheduledTotalCents).toBe(21000);
     expect(metrics.receivedTotalCents).toBe(42500);
-    expect(metrics.dailyReceived[11]).toMatchObject({ label: "12/08", total: 2 });
+    expect(metrics.dailyReceived[11]).toMatchObject({ label: "12/08", total: 2, totalCents: 42500 });
     expect(metrics.topSuppliers).toEqual([
       { name: "Clínica Alfa", notesReceived: 1 },
       { name: "Distribuidora Beta", notesReceived: 1 },

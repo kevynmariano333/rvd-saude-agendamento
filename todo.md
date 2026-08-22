@@ -270,3 +270,8 @@
 - [x] Validar a interface de Relatórios sem os filtros de valor.
 - [x] Remover o quadro Top Fornecedores do Dashboard.
 - [x] Validar o Dashboard após a remoção do quadro de fornecedores.
+- [x] Exibir no gráfico diário a quantidade de notas recebidas e o valor total das NFs.
+- [x] Restringir os valores financeiros do Dashboard ao perfil Administrador.
+- [x] Cobrir e validar as métricas diárias e as permissões financeiras no Dashboard.
+- [x] Atualizar com segurança a senha da conta Administrador de teste.
+- [x] Validar o login administrativo com a nova credencial sem expor a senha.
