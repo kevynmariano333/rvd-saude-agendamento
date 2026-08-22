@@ -255,3 +255,7 @@
 - [x] Persistir a quantidade de volumes no agendamento e disponibilizá-la à interface.
 - [x] Exibir a quantidade de volumes no Detalhamento da nota.
 - [x] Cobrir e validar a extração de volumes em notas XML.
+- [ ] Verificar o repositório remoto GitHub associado ao RVD Saúde Agendamento.
+- [ ] Preparar e confirmar a sincronização do código atual no repositório GitHub existente.
+- [ ] Criar o repositório privado rvd-saude-agendamento no GitHub.
+- [ ] Enviar a versão atual do código ao novo repositório GitHub.
