@@ -259,3 +259,22 @@
 - [x] Preparar e confirmar a sincronização do código atual no repositório GitHub existente.
 - [x] Criar o repositório privado rvd-saude-agendamento no GitHub.
 - [x] Enviar a versão atual do código ao novo repositório GitHub.
+- [x] Criar e publicar uma branch dedicada às melhorias de relatórios no GitHub.
+- [x] Registrar o estado atual do projeto no fluxo de melhorias de relatórios.
+- [x] Criar uma lista de tarefas de melhorias no repositório GitHub.
+- [x] Implementar filtro de valor mínimo e máximo da NF nos Relatórios.
+- [x] Aplicar a faixa de valores à tabela consolidada e à exportação Excel.
+- [x] Cobrir e validar o filtro financeiro da tarefa GitHub #1.
+- [x] Remover os campos de valor mínimo e máximo da NF dos Relatórios.
+- [x] Remover a lógica e os testes exclusivos do filtro financeiro.
+- [x] Validar a interface de Relatórios sem os filtros de valor.
+- [x] Remover o quadro Top Fornecedores do Dashboard.
+- [x] Validar o Dashboard após a remoção do quadro de fornecedores.
+- [x] Exibir no gráfico diário a quantidade de notas recebidas e o valor total das NFs.
+- [x] Restringir os valores financeiros do Dashboard ao perfil Administrador.
+- [x] Cobrir e validar as métricas diárias e as permissões financeiras no Dashboard.
+- [x] Atualizar com segurança a senha da conta Administrador de teste.
+- [x] Validar o login administrativo com a nova credencial sem expor a senha.
+- [x] Substituir a grade semanal por uma visão mensal com quantidade de agendamentos por dia.
+- [x] Permitir selecionar um dia do calendário para exibir horários e fornecedores.
+- [x] Validar visualmente a visão mensal e o detalhamento da data selecionada.

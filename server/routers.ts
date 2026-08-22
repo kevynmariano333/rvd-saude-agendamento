@@ -47,7 +47,6 @@ import { buildDashboardMetrics } from "./dashboardMetrics";
 const localProfileSchema = z.enum(["operator", "supplier"]);
 const statusSchema = z.enum(appointmentStatuses);
 const demoLogin = "admin";
-const demoPassword = "admin";
 
 function demoAccountFor(profile: z.infer<typeof localProfileSchema>) {
   return profile === "supplier"
@@ -115,6 +114,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const requestedLogin = input.email.trim().toLowerCase();
         const isDemoLogin = requestedLogin === demoLogin;
+        const demoPassword = ENV.adminTestPassword;
         if (!isDemoLogin && !z.string().email().safeParse(requestedLogin).success) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Informe um e-mail válido ou use o login de teste admin." });
         }
@@ -130,7 +130,7 @@ export const appRouter = router({
           }
           await touchUserSignIn(existing.id);
           user = existing;
-        } else if (isDemoLogin && input.password === demoPassword) {
+        } else if (isDemoLogin && demoPassword && input.password === demoPassword) {
           user = await createLocalUser({ ...demoAccount, role: input.profile === "operator" ? "admin" : "supplier", passwordHash: hashPassword(demoPassword) });
         } else if (isDemoLogin) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Login, senha ou perfil não conferem." });
@@ -431,7 +431,16 @@ export const appRouter = router({
     dashboard: protectedProcedure.input(z.object({ month: z.number().int().min(1).max(12), year: z.number().int().min(2020).max(2100) })).query(async ({ ctx, input }) => {
       assertOperator(ctx.user.role);
       const items = (await listAppointments()).filter(item => item.status !== "backlog");
-      return buildDashboardMetrics(items, input);
+      const metrics = buildDashboardMetrics(items, input);
+      const canViewFinancial = ctx.user.role === "admin";
+      return {
+        ...metrics,
+        canViewFinancial,
+        pendingTotalCents: canViewFinancial ? metrics.pendingTotalCents : null,
+        scheduledTotalCents: canViewFinancial ? metrics.scheduledTotalCents : null,
+        receivedTotalCents: canViewFinancial ? metrics.receivedTotalCents : null,
+        dailyReceived: metrics.dailyReceived.map(item => ({ ...item, totalCents: canViewFinancial ? item.totalCents : null })),
+      };
     }),
   }),
 });

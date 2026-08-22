@@ -11,6 +11,7 @@ export type ReportAppointment = {
   status: PortalStatus;
   scheduledFor: Date | string;
   receivedAt: Date | string | null;
+  invoiceTotalCents: number | null;
 };
 
 export type ReportFilters = {
@@ -29,6 +30,7 @@ export type ConsolidatedReportRow = {
   "CNPJ destinatário": string;
   Pedido: string;
   Status: string;
+  "Valor total da NF": string;
   "Data de agendamento": string;
   "Data de recebimento": string;
   "Item recebido": string;
@@ -66,6 +68,10 @@ export function formatReportDate(value: Date | string | null) {
   return value ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
 }
 
+export function formatReportCurrency(value: number | null) {
+  return value === null ? "Não informado" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value / 100);
+}
+
 export function toConsolidatedReportRows(appointments: ReportAppointment[]): ConsolidatedReportRow[] {
   return appointments.map(item => ({
     "Nota fiscal": item.invoiceNumber || "—",
@@ -73,6 +79,7 @@ export function toConsolidatedReportRows(appointments: ReportAppointment[]): Con
     "CNPJ destinatário": item.recipientCnpj || "—",
     Pedido: item.purchaseOrder || "—",
     Status: statusCopy[item.status],
+    "Valor total da NF": formatReportCurrency(item.invoiceTotalCents),
     "Data de agendamento": formatReportDate(item.scheduledFor),
     "Data de recebimento": formatReportDate(item.receivedAt),
     "Item recebido": item.status === "received" || item.status === "completed" ? item.serviceType : "Aguardando recebimento",

@@ -33,6 +33,7 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
     day: index + 1,
     label: `${String(index + 1).padStart(2, "0")}/${String(period.month).padStart(2, "0")}`,
     total: 0,
+    totalCents: 0,
   }));
   const receivedBySupplier = new Map<string, number>();
   const pending = items.filter(item => item.status === "pending");
@@ -44,6 +45,7 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
     const receivedAt = item.receivedAt;
     if (!receivedAt) return;
     dailyReceived[receivedAt.getDate() - 1]!.total += 1;
+    dailyReceived[receivedAt.getDate() - 1]!.totalCents += item.invoiceTotalCents ?? 0;
     const supplier = supplierLabel(item);
     receivedBySupplier.set(supplier, (receivedBySupplier.get(supplier) ?? 0) + 1);
   });
