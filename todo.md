@@ -275,3 +275,6 @@
 - [x] Cobrir e validar as métricas diárias e as permissões financeiras no Dashboard.
 - [x] Atualizar com segurança a senha da conta Administrador de teste.
 - [x] Validar o login administrativo com a nova credencial sem expor a senha.
+- [x] Substituir a grade semanal por uma visão mensal com quantidade de agendamentos por dia.
+- [x] Permitir selecionar um dia do calendário para exibir horários e fornecedores.
+- [x] Validar visualmente a visão mensal e o detalhamento da data selecionada.
