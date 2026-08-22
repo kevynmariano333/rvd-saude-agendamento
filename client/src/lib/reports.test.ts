@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterReportAppointments, getReportInvoiceValueRangeError, parseReportCurrencyToCents, toConsolidatedReportRows, type ReportAppointment } from "./reports";
+import { filterReportAppointments, toConsolidatedReportRows, type ReportAppointment } from "./reports";
 
 const appointments: ReportAppointment[] = [
   { id: 1, invoiceNumber: "100", supplierName: "Fornecedor RVD", invoiceSupplierName: null, recipientCnpj: "12345678000190", purchaseOrder: "PO-1", serviceType: "Caixa hospitalar", status: "received", scheduledFor: "2026-08-10T10:00:00.000Z", receivedAt: "2026-08-10T11:00:00.000Z", invoiceTotalCents: 15000 },
@@ -22,15 +22,4 @@ describe("consolidado de relatórios", () => {
     expect(received?.["Valor total da NF"]).toContain("150");
   });
 
-  it("filtra as notas pela faixa de valor informada em reais", () => {
-    expect(filterReportAppointments(appointments, { invoiceValueMin: "200", invoiceValueMax: "800" }).map(row => row.id)).toEqual([2]);
-    expect(filterReportAppointments(appointments, { invoiceValueMax: "200" }).map(row => row.id)).toEqual([1]);
-  });
-
-  it("converte valores brasileiros para centavos e identifica faixas inválidas", () => {
-    expect(parseReportCurrencyToCents("R$ 1.234,56")).toBe(123456);
-    expect(parseReportCurrencyToCents("750.5")).toBe(75050);
-    expect(getReportInvoiceValueRangeError("800", "200")).toContain("mínimo");
-    expect(getReportInvoiceValueRangeError("valor inválido", "200")).toContain("válidos");
-  });
 });

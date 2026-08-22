@@ -22,8 +22,6 @@ export type ReportFilters = {
   status?: Exclude<PortalStatus, "backlog"> | "all";
   supplier?: string;
   recipientCnpj?: string;
-  invoiceValueMin?: string;
-  invoiceValueMax?: string;
 };
 
 export type ConsolidatedReportRow = {
@@ -51,39 +49,6 @@ function normalize(value: string) {
   return value.replace(/\D/g, "");
 }
 
-export function parseReportCurrencyToCents(value?: string) {
-  const trimmed = value?.trim();
-  if (!trimmed) return undefined;
-  const withoutCurrency = trimmed.replace(/R\$/gi, "").replace(/\s/g, "");
-  const normalized = withoutCurrency.includes(",")
-    ? withoutCurrency.replace(/\./g, "").replace(",", ".")
-    : /^\d{1,3}(?:\.\d{3})+$/.test(withoutCurrency)
-      ? withoutCurrency.replace(/\./g, "")
-      : withoutCurrency;
-  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : null;
-}
-
-export function getReportInvoiceValueRangeError(minimum?: string, maximum?: string) {
-  const minCents = parseReportCurrencyToCents(minimum);
-  const maxCents = parseReportCurrencyToCents(maximum);
-  if (minCents === null || maxCents === null) return "Informe valores monetários válidos.";
-  if (minCents !== undefined && maxCents !== undefined && minCents > maxCents) return "O valor mínimo não pode ser maior que o valor máximo.";
-  return null;
-}
-
-function isWithinValueRange(value: number | null, minimum?: string, maximum?: string) {
-  const minCents = parseReportCurrencyToCents(minimum);
-  const maxCents = parseReportCurrencyToCents(maximum);
-  if (minCents === undefined && maxCents === undefined) return true;
-  if (minCents === null || maxCents === null || (minCents !== undefined && maxCents !== undefined && minCents > maxCents)) return false;
-  if (value === null) return false;
-  if (minCents !== undefined && value < minCents) return false;
-  if (maxCents !== undefined && value > maxCents) return false;
-  return true;
-}
-
 export function filterReportAppointments(appointments: ReportAppointment[], filters: ReportFilters) {
   const supplier = filters.supplier?.trim().toLocaleLowerCase();
   const recipientCnpj = filters.recipientCnpj ? normalize(filters.recipientCnpj) : "";
@@ -92,7 +57,6 @@ export function filterReportAppointments(appointments: ReportAppointment[], filt
     if (filters.status && filters.status !== "all" && item.status !== filters.status) return false;
     if (!isWithinDateRange(item.scheduledFor, filters.scheduledStart, filters.scheduledEnd)) return false;
     if (!isWithinDateRange(item.receivedAt, filters.receivedStart, filters.receivedEnd)) return false;
-    if (!isWithinValueRange(item.invoiceTotalCents, filters.invoiceValueMin, filters.invoiceValueMax)) return false;
     const supplierName = `${item.invoiceSupplierName || ""} ${item.supplierName || ""}`.toLocaleLowerCase();
     if (supplier && !supplierName.includes(supplier)) return false;
     if (recipientCnpj && !normalize(item.recipientCnpj || "").includes(recipientCnpj)) return false;

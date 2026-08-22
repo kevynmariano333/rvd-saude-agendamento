@@ -265,3 +265,6 @@
 - [x] Implementar filtro de valor mínimo e máximo da NF nos Relatórios.
 - [x] Aplicar a faixa de valores à tabela consolidada e à exportação Excel.
 - [x] Cobrir e validar o filtro financeiro da tarefa GitHub #1.
+- [x] Remover os campos de valor mínimo e máximo da NF dos Relatórios.
+- [x] Remover a lógica e os testes exclusivos do filtro financeiro.
+- [x] Validar a interface de Relatórios sem os filtros de valor.
