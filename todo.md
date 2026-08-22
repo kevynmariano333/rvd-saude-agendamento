@@ -268,3 +268,5 @@
 - [x] Remover os campos de valor mínimo e máximo da NF dos Relatórios.
 - [x] Remover a lógica e os testes exclusivos do filtro financeiro.
 - [x] Validar a interface de Relatórios sem os filtros de valor.
+- [x] Remover o quadro Top Fornecedores do Dashboard.
+- [x] Validar o Dashboard após a remoção do quadro de fornecedores.
