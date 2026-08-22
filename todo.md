@@ -262,3 +262,6 @@
 - [x] Criar e publicar uma branch dedicada às melhorias de relatórios no GitHub.
 - [x] Registrar o estado atual do projeto no fluxo de melhorias de relatórios.
 - [x] Criar uma lista de tarefas de melhorias no repositório GitHub.
+- [x] Implementar filtro de valor mínimo e máximo da NF nos Relatórios.
+- [x] Aplicar a faixa de valores à tabela consolidada e à exportação Excel.
+- [x] Cobrir e validar o filtro financeiro da tarefa GitHub #1.
