@@ -259,3 +259,6 @@
 - [x] Preparar e confirmar a sincronização do código atual no repositório GitHub existente.
 - [x] Criar o repositório privado rvd-saude-agendamento no GitHub.
 - [x] Enviar a versão atual do código ao novo repositório GitHub.
+- [ ] Criar e publicar uma branch dedicada às melhorias de relatórios no GitHub.
+- [ ] Registrar o estado atual do projeto no fluxo de melhorias de relatórios.
+- [ ] Criar uma lista de tarefas de melhorias no repositório GitHub.
