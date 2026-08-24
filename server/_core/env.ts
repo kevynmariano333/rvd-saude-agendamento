@@ -5,8 +5,6 @@ export const ENV = {
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
-  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   s3Bucket: process.env.S3_BUCKET ?? "",
   s3Region: process.env.S3_REGION ?? "auto",
   s3Endpoint: process.env.S3_ENDPOINT ?? "",
