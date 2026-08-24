@@ -1,14 +1,19 @@
+// Values pasted into a hosting dashboard often carry a stray space or newline.
+// An S3 secret with a trailing "\n" fails signing with an opaque "Unauthorized",
+// so trim everything we read rather than trusting the paste.
+const str = (name: string): string => (process.env[name] ?? "").trim();
+
 export const ENV = {
-  appId: process.env.VITE_APP_ID ?? "",
-  cookieSecret: process.env.JWT_SECRET ?? "",
-  databaseUrl: process.env.DATABASE_URL ?? "",
-  oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
-  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
+  appId: str("VITE_APP_ID"),
+  cookieSecret: str("JWT_SECRET"),
+  databaseUrl: str("DATABASE_URL"),
+  oAuthServerUrl: str("OAUTH_SERVER_URL"),
+  ownerOpenId: str("OWNER_OPEN_ID"),
   isProduction: process.env.NODE_ENV === "production",
-  s3Bucket: process.env.S3_BUCKET ?? "",
-  s3Region: process.env.S3_REGION ?? "auto",
-  s3Endpoint: process.env.S3_ENDPOINT ?? "",
-  s3AccessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
-  s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
-  s3ForcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+  s3Bucket: str("S3_BUCKET"),
+  s3Region: str("S3_REGION") || "auto",
+  s3Endpoint: str("S3_ENDPOINT"),
+  s3AccessKeyId: str("S3_ACCESS_KEY_ID"),
+  s3SecretAccessKey: str("S3_SECRET_ACCESS_KEY"),
+  s3ForcePathStyle: str("S3_FORCE_PATH_STYLE") === "true",
 };
