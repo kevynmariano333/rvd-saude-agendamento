@@ -19,6 +19,33 @@ function appendHashSuffix(relKey: string): string {
   return `${relKey.slice(0, lastDot)}_${hash}${relKey.slice(lastDot)}`;
 }
 
+// The raw S3/R2 rejection is an opaque "Unauthorized"/"AccessDenied", which
+// reaches the user as-is and looks like a login problem. Restate it as what it
+// actually is: the bucket credentials are wrong or lack access to the bucket.
+function describeStorageError(err: unknown): Error {
+  const status = (err as { $metadata?: { httpStatusCode?: number } })?.$metadata
+    ?.httpStatusCode;
+  const name = (err as { name?: string })?.name ?? "";
+  const message = err instanceof Error ? err.message : String(err);
+
+  if (status === 401 || status === 403 || /Unauthorized|AccessDenied|InvalidAccessKeyId|SignatureDoesNotMatch/i.test(`${name} ${message}`)) {
+    return new Error(
+      `O armazenamento de arquivos recusou as credenciais (${message}). ` +
+        `Confira S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_ENDPOINT e se o token ` +
+        `tem permissao de leitura/escrita no bucket "${ENV.s3Bucket}".`,
+    );
+  }
+
+  if (status === 404 || /NoSuchBucket/i.test(`${name} ${message}`)) {
+    return new Error(
+      `O bucket "${ENV.s3Bucket}" nao foi encontrado no endpoint configurado. ` +
+        `Confira S3_BUCKET e S3_ENDPOINT.`,
+    );
+  }
+
+  return err instanceof Error ? err : new Error(message);
+}
+
 export async function storagePut(
   relKey: string,
   data: Buffer | Uint8Array | string,
@@ -27,14 +54,19 @@ export async function storagePut(
   const key = appendHashSuffix(normalizeKey(relKey));
   const client = getS3Client();
 
-  await client.send(
-    new PutObjectCommand({
-      Bucket: ENV.s3Bucket,
-      Key: key,
-      Body: data,
-      ContentType: contentType,
-    }),
-  );
+  try {
+    await client.send(
+      new PutObjectCommand({
+        Bucket: ENV.s3Bucket,
+        Key: key,
+        Body: data,
+        ContentType: contentType,
+      }),
+    );
+  } catch (err) {
+    console.error("[Storage] upload failed:", err);
+    throw describeStorageError(err);
+  }
 
   return { key, url: `/manus-storage/${key}` };
 }
@@ -47,9 +79,14 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
   const key = normalizeKey(relKey);
   const client = getS3Client();
-  return getSignedUrl(
-    client,
-    new GetObjectCommand({ Bucket: ENV.s3Bucket, Key: key }),
-    { expiresIn: 300 },
-  );
+  try {
+    return await getSignedUrl(
+      client,
+      new GetObjectCommand({ Bucket: ENV.s3Bucket, Key: key }),
+      { expiresIn: 300 },
+    );
+  } catch (err) {
+    console.error("[Storage] signed url failed:", err);
+    throw describeStorageError(err);
+  }
 }
