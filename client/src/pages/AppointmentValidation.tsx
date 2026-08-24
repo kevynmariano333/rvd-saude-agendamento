@@ -16,7 +16,7 @@ export default function AppointmentValidation() {
     <main className="min-h-screen bg-gradient-to-br from-rvd-plum-pale via-white to-rvd-blue-pale px-4 py-10 text-rvd-plum">
       <section className="mx-auto w-full max-w-xl">
         <div className="mb-6 flex items-center gap-3 px-2">
-          <img src="/manus-storage/RVD-Saude_f78a565b.png" alt="RVD Saúde" className="size-14 rounded-2xl bg-white object-contain p-1 shadow-sm" />
+          <img src="/RVD-Saude.png" alt="RVD Saúde" className="size-14 rounded-2xl bg-white object-contain p-1 shadow-sm" />
           <div><p className="text-lg font-extrabold">RVD Saúde</p><p className="text-sm font-medium text-rvd-plum/70">Validação de agendamento</p></div>
         </div>
         <Card className="overflow-hidden border-rvd-plum-soft bg-white shadow-xl shadow-rvd-plum/10">

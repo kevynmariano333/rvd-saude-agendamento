@@ -47,7 +47,7 @@ export default function PortalLayout({ user, title, subtitle, children, onLogout
       <header className="sticky top-0 z-50 border-b border-rvd-plum-soft bg-white/95 backdrop-blur">
         <div className="mx-auto flex min-h-24 max-w-[1440px] items-center gap-4 px-5 sm:px-8">
           <button onClick={() => go(isOperator ? "/operador/dashboard" : "/fornecedor")} className="flex shrink-0 items-center gap-3 text-left">
-            <img src="/manus-storage/RVD-Saude_f78a565b.png" alt="RVD Saúde" className="size-11 rounded-2xl object-cover shadow-sm" />
+            <img src="/RVD-Saude.png" alt="RVD Saúde" className="size-11 rounded-2xl object-cover shadow-sm" />
             <div className="hidden min-w-0 sm:block">
               <p className="font-display text-base font-extrabold leading-none text-rvd-plum">RVD Saúde</p>
               <p className="mt-1 text-[9px] font-bold uppercase tracking-[0.1em] text-rvd-plum">Sistema de Agendamento</p>

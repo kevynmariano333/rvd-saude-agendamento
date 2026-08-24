@@ -24,7 +24,7 @@ let logoDataUrlPromise: Promise<string> | undefined;
 
 function getRvdLogoDataUrl() {
   if (logoDataUrlPromise) return logoDataUrlPromise;
-  logoDataUrlPromise = fetch("/manus-storage/RVD-Saude_f78a565b.png")
+  logoDataUrlPromise = fetch("/RVD-Saude.png")
     .then(async response => {
       if (!response.ok) throw new Error("Não foi possível carregar o logo da RVD Saúde.");
       const blob = await response.blob();
