@@ -6,6 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { logStorageConfig, probeStorage } from "./s3Client";
+import { ENV } from "./env";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -29,7 +30,27 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+// Session cookies fall back to a constant that lives in this repository, which
+// is the right default for a local checkout and a forgeable one in production:
+// anyone who can read the source could mint a cookie for any user. Refuse to
+// serve rather than serve without access control.
+function assertSessionSecret() {
+  if (ENV.isProduction && !ENV.cookieSecret) {
+    console.error(
+      "[Auth] JWT_SECRET nao esta configurado. Sem ele, os cookies de login seriam " +
+        "assinados com um valor publico do repositorio e qualquer pessoa poderia se " +
+        "passar por qualquer usuario. Defina JWT_SECRET (texto longo e aleatorio) " +
+        "nas variaveis de ambiente e suba de novo.",
+    );
+    throw new Error("JWT_SECRET is required in production");
+  }
+  if (!ENV.cookieSecret) {
+    console.warn("[Auth] JWT_SECRET ausente — usando segredo de desenvolvimento.");
+  }
+}
+
 async function startServer() {
+  assertSessionSecret();
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
