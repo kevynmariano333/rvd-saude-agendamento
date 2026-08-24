@@ -115,6 +115,7 @@ export default function Login() {
               <Button type="submit" disabled={pending} className="h-12 w-full rounded-xl bg-rvd-plum text-sm font-bold text-white hover:bg-rvd-plum active:scale-[0.97]">{pending ? "Processando..." : registering ? <><UserPlus className="size-4" />Criar conta de {selectedProfileLabel}</> : <>Entrar no portal <ChevronRight className="size-4" /></>}</Button>
             </form>
             <div className="mt-5 text-center">{registering ? <button type="button" onClick={() => setMode("login")} className="inline-flex items-center gap-2 text-sm font-bold text-rvd-plum hover:underline"><ArrowLeft className="size-4" />Já tenho conta</button> : <button type="button" onClick={() => setMode("register")} className="inline-flex items-center gap-2 text-sm font-bold text-rvd-plum hover:underline"><UserPlus className="size-4" />Novo cadastro de {selectedProfileLabel}</button>}</div>
+            <p className="mt-6 border-t border-rvd-plum-soft pt-4 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-rvd-plum/55">Mariano System</p>
           </div>
         </section>
       </div>
