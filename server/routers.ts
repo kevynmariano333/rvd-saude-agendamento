@@ -200,6 +200,12 @@ export const appRouter = router({
           }
         }
 
+        if (!user) {
+          // Logged, never returned: the caller still gets the same answer, but a
+          // silent no-op is indistinguishable from a delivery failure otherwise.
+          console.warn(`[PasswordReset] Nenhuma conta encontrada para o e-mail informado.`);
+        }
+
         return { sent: true } as const;
       }),
     resetPassword: publicProcedure
