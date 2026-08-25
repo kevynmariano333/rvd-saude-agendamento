@@ -27,8 +27,7 @@ export default function PortalLayout({ user, title, subtitle, children, onLogout
       { label: "Agendamentos", path: "/operador", icon: ClipboardList },
       { label: "Calendário", path: "/operador/calendario", icon: CalendarDays },
       { label: "Relatórios", path: "/operador/relatorios", icon: BarChart3 },
-      { label: "Acessos", path: "/operador/acessos", icon: UserCheck },
-      ...(isAdmin ? [{ label: "Administrar notas", path: "/operador/notas", icon: ShieldCheck }] : []),
+      ...(isAdmin ? [{ label: "Acessos", path: "/operador/acessos", icon: UserCheck }, { label: "Administrar notas", path: "/operador/notas", icon: ShieldCheck }] : []),
     ]
     : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }];
   const go = (path: string) => { setLocation(path); setMobileOpen(false); };

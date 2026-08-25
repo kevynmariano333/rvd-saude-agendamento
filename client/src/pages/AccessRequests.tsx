@@ -7,28 +7,37 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import PortalLayout from "./PortalLayout";
 
-export default function SupplierAccessRequests() {
+type PendingRequest = {
+  id: number;
+  name: string | null;
+  email: string | null;
+  role: "admin" | "operator" | "supplier";
+  companyName: string | null;
+  companyCnpj: string | null;
+};
+
+export default function AccessRequests() {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
   const utils = trpc.useUtils();
-  const pending = trpc.supplierAccess.listPending.useQuery(undefined, {
-    enabled: Boolean(auth.data && auth.data.role !== "supplier"),
+  const pending = trpc.accessRequests.listPending.useQuery(undefined, {
+    enabled: auth.data?.role === "admin",
   });
 
-  const decide = trpc.supplierAccess.decide.useMutation({
+  const decide = trpc.accessRequests.decide.useMutation({
     onSuccess: (_result, variables) => {
       toast.success(variables.approve ? "Acesso liberado." : "Acesso recusado.");
-      utils.supplierAccess.listPending.invalidate();
+      utils.accessRequests.listPending.invalidate();
     },
     onError: error => toast.error(error.message),
   });
 
   useEffect(() => {
-    if (auth.data && auth.data.role === "supplier") setLocation("/fornecedor");
+    if (auth.data && auth.data.role !== "admin") setLocation(auth.data.role === "supplier" ? "/fornecedor" : "/operador");
     if (auth.data === null) setLocation("/");
   }, [auth.data, setLocation]);
 
-  if (!auth.data || auth.data.role === "supplier") return <div className="min-h-screen bg-white" />;
+  if (!auth.data || auth.data.role !== "admin") return <div className="min-h-screen bg-white" />;
 
   const requests = pending.data ?? [];
 
@@ -36,7 +45,7 @@ export default function SupplierAccessRequests() {
     <PortalLayout
       user={auth.data}
       title="Acessos de fornecedores"
-      subtitle="Libere ou recuse quem pediu para entrar em uma empresa já cadastrada."
+      subtitle="Todo cadastro novo passa por aqui antes de ter acesso ao sistema."
     >
       <section className="rounded-3xl border border-rvd-plum-soft bg-white p-5 sm:p-7">
         <div className="flex items-center gap-3">
@@ -47,8 +56,9 @@ export default function SupplierAccessRequests() {
             <p className="text-sm font-bold uppercase tracking-[0.12em] text-rvd-plum">Aprovação</p>
             <h2 className="mt-1 font-display text-xl font-extrabold text-rvd-plum">Solicitações pendentes</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-rvd-plum">
-              O primeiro cadastro de um CNPJ entra direto. A partir do segundo, o novo login fica sem acesso
-              até você aprovar — quem for liberado passa a ver todas as notas daquela empresa.
+              Nenhum cadastro entra sozinho: operadores e fornecedores ficam sem acesso até você aprovar.
+              Um operador aprovado enxerga os agendamentos de todos os fornecedores; um fornecedor enxerga
+              as notas do próprio CNPJ.
             </p>
           </div>
         </div>
@@ -57,7 +67,7 @@ export default function SupplierAccessRequests() {
           <div className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando solicitações...</div>
         ) : requests.length ? (
           <div className="mt-7 space-y-3">
-            {requests.map(request => (
+            {requests.map((request: PendingRequest) => (
               <article
                 key={request.id}
                 className="rounded-2xl border border-rvd-plum-soft p-4 transition hover:border-rvd-plum"
@@ -68,9 +78,16 @@ export default function SupplierAccessRequests() {
                       {request.companyName || request.name || "Fornecedor"}
                     </p>
                     <p className="mt-1 text-sm text-rvd-plum">{request.email}</p>
-                    <p className="mt-1 text-xs font-bold uppercase tracking-wide text-rvd-plum">
-                      CNPJ {formatCnpj(request.companyCnpj || "")}
-                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex rounded-full bg-rvd-blue-pale px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">
+                        {request.role === "supplier" ? "Fornecedor" : "Operador"}
+                      </span>
+                      {request.companyCnpj && (
+                        <span className="text-xs font-bold uppercase tracking-wide text-rvd-plum">
+                          CNPJ {formatCnpj(request.companyCnpj)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex shrink-0 gap-2">
                     <Button

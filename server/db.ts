@@ -677,7 +677,7 @@ export async function listApprovedCompanyUserIds(companyKey: string) {
   return rows.map(row => row.id);
 }
 
-export async function listPendingSupplierAccess() {
+export async function listPendingAccessRequests() {
   const db = await getDb();
   if (!db) return [];
   return db
@@ -685,12 +685,13 @@ export async function listPendingSupplierAccess() {
       id: users.id,
       name: users.name,
       email: users.email,
+      role: users.role,
       companyName: users.companyName,
       companyCnpj: users.companyCnpj,
       createdAt: users.createdAt,
     })
     .from(users)
-    .where(and(eq(users.role, "supplier"), eq(users.accessStatus, "pending")))
+    .where(eq(users.accessStatus, "pending"))
     .orderBy(desc(users.createdAt));
 }
 
@@ -700,5 +701,5 @@ export async function setUserAccessStatus(input: { userId: number; accessStatus:
   await db
     .update(users)
     .set({ accessStatus: input.accessStatus })
-    .where(and(eq(users.id, input.userId), eq(users.role, "supplier")));
+    .where(eq(users.id, input.userId));
 }

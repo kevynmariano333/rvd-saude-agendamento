@@ -32,7 +32,7 @@ import {
   consumePasswordResetToken,
   updateUserPassword,
   listApprovedCompanyUserIds,
-  listPendingSupplierAccess,
+  listPendingAccessRequests,
   setUserAccessStatus,
   createPasswordResetToken,
   getPasswordResetToken,
@@ -42,7 +42,7 @@ import { clearRvdSession, createRvdSession } from "./session";
 import { systemRouter } from "./_core/systemRouter";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { COOKIE_NAME } from "../shared/const";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { scryptSync, timingSafeEqual } from "node:crypto";
 import { nanoid } from "nanoid";
 import { storagePut } from "./storage";
@@ -154,10 +154,10 @@ export const appRouter = router({
           // Checked only after the password, so the status of an account is not
           // revealed to someone who does not already hold its credentials.
           if (existing.accessStatus === "pending") {
-            throw new TRPCError({ code: "FORBIDDEN", message: "Seu acesso ainda está em análise pelo Operador. Você será liberado assim que for aprovado." });
+            throw new TRPCError({ code: "FORBIDDEN", message: "Seu cadastro ainda está em análise. Você poderá entrar assim que for aprovado." });
           }
           if (existing.accessStatus === "rejected") {
-            throw new TRPCError({ code: "FORBIDDEN", message: "Seu acesso a esta empresa não foi autorizado. Fale com o Operador." });
+            throw new TRPCError({ code: "FORBIDDEN", message: "Seu cadastro não foi aprovado. Fale com o administrador do sistema." });
           }
           await touchUserSignIn(existing.id);
           user = existing;
@@ -201,13 +201,8 @@ export const appRouter = router({
         const isSupplier = input.profile === "supplier";
         const companyCnpj = isSupplier ? input.companyCnpj?.replace(/\D/g, "") : undefined;
         if (isSupplier && companyCnpj?.length !== 14) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe um CNPJ válido com 14 dígitos." });
-        const companyExists = Boolean(companyCnpj && (await getUserByCompanyCnpj(companyCnpj)));
-        const accessStatus = isSupplier && companyExists ? "pending" : "approved";
-        const user = await createLocalUser({ email, name: input.name.trim(), companyName: isSupplier ? input.name.trim() : undefined, companyCnpj, role: input.profile, passwordHash: hashPassword(input.password), accessStatus });
-        if (accessStatus === "pending") return { pending: true } as const;
-
-        await createRvdSession(ctx.res, user);
-        return { pending: false, ...publicUser(user) } as const;
+        await createLocalUser({ email, name: input.name.trim(), companyName: isSupplier ? input.name.trim() : undefined, companyCnpj, role: input.profile, passwordHash: hashPassword(input.password), accessStatus: "pending" });
+        return { pending: true } as const;
       }),
     requestPasswordReset: publicProcedure
       .input(z.object({ email: z.string().trim().email("Informe um e-mail válido.") }))
@@ -524,15 +519,15 @@ export const appRouter = router({
         return acceptAppointmentSuggestion({ suggestionId: input.suggestionId, appointmentStatus: suggestion.appointmentStatus, handledBy: ctx.user.id });
       }),
   }),
-  supplierAccess: router({
-    listPending: protectedProcedure.query(async ({ ctx }) => {
-      assertOperator(ctx.user.role);
-      return listPendingSupplierAccess();
-    }),
-    decide: protectedProcedure
+  accessRequests: router({
+    listPending: adminProcedure.query(async () => listPendingAccessRequests()),
+    decide: adminProcedure
       .input(z.object({ userId: z.number().int().positive(), approve: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
-        assertOperator(ctx.user.role);
+        // Guard against an administrator locking themselves out mid-session.
+        if (input.userId === ctx.user.id) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode alterar o próprio acesso." });
+        }
         await setUserAccessStatus({ userId: input.userId, accessStatus: input.approve ? "approved" : "rejected" });
         return { success: true } as const;
       }),

@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   scheduleAppointment: vi.fn(),
   createUnscheduledReceipt: vi.fn(),
   listApprovedCompanyUserIds: vi.fn(),
-  listPendingSupplierAccess: vi.fn(),
+  listPendingAccessRequests: vi.fn(),
   setUserAccessStatus: vi.fn(),
 }));
 
@@ -167,18 +167,27 @@ describe("procedures de agendamento", () => {
     expect(mocks.listAppointmentHistory).toHaveBeenCalledWith(5);
   });
 
-  it("recusa que o fornecedor decida aprovações de acesso", async () => {
-    const caller = appRouter.createCaller(context("supplier"));
-    await expect(caller.supplierAccess.decide({ userId: 31, approve: true })).rejects.toThrow();
+  it("recusa que fornecedor e operador decidam aprovações de acesso", async () => {
+    for (const role of ["supplier", "operator"] as const) {
+      const caller = appRouter.createCaller(context(role));
+      await expect(caller.accessRequests.decide({ userId: 31, approve: true })).rejects.toThrow();
+      await expect(caller.accessRequests.listPending()).rejects.toThrow();
+    }
     expect(mocks.setUserAccessStatus).not.toHaveBeenCalled();
   });
 
-  it("permite ao operador aprovar e recusar um acesso", async () => {
-    const caller = appRouter.createCaller(context("operator"));
-    await caller.supplierAccess.decide({ userId: 31, approve: true });
+  it("permite ao admin aprovar e recusar um acesso", async () => {
+    const caller = appRouter.createCaller(context("admin"));
+    await caller.accessRequests.decide({ userId: 31, approve: true });
     expect(mocks.setUserAccessStatus).toHaveBeenCalledWith({ userId: 31, accessStatus: "approved" });
-    await caller.supplierAccess.decide({ userId: 32, approve: false });
+    await caller.accessRequests.decide({ userId: 32, approve: false });
     expect(mocks.setUserAccessStatus).toHaveBeenCalledWith({ userId: 32, accessStatus: "rejected" });
+  });
+
+  it("impede o admin de alterar o próprio acesso", async () => {
+    const caller = appRouter.createCaller(context("admin"));
+    await expect(caller.accessRequests.decide({ userId: 24, approve: false })).rejects.toThrow(/próprio acesso/);
+    expect(mocks.setUserAccessStatus).not.toHaveBeenCalled();
   });
 
   it("encaminha os filtros de nota, fornecedor e CNPJ ao operador", async () => {
