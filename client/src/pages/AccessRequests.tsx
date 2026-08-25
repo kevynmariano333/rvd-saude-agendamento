@@ -44,7 +44,7 @@ export default function AccessRequests() {
   return (
     <PortalLayout
       user={auth.data}
-      title="Acessos de fornecedores"
+      title="Acessos ao sistema"
       subtitle="Todo cadastro novo passa por aqui antes de ter acesso ao sistema."
     >
       <section className="rounded-3xl border border-rvd-plum-soft bg-white p-5 sm:p-7">
