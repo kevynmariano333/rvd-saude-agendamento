@@ -25,6 +25,17 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const auth = trpc.auth.me.useQuery();
+  const requestReset = trpc.auth.requestPasswordReset.useMutation({
+    // The server answers identically for a known and an unknown address, and so
+    // does this message — naming the account would leak who has one.
+    onSuccess: () => toast.success("Se houver uma conta com esse e-mail, o link de redefinicao chega em instantes."),
+    onError: error => toast.error(error.message),
+  });
+  const askPasswordReset = () => {
+    const target = email.trim();
+    if (!target) return toast.error("Informe seu e-mail no campo acima para receber o link.");
+    requestReset.mutate({ email: target });
+  };
   const login = trpc.auth.login.useMutation({
     onSuccess: user => setLocation(user.role === "supplier" ? "/fornecedor" : "/operador"),
     onError: error => toast.error(error.message),
@@ -114,7 +125,7 @@ export default function Login() {
               {registering && <div className="space-y-2"><Label htmlFor="passwordConfirmation" className="text-sm font-bold text-rvd-plum">Confirmar senha</Label><Input id="passwordConfirmation" type="password" minLength={6} required value={passwordConfirmation} onChange={event => setPasswordConfirmation(event.target.value)} placeholder="Repita a senha" className="h-12 border-rvd-plum-soft bg-white text-rvd-plum" /></div>}
               <Button type="submit" disabled={pending} className="h-12 w-full rounded-xl bg-rvd-plum text-sm font-bold text-white hover:bg-rvd-plum active:scale-[0.97]">{pending ? "Processando..." : registering ? <><UserPlus className="size-4" />Criar conta de {selectedProfileLabel}</> : <>Entrar no portal <ChevronRight className="size-4" /></>}</Button>
             </form>
-            <div className="mt-5 text-center">{registering ? <button type="button" onClick={() => setMode("login")} className="inline-flex items-center gap-2 text-sm font-bold text-rvd-plum hover:underline"><ArrowLeft className="size-4" />Já tenho conta</button> : <button type="button" onClick={() => setMode("register")} className="inline-flex items-center gap-2 text-sm font-bold text-rvd-plum hover:underline"><UserPlus className="size-4" />Novo cadastro de {selectedProfileLabel}</button>}</div>
+            <div className="mt-4 text-center">{!registering && <button type="button" onClick={askPasswordReset} disabled={requestReset.isPending} className="text-sm font-bold text-rvd-plum hover:underline disabled:opacity-60">{requestReset.isPending ? "Enviando..." : "Esqueci minha senha"}</button>}</div><div className="mt-3 text-center">{registering ? <button type="button" onClick={() => setMode("login")} className="inline-flex items-center gap-2 text-sm font-bold text-rvd-plum hover:underline"><ArrowLeft className="size-4" />Já tenho conta</button> : <button type="button" onClick={() => setMode("register")} className="inline-flex items-center gap-2 text-sm font-bold text-rvd-plum hover:underline"><UserPlus className="size-4" />Novo cadastro de {selectedProfileLabel}</button>}</div>
             <p className="mt-6 border-t border-rvd-plum-soft pt-4 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-rvd-plum/55">Mariano System</p>
           </div>
         </section>

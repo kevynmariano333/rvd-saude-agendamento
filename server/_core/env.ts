@@ -16,4 +16,7 @@ export const ENV = {
   s3AccessKeyId: str("S3_ACCESS_KEY_ID"),
   s3SecretAccessKey: str("S3_SECRET_ACCESS_KEY"),
   s3ForcePathStyle: str("S3_FORCE_PATH_STYLE") === "true",
+  resendApiKey: str("RESEND_API_KEY"),
+  mailFrom: str("MAIL_FROM"),
+  appUrl: str("APP_URL").replace(/\/+$/, ""),
 };

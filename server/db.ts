@@ -6,6 +6,7 @@ import {
   appointmentMessages,
   appointmentStatusHistory,
   appointmentSuggestions,
+  passwordResetTokens,
   type AppointmentStatus,
   type InsertUser,
   type SuggestionStatus,
@@ -586,4 +587,51 @@ export async function createUnscheduledReceipt(input: {
     return appointmentId;
   });
   return getAppointmentById(result);
+}
+
+export async function createPasswordResetToken(input: {
+  userId: number;
+  tokenHash: string;
+  expiresAt: Date;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  // Any earlier link for this user stops working the moment a new one is asked
+  // for, so a forwarded or intercepted older e-mail is worthless.
+  await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, input.userId));
+  await db.insert(passwordResetTokens).values({
+    userId: input.userId,
+    tokenHash: input.tokenHash,
+    expiresAt: input.expiresAt,
+  });
+}
+
+export async function getPasswordResetToken(tokenHash: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(passwordResetTokens)
+    .where(eq(passwordResetTokens.tokenHash, tokenHash))
+    .limit(1);
+  return rows[0];
+}
+
+export async function consumePasswordResetToken(input: {
+  tokenId: number;
+  userId: number;
+  passwordHash: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.transaction(async tx => {
+    await tx
+      .update(users)
+      .set({ passwordHash: input.passwordHash })
+      .where(eq(users.id, input.userId));
+    await tx
+      .update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(passwordResetTokens.id, input.tokenId));
+  });
 }

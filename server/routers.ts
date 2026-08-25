@@ -29,6 +29,9 @@ import {
   scheduleAppointment,
   touchUserSignIn,
   updateAppointmentStatus,
+  consumePasswordResetToken,
+  createPasswordResetToken,
+  getPasswordResetToken,
 } from "./db";
 import { canApplySuggestion, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canTransitionAppointment, isOperator } from "./permissions";
 import { clearRvdSession, createRvdSession } from "./session";
@@ -42,6 +45,8 @@ import { storagePut } from "./storage";
 import { MAX_XML_BYTES, parseInvoiceXml } from "./xmlInvoice";
 import { ENV } from "./_core/env";
 import { createAppointmentValidationToken, readAppointmentValidationToken } from "./appointmentValidation";
+import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
+import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildDashboardMetrics } from "./dashboardMetrics";
 
 const localProfileSchema = z.enum(["operator", "supplier"]);
@@ -166,6 +171,62 @@ export const appRouter = router({
         const user = await createLocalUser({ email, name: input.name.trim(), companyName: isSupplier ? input.name.trim() : undefined, companyCnpj, role: input.profile, passwordHash: hashPassword(input.password) });
         await createRvdSession(ctx.res, user);
         return publicUser(user);
+      }),
+    requestPasswordReset: publicProcedure
+      .input(z.object({ email: z.string().trim().email("Informe um e-mail válido.") }))
+      .mutation(async ({ input }) => {
+        const email = input.email.trim().toLowerCase();
+        const user = await getUserByEmail(email);
+
+        // Always answer the same way. Telling the caller whether the address is
+        // registered would turn this endpoint into a way to enumerate accounts.
+        if (user?.id && user.email) {
+          const { token, tokenHash } = createResetToken();
+          await createPasswordResetToken({ userId: user.id, tokenHash, expiresAt: resetTokenExpiry() });
+
+          const baseUrl = ENV.appUrl;
+          if (!baseUrl) {
+            console.error("[PasswordReset] APP_URL não configurada — não foi possível montar o link.");
+          } else if (!isMailerConfigured()) {
+            console.error("[PasswordReset] RESEND_API_KEY ou MAIL_FROM ausentes — e-mail não enviado.");
+          } else {
+            const content = resetEmailContent(buildResetUrl(baseUrl, token));
+            try {
+              await sendMail({ to: user.email, ...content });
+            } catch (error) {
+              // A delivery failure must not change the response either.
+              console.error("[PasswordReset] Falha ao enviar o e-mail:", error);
+            }
+          }
+        }
+
+        return { sent: true } as const;
+      }),
+    resetPassword: publicProcedure
+      .input(
+        z.object({
+          token: z.string().min(1, "Link inválido.").max(500),
+          password: z.string().min(6, "A senha deve conter pelo menos 6 caracteres."),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const stored = await getPasswordResetToken(hashResetToken(input.token));
+        if (!isResetTokenUsable(stored)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Este link expirou ou já foi utilizado. Peça um novo e-mail de redefinição.",
+          });
+        }
+
+        await consumePasswordResetToken({
+          tokenId: stored!.id,
+          userId: stored!.userId,
+          passwordHash: hashPassword(input.password),
+        });
+
+        // No session is created here: the new password has to be typed on the
+        // login screen, so possession of the link alone never grants access.
+        return { success: true } as const;
       }),
     logout: publicProcedure.mutation(({ ctx }) => {
       clearRvdSession(ctx.res);
