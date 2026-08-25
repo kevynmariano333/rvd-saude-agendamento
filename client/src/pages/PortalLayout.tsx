@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { type PortalRole, isPortalAdmin, isPortalOperator } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
-import { BarChart3, Bell, CalendarDays, ChevronDown, ClipboardList, LayoutDashboard, LogOut, Menu, MessageCircle, ShieldCheck, UserRound, X } from "lucide-react";
+import { BarChart3, Bell, CalendarDays, ChevronDown, ClipboardList, LayoutDashboard, KeyRound, LogOut, Menu, MessageCircle, ShieldCheck, UserRound, X } from "lucide-react";
 import { useState } from "react";
+import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import { useLocation } from "wouter";
 
 type PortalUser = { id: number; name: string | null; email: string | null; role: string };
@@ -10,6 +11,7 @@ type PortalUser = { id: number; name: string | null; email: string | null; role:
 export default function PortalLayout({ user, title, subtitle, children, onLogout: _onLogout }: { user: PortalUser; title: string; subtitle: string; children: React.ReactNode; onLogout?: () => void }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [location, setLocation] = useLocation();
   const role = user.role as PortalRole;
@@ -90,7 +92,7 @@ export default function PortalLayout({ user, title, subtitle, children, onLogout
           {notifications.data?.length ? <div className="max-h-80 overflow-y-auto p-2">{notifications.data.map(message => <button key={message.id} onClick={() => { setNotificationsOpen(false); go(`${isOperator ? "/operador" : "/fornecedor"}?chat=${message.appointmentId}`); }} className="w-full rounded-xl p-3 text-left hover:bg-rvd-plum-pale"><div className="flex items-start gap-3"><span className="mt-0.5 rounded-lg bg-rvd-plum-pale p-2 text-rvd-plum"><MessageCircle className="size-4" /></span><span className="min-w-0"><span className="block text-xs font-bold text-rvd-plum">{message.invoiceNumber ? `Nota ${message.invoiceNumber}` : message.serviceType}</span><span className="mt-0.5 block truncate text-sm text-rvd-plum">{message.senderName || "Participante"}: {message.body}</span><span className="mt-1 block text-[10px] text-rvd-plum">{new Date(message.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span></span></div></button>)}</div> : <div className="px-5 py-10 text-center"><Bell className="mx-auto size-6 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhuma mensagem nova</p></div>}
         </div>}
 
-        {profileOpen && <div className="absolute right-5 top-[5.5rem] w-72 rounded-2xl border border-rvd-plum-soft bg-white p-4 shadow-xl sm:right-8"><p className="truncate font-display text-sm font-extrabold text-rvd-plum">{user.name || "Acesso RVD"}</p><p className="mt-1 truncate text-xs text-rvd-plum">{user.email}</p><p className="mt-3 inline-flex rounded-full bg-rvd-plum-pale px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">{roleLabel}</p><Button onClick={finishLogout} disabled={logoutMutation.isPending} variant="ghost" className="mt-4 w-full justify-start text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"><LogOut className="size-4" />{logoutMutation.isPending ? "Encerrando..." : "Encerrar sessão"}</Button></div>}
+        {profileOpen && <div className="absolute right-5 top-[5.5rem] w-72 rounded-2xl border border-rvd-plum-soft bg-white p-4 shadow-xl sm:right-8"><p className="truncate font-display text-sm font-extrabold text-rvd-plum">{user.name || "Acesso RVD"}</p><p className="mt-1 truncate text-xs text-rvd-plum">{user.email}</p><p className="mt-3 inline-flex rounded-full bg-rvd-plum-pale px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">{roleLabel}</p><Button onClick={() => { setProfileOpen(false); setPasswordOpen(true); }} variant="ghost" className="mt-4 w-full justify-start text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"><KeyRound className="size-4" />Alterar senha</Button><Button onClick={finishLogout} disabled={logoutMutation.isPending} variant="ghost" className="mt-1 w-full justify-start text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"><LogOut className="size-4" />{logoutMutation.isPending ? "Encerrando..." : "Encerrar sessão"}</Button></div>}
       </header>
 
       <main>
@@ -104,6 +106,6 @@ export default function PortalLayout({ user, title, subtitle, children, onLogout
           <div className="pt-7">{children}</div>
         </div>
       </main>
-    </div>
+    <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} /></div>
   );
 }

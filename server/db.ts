@@ -635,3 +635,12 @@ export async function consumePasswordResetToken(input: {
       .where(eq(passwordResetTokens.id, input.tokenId));
   });
 }
+
+export async function updateUserPassword(input: { userId: number; passwordHash: string }) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(users)
+    .set({ passwordHash: input.passwordHash })
+    .where(eq(users.id, input.userId));
+}

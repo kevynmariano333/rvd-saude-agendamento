@@ -30,6 +30,7 @@ import {
   touchUserSignIn,
   updateAppointmentStatus,
   consumePasswordResetToken,
+  updateUserPassword,
   createPasswordResetToken,
   getPasswordResetToken,
 } from "./db";
@@ -232,6 +233,27 @@ export const appRouter = router({
 
         // No session is created here: the new password has to be typed on the
         // login screen, so possession of the link alone never grants access.
+        return { success: true } as const;
+      }),
+    changePassword: protectedProcedure
+      .input(
+        z.object({
+          currentPassword: z.string().min(1, "Informe a senha atual."),
+          newPassword: z.string().min(6, "A nova senha deve conter pelo menos 6 caracteres."),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        // Re-check the current password even though the session is already
+        // authenticated: an unattended open session should not be enough to
+        // take the account over.
+        if (!ctx.user.passwordHash || !passwordMatches(input.currentPassword, ctx.user.passwordHash)) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "A senha atual não confere." });
+        }
+        if (input.currentPassword === input.newPassword) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A nova senha deve ser diferente da atual." });
+        }
+
+        await updateUserPassword({ userId: ctx.user.id, passwordHash: hashPassword(input.newPassword) });
         return { success: true } as const;
       }),
     logout: publicProcedure.mutation(({ ctx }) => {
