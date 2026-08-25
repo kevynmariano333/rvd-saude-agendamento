@@ -14,11 +14,15 @@ export const userRoles = ["admin", "operator", "supplier"] as const;
 export const appointmentStatuses = ["pending", "scheduled", "received", "completed", "backlog", "rejected"] as const;
 export const appointmentSources = ["portal", "manual_xml"] as const;
 export const suggestionStatuses = ["pending", "accepted", "declined"] as const;
+// A supplier login is approved on sight when it is the first for its CNPJ, and
+// held for an operator's decision when it joins a company that already exists.
+export const userAccessStatuses = ["approved", "pending", "rejected"] as const;
 
 export type UserRole = (typeof userRoles)[number];
 export type AppointmentStatus = (typeof appointmentStatuses)[number];
 export type AppointmentSource = (typeof appointmentSources)[number];
 export type SuggestionStatus = (typeof suggestionStatuses)[number];
+export type UserAccessStatus = (typeof userAccessStatuses)[number];
 
 export const users = mysqlTable(
   "users",
@@ -32,11 +36,12 @@ export const users = mysqlTable(
     loginMethod: varchar("loginMethod", { length: 64 }),
     passwordHash: varchar("passwordHash", { length: 255 }),
     role: mysqlEnum("role", userRoles).default("supplier").notNull(),
+    accessStatus: mysqlEnum("accessStatus", userAccessStatuses).default("approved").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
     lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   },
-  table => [uniqueIndex("users_email_unique").on(table.email), uniqueIndex("users_company_cnpj_unique").on(table.companyCnpj)]
+  table => [uniqueIndex("users_email_unique").on(table.email), index("users_company_cnpj_idx").on(table.companyCnpj)]
 );
 
 export const passwordResetTokens = mysqlTable(

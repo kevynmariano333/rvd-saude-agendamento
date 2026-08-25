@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, like, lte, ne, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, like, lte, ne, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { nanoid } from "nanoid";
 import {
@@ -10,6 +10,7 @@ import {
   type AppointmentStatus,
   type InsertUser,
   type SuggestionStatus,
+  type UserAccessStatus,
   type UserRole,
   users,
 } from "../drizzle/schema";
@@ -88,6 +89,7 @@ export async function createLocalUser(input: {
   name?: string;
   companyName?: string;
   companyCnpj?: string;
+  accessStatus?: UserAccessStatus;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
@@ -101,6 +103,7 @@ export async function createLocalUser(input: {
     loginMethod: "rvd-password",
     passwordHash: input.passwordHash,
     role: input.role,
+    accessStatus: input.accessStatus ?? "approved",
     lastSignedIn: new Date(),
   };
   const result = await db.insert(users).values(values);
@@ -114,6 +117,8 @@ export async function touchUserSignIn(id: number) {
 }
 
 export type AppointmentFilters = {
+  /** Owners whose appointments the caller may see; empty means no access. */
+  supplierIds?: number[];
   supplierId?: number;
   status?: AppointmentStatus;
   date?: string;
@@ -128,6 +133,12 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
 
   const conditions = [];
   if (filters.supplierId) conditions.push(eq(appointments.supplierId, filters.supplierId));
+  // An empty list is "sees nothing", not "sees everything": inArray with no
+  // values would drop the condition and expose every supplier's records.
+  if (filters.supplierIds) {
+    if (!filters.supplierIds.length) return [];
+    conditions.push(inArray(appointments.supplierId, filters.supplierIds));
+  }
   if (filters.status) conditions.push(eq(appointments.status, filters.status));
   if (filters.invoiceNumber) conditions.push(like(appointments.invoiceNumber, `%${filters.invoiceNumber.trim()}%`));
   if (filters.supplierName) {
@@ -304,12 +315,17 @@ export async function getSuggestionById(id: number) {
   return result[0];
 }
 
-export async function listAppointmentSuggestions(filters: { appointmentId?: number; supplierId?: number; status?: SuggestionStatus } = {}) {
+export async function listAppointmentSuggestions(filters: { appointmentId?: number; supplierId?: number; supplierIds?: number[]; status?: SuggestionStatus } = {}) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
   if (filters.appointmentId) conditions.push(eq(appointmentSuggestions.appointmentId, filters.appointmentId));
   if (filters.supplierId) conditions.push(eq(appointmentSuggestions.supplierId, filters.supplierId));
+  // Same rule as the appointment list: an empty scope means nothing, not everything.
+  if (filters.supplierIds) {
+    if (!filters.supplierIds.length) return [];
+    conditions.push(inArray(appointmentSuggestions.supplierId, filters.supplierIds));
+  }
   if (filters.status) conditions.push(eq(appointmentSuggestions.status, filters.status));
   const query = db
     .select({
@@ -643,4 +659,46 @@ export async function updateUserPassword(input: { userId: number; passwordHash: 
     .update(users)
     .set({ passwordHash: input.passwordHash })
     .where(eq(users.id, input.userId));
+}
+
+export async function listApprovedCompanyUserIds(companyKey: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(
+      and(
+        eq(users.companyCnpj, companyKey),
+        eq(users.role, "supplier"),
+        eq(users.accessStatus, "approved")
+      )
+    );
+  return rows.map(row => row.id);
+}
+
+export async function listPendingSupplierAccess() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      companyName: users.companyName,
+      companyCnpj: users.companyCnpj,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(and(eq(users.role, "supplier"), eq(users.accessStatus, "pending")))
+    .orderBy(desc(users.createdAt));
+}
+
+export async function setUserAccessStatus(input: { userId: number; accessStatus: UserAccessStatus }) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(users)
+    .set({ accessStatus: input.accessStatus })
+    .where(and(eq(users.id, input.userId), eq(users.role, "supplier")));
 }

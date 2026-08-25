@@ -30,9 +30,17 @@ export default function Login() {
     onError: error => toast.error(error.message),
   });
   const register = trpc.auth.register.useMutation({
-    onSuccess: user => {
+    onSuccess: result => {
+      // A login joining a company that already exists is created without access
+      // until the operator decides, so there is nowhere to send it yet.
+      if (result.pending) {
+        setMode("login");
+        return toast.success(
+          "Cadastro enviado. Este CNPJ já tem acesso ativo, então o Operador precisa liberar o seu login. Você poderá entrar assim que for aprovado."
+        );
+      }
       toast.success("Cadastro realizado com sucesso.");
-      setLocation(user.role === "supplier" ? "/fornecedor" : "/operador");
+      setLocation(result.role === "supplier" ? "/fornecedor" : "/operador");
     },
     onError: error => toast.error(error.message),
   });

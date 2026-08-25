@@ -24,6 +24,9 @@ const mocks = vi.hoisted(() => ({
   deleteAppointmentById: vi.fn(),
   scheduleAppointment: vi.fn(),
   createUnscheduledReceipt: vi.fn(),
+  listApprovedCompanyUserIds: vi.fn(),
+  listPendingSupplierAccess: vi.fn(),
+  setUserAccessStatus: vi.fn(),
 }));
 
 vi.mock("./db", () => mocks);
@@ -36,13 +39,13 @@ vi.mock("./storage", () => ({ storagePut: vi.fn().mockResolvedValue({ key: "rece
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
-function user(role: User["role"]): User {
+function user(role: User["role"], companyCnpj: string | null = null): User {
   const now = new Date();
-  return { id: role === "supplier" ? 12 : 24, openId: `test-${role}`, name: "Teste", email: `${role}@example.com`, loginMethod: "test", passwordHash: null, role, createdAt: now, updatedAt: now, lastSignedIn: now };
+  return { id: role === "supplier" ? 12 : 24, openId: `test-${role}`, name: "Teste", email: `${role}@example.com`, loginMethod: "test", passwordHash: null, role, companyCnpj, createdAt: now, updatedAt: now, lastSignedIn: now } as User;
 }
 
-function context(role: User["role"]): TrpcContext {
-  return { user: user(role), req: { protocol: "https", headers: {} } as TrpcContext["req"], res: { clearCookie: vi.fn(), cookie: vi.fn() } as unknown as TrpcContext["res"] };
+function context(role: User["role"], companyCnpj: string | null = null): TrpcContext {
+  return { user: user(role, companyCnpj), req: { protocol: "https", headers: {} } as TrpcContext["req"], res: { clearCookie: vi.fn(), cookie: vi.fn() } as unknown as TrpcContext["res"] };
 }
 
 describe("procedures de agendamento", () => {
@@ -54,6 +57,7 @@ describe("procedures de agendamento", () => {
     mocks.listAppointmentMessages.mockResolvedValue([]);
     mocks.listAppointments.mockResolvedValue([]);
     mocks.listAppointmentSuggestions.mockResolvedValue([]);
+    mocks.listApprovedCompanyUserIds.mockResolvedValue([]);
   });
 
   it("permite que o fornecedor crie uma solicitação própria", async () => {
@@ -130,7 +134,51 @@ describe("procedures de agendamento", () => {
   it("aplica o escopo do fornecedor ao listar agendamentos", async () => {
     const caller = appRouter.createCaller(context("supplier"));
     await caller.appointments.list({ status: "pending" });
-    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 12, status: "pending" }));
+    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ supplierIds: [12], status: "pending" }));
+  });
+
+  it("mostra ao fornecedor os agendamentos dos demais logins do mesmo CNPJ", async () => {
+    mocks.listApprovedCompanyUserIds.mockResolvedValue([12, 31]);
+    const caller = appRouter.createCaller(context("supplier", "06.033.403/0001-13"));
+    await caller.appointments.list();
+    expect(mocks.listApprovedCompanyUserIds).toHaveBeenCalledWith("06033403000113");
+    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ supplierIds: [12, 31] }));
+  });
+
+  it("não agrupa logins sem CNPJ utilizável", async () => {
+    const caller = appRouter.createCaller(context("supplier", "00000000000000"));
+    await caller.appointments.list();
+    expect(mocks.listApprovedCompanyUserIds).not.toHaveBeenCalled();
+    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ supplierIds: [12] }));
+  });
+
+  it("recusa o histórico de um agendamento de outra empresa", async () => {
+    mocks.listApprovedCompanyUserIds.mockResolvedValue([12, 31]);
+    mocks.getAppointmentById.mockResolvedValue({ id: 5, supplierId: 99, status: "pending" });
+    const caller = appRouter.createCaller(context("supplier", "06.033.403/0001-13"));
+    await expect(caller.appointments.history({ appointmentId: 5 })).rejects.toThrow(/não pode consultar o histórico/);
+  });
+
+  it("libera o histórico de um agendamento de um colega do mesmo CNPJ", async () => {
+    mocks.listApprovedCompanyUserIds.mockResolvedValue([12, 31]);
+    mocks.getAppointmentById.mockResolvedValue({ id: 5, supplierId: 31, status: "pending" });
+    const caller = appRouter.createCaller(context("supplier", "06.033.403/0001-13"));
+    await caller.appointments.history({ appointmentId: 5 });
+    expect(mocks.listAppointmentHistory).toHaveBeenCalledWith(5);
+  });
+
+  it("recusa que o fornecedor decida aprovações de acesso", async () => {
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.supplierAccess.decide({ userId: 31, approve: true })).rejects.toThrow();
+    expect(mocks.setUserAccessStatus).not.toHaveBeenCalled();
+  });
+
+  it("permite ao operador aprovar e recusar um acesso", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.supplierAccess.decide({ userId: 31, approve: true });
+    expect(mocks.setUserAccessStatus).toHaveBeenCalledWith({ userId: 31, accessStatus: "approved" });
+    await caller.supplierAccess.decide({ userId: 32, approve: false });
+    expect(mocks.setUserAccessStatus).toHaveBeenCalledWith({ userId: 32, accessStatus: "rejected" });
   });
 
   it("encaminha os filtros de nota, fornecedor e CNPJ ao operador", async () => {

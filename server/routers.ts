@@ -31,6 +31,9 @@ import {
   updateAppointmentStatus,
   consumePasswordResetToken,
   updateUserPassword,
+  listApprovedCompanyUserIds,
+  listPendingSupplierAccess,
+  setUserAccessStatus,
   createPasswordResetToken,
   getPasswordResetToken,
 } from "./db";
@@ -48,6 +51,7 @@ import { ENV } from "./_core/env";
 import { createAppointmentValidationToken, readAppointmentValidationToken } from "./appointmentValidation";
 import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
 import { isMailerConfigured, sendMail } from "./_core/mailer";
+import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { buildDashboardMetrics } from "./dashboardMetrics";
 
 const localProfileSchema = z.enum(["operator", "supplier"]);
@@ -85,10 +89,23 @@ function assertAdmin(role: "admin" | "operator" | "supplier") {
   if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Ação restrita ao Administrador." });
 }
 
-async function getAccessibleAppointment(user: { id: number; role: "admin" | "operator" | "supplier" }, appointmentId: number) {
+type ScopedUser = { id: number; role: "admin" | "operator" | "supplier"; companyCnpj?: string | null };
+
+/**
+ * The supplier logins whose appointments this caller may read. Logins sharing a
+ * CNPJ see the company's records; only approved ones count, so a login waiting
+ * on the operator neither sees the company nor is seen by it.
+ */
+async function supplierScopeIds(user: ScopedUser): Promise<number[]> {
+  const key = companyKey(user.companyCnpj);
+  if (!key) return [user.id];
+  return buildScopeIds(user.id, await listApprovedCompanyUserIds(key));
+}
+
+async function getAccessibleAppointment(user: ScopedUser, appointmentId: number) {
   const appointment = await getAppointmentById(appointmentId);
   if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
-  if (!isOperator(user.role) && appointment.supplierId !== user.id) {
+  if (!isOperator(user.role) && !isWithinScope(await supplierScopeIds(user), appointment.supplierId)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode acessar as mensagens deste agendamento." });
   }
   return appointment;
@@ -134,6 +151,14 @@ export const appRouter = router({
           if (!profileAllowed || !existing.passwordHash || !passwordMatches(input.password, existing.passwordHash)) {
             throw new TRPCError({ code: "UNAUTHORIZED", message: "E-mail, senha ou perfil não conferem." });
           }
+          // Checked only after the password, so the status of an account is not
+          // revealed to someone who does not already hold its credentials.
+          if (existing.accessStatus === "pending") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Seu acesso ainda está em análise pelo Operador. Você será liberado assim que for aprovado." });
+          }
+          if (existing.accessStatus === "rejected") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Seu acesso a esta empresa não foi autorizado. Fale com o Operador." });
+          }
           await touchUserSignIn(existing.id);
           user = existing;
         } else if (isDemoLogin && input.password === demoPassword) {
@@ -155,10 +180,18 @@ export const appRouter = router({
         if (companyCnpj.length !== 14) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe um CNPJ válido com 14 dígitos." });
         const existing = await getUserByEmail(email);
         if (existing) throw new TRPCError({ code: "CONFLICT", message: "Este e-mail já possui uma conta. Entre pelo formulário de acesso." });
-        if (await getUserByCompanyCnpj(companyCnpj)) throw new TRPCError({ code: "CONFLICT", message: "Este CNPJ já possui uma conta de fornecedor." });
-        const user = await createLocalUser({ email, name: input.companyName.trim(), companyName: input.companyName.trim(), companyCnpj, role: "supplier", passwordHash: hashPassword(input.password) });
+
+        // The first login for a CNPJ opens the company and is trusted. Any later
+        // one joins a company whose records already exist, so it waits for the
+        // operator — a CNPJ is public, and self-service would hand the company's
+        // history to anyone who types it.
+        const companyExists = Boolean(await getUserByCompanyCnpj(companyCnpj));
+        const accessStatus = companyExists ? "pending" : "approved";
+        const user = await createLocalUser({ email, name: input.companyName.trim(), companyName: input.companyName.trim(), companyCnpj, role: "supplier", passwordHash: hashPassword(input.password), accessStatus });
+        if (accessStatus === "pending") return { pending: true } as const;
+
         await createRvdSession(ctx.res, user);
-        return publicUser(user);
+        return { pending: false, ...publicUser(user) } as const;
       }),
     register: publicProcedure
       .input(z.object({ profile: localProfileSchema, name: z.string().trim().min(2, "Informe o nome.").max(255), companyCnpj: z.string().max(20).optional(), email: z.string().email("Informe um e-mail válido."), password: z.string().min(6, "A senha deve conter pelo menos 6 caracteres.") }))
@@ -168,10 +201,13 @@ export const appRouter = router({
         const isSupplier = input.profile === "supplier";
         const companyCnpj = isSupplier ? input.companyCnpj?.replace(/\D/g, "") : undefined;
         if (isSupplier && companyCnpj?.length !== 14) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe um CNPJ válido com 14 dígitos." });
-        if (companyCnpj && await getUserByCompanyCnpj(companyCnpj)) throw new TRPCError({ code: "CONFLICT", message: "Este CNPJ já possui uma conta de fornecedor." });
-        const user = await createLocalUser({ email, name: input.name.trim(), companyName: isSupplier ? input.name.trim() : undefined, companyCnpj, role: input.profile, passwordHash: hashPassword(input.password) });
+        const companyExists = Boolean(companyCnpj && (await getUserByCompanyCnpj(companyCnpj)));
+        const accessStatus = isSupplier && companyExists ? "pending" : "approved";
+        const user = await createLocalUser({ email, name: input.name.trim(), companyName: isSupplier ? input.name.trim() : undefined, companyCnpj, role: input.profile, passwordHash: hashPassword(input.password), accessStatus });
+        if (accessStatus === "pending") return { pending: true } as const;
+
         await createRvdSession(ctx.res, user);
-        return publicUser(user);
+        return { pending: false, ...publicUser(user) } as const;
       }),
     requestPasswordReset: publicProcedure
       .input(z.object({ email: z.string().trim().email("Informe um e-mail válido.") }))
@@ -277,7 +313,7 @@ export const appRouter = router({
       .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional() }).optional())
       .query(async ({ ctx, input }) => {
         const filters: AppointmentFilters = { date: input?.date, status: input?.status as AppointmentStatus | undefined, invoiceNumber: input?.invoiceNumber, supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj };
-        if (!isOperator(ctx.user.role)) filters.supplierId = ctx.user.id;
+        if (!isOperator(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
         return listAppointments(filters);
       }),
     history: protectedProcedure
@@ -285,7 +321,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
-        if (!isOperator(ctx.user.role) && appointment.supplierId !== ctx.user.id) {
+        if (!isOperator(ctx.user.role) && !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar o histórico deste agendamento." });
         }
         return listAppointmentHistory(input.appointmentId);
@@ -295,7 +331,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
-        if (ctx.user.role === "supplier" && appointment.supplierId !== ctx.user.id) {
+        if (ctx.user.role === "supplier" && !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode emitir este comprovante." });
         }
         if (appointment.status !== "scheduled") {
@@ -462,16 +498,16 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         if (input?.appointmentId && !isOperator(ctx.user.role)) {
           const appointment = await getAppointmentById(input.appointmentId);
-          if (!appointment || appointment.supplierId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar sugestões deste agendamento." });
+          if (!appointment || !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar sugestões deste agendamento." });
         }
-        return listAppointmentSuggestions({ appointmentId: input?.appointmentId, status: input?.status, supplierId: isOperator(ctx.user.role) ? undefined : ctx.user.id });
+        return listAppointmentSuggestions({ appointmentId: input?.appointmentId, status: input?.status, supplierIds: isOperator(ctx.user.role) ? undefined : await supplierScopeIds(ctx.user) });
       }),
     create: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), suggestedFor: z.string().datetime(), notes: z.string().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {
         if (!canRequestAppointment(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Somente fornecedores podem enviar sugestões." });
         const appointment = await getAppointmentById(input.appointmentId);
-        if (!appointment || appointment.supplierId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode sugerir horário para este agendamento." });
+        if (!appointment || !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode sugerir horário para este agendamento." });
         if (!canApplySuggestion(appointment.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Este agendamento não aceita novas sugestões." });
         const suggestedFor = new Date(input.suggestedFor);
         if (Number.isNaN(suggestedFor.getTime()) || suggestedFor.getTime() <= Date.now()) throw new TRPCError({ code: "BAD_REQUEST", message: "Sugira uma data e horário futuros." });
@@ -486,6 +522,19 @@ export const appRouter = router({
         if (!suggestion) throw new TRPCError({ code: "NOT_FOUND", message: "Sugestão pendente não encontrada." });
         if (!canApplySuggestion(suggestion.appointmentStatus)) throw new TRPCError({ code: "BAD_REQUEST", message: "O agendamento não pode receber esta sugestão." });
         return acceptAppointmentSuggestion({ suggestionId: input.suggestionId, appointmentStatus: suggestion.appointmentStatus, handledBy: ctx.user.id });
+      }),
+  }),
+  supplierAccess: router({
+    listPending: protectedProcedure.query(async ({ ctx }) => {
+      assertOperator(ctx.user.role);
+      return listPendingSupplierAccess();
+    }),
+    decide: protectedProcedure
+      .input(z.object({ userId: z.number().int().positive(), approve: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        assertOperator(ctx.user.role);
+        await setUserAccessStatus({ userId: input.userId, accessStatus: input.approve ? "approved" : "rejected" });
+        return { success: true } as const;
       }),
   }),
   messages: router({

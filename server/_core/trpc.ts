@@ -17,6 +17,19 @@ const requireUser = t.middleware(async opts => {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
 
+  // Checked on every request, not only at sign-in: revoking an approval has to
+  // take effect at once, and a session cookie already issued would otherwise
+  // keep working until it expired.
+  if (ctx.user.accessStatus && ctx.user.accessStatus !== "approved") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message:
+        ctx.user.accessStatus === "pending"
+          ? "Seu acesso ainda está em análise pelo Operador."
+          : "Seu acesso a esta empresa não foi autorizado. Fale com o Operador.",
+    });
+  }
+
   return next({
     ctx: {
       ...ctx,

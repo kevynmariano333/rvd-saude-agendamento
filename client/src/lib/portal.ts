@@ -29,3 +29,10 @@ export function getAppointmentMomentForDisplay(input: { status: PortalStatus; sc
 export function hasConfirmedAppointmentMoment(status: PortalStatus) {
   return status === "scheduled" || status === "received" || status === "completed";
 }
+
+/** Renders a CNPJ as 00.000.000/0000-00, leaving anything unexpected as-is. */
+export function formatCnpj(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length !== 14) return value;
+  return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+}

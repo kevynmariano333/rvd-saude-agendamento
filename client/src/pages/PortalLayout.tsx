@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { type PortalRole, isPortalAdmin, isPortalOperator } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
-import { BarChart3, Bell, CalendarDays, ChevronDown, ClipboardList, LayoutDashboard, KeyRound, LogOut, Menu, MessageCircle, ShieldCheck, UserRound, X } from "lucide-react";
+import { BarChart3, Bell, CalendarDays, ChevronDown, ClipboardList, LayoutDashboard, KeyRound, LogOut, Menu, UserCheck, MessageCircle, ShieldCheck, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import { useLocation } from "wouter";
@@ -27,6 +27,7 @@ export default function PortalLayout({ user, title, subtitle, children, onLogout
       { label: "Agendamentos", path: "/operador", icon: ClipboardList },
       { label: "Calendário", path: "/operador/calendario", icon: CalendarDays },
       { label: "Relatórios", path: "/operador/relatorios", icon: BarChart3 },
+      { label: "Acessos", path: "/operador/acessos", icon: UserCheck },
       ...(isAdmin ? [{ label: "Administrar notas", path: "/operador/notas", icon: ShieldCheck }] : []),
     ]
     : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment } from "./portal";
+import { formatCnpj, getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment } from "./portal";
 
 describe("momento exibido do agendamento", () => {
   it("prioriza a data e hora reais quando a nota foi recebida", () => {
@@ -19,5 +19,20 @@ describe("momento exibido do agendamento", () => {
     expect(hasConfirmedAppointmentMoment("scheduled")).toBe(true);
     expect(hasConfirmedAppointmentMoment("received")).toBe(true);
     expect(hasConfirmedAppointmentMoment("completed")).toBe(true);
+  });
+});
+
+describe("formatCnpj", () => {
+  it("formata um CNPJ de 14 dígitos", () => {
+    expect(formatCnpj("06033403000113")).toBe("06.033.403/0001-13");
+  });
+
+  it("mantém o valor original quando não há 14 dígitos", () => {
+    expect(formatCnpj("")).toBe("");
+    expect(formatCnpj("123")).toBe("123");
+  });
+
+  it("aceita um valor já formatado", () => {
+    expect(formatCnpj("06.033.403/0001-13")).toBe("06.033.403/0001-13");
   });
 });
