@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { formatAppointmentDate } from "@/lib/portal";
+import { formatAppointmentDate, homePathFor, type PortalRole } from "@/lib/portal";
 import { CalendarClock, Lightbulb, Send } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -33,7 +33,7 @@ export default function SupplierSuggestions() {
   });
 
   useEffect(() => {
-    if (auth.data && auth.data.role !== "supplier") setLocation("/operador");
+    if (auth.data && auth.data.role !== "supplier") setLocation(homePathFor(auth.data.role as PortalRole));
     if (auth.data === null) setLocation("/");
   }, [auth.data, setLocation]);
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { EmptyState, Panel, PanelBody, PanelHeader } from "@/components/PortalKit";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { formatCnpj, roleLabel, type PortalRole } from "@/lib/portal";
+import { formatCnpj, roleLabel, type PortalRole, homePathFor } from "@/lib/portal";
 import { CheckCircle2, ShieldCheck, UserCheck, UsersRound, X } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -47,7 +47,7 @@ export default function AccessRequests() {
 
   useEffect(() => {
     if (auth.data && auth.data.role !== "admin") {
-      setLocation(auth.data.role === "supplier" ? "/fornecedor" : "/operador");
+      setLocation(homePathFor(auth.data.role as PortalRole));
     }
     if (auth.data === null) setLocation("/");
   }, [auth.data, setLocation]);

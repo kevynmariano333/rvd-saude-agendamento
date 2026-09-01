@@ -1,3 +1,4 @@
+import { homePathFor, isPortalOperator, type PortalRole } from "@/lib/portal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +22,7 @@ export default function ReportsPage() {
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
   const [filters, setFilters] = useState<ReportFilters>(initialFilters);
   const [view, setView] = useState<"consolidated" | "detailed">("consolidated");
-  useEffect(() => { if (auth.data?.role === "supplier") setLocation("/fornecedor"); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
+  useEffect(() => { if (auth.data && !isPortalOperator(auth.data.role as PortalRole)) setLocation(homePathFor(auth.data.role as PortalRole)); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
   const filtered = useMemo(() => filterReportAppointments(appointments.data ?? [], filters), [appointments.data, filters]);
   const rows = useMemo(() => toConsolidatedReportRows(filtered), [filtered]);
   const setFilter = <K extends keyof ReportFilters>(key: K, value: ReportFilters[K]) => setFilters(current => ({ ...current, [key]: value }));
@@ -32,7 +33,7 @@ export default function ReportsPage() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Consolidado");
     XLSX.writeFile(workbook, `relatorio-consolidado-rvd-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
-  if (!auth.data || auth.data.role === "supplier") return <div className="min-h-screen bg-canvas" />;
+  if (!auth.data || !isPortalOperator(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
 
   return <PortalLayout user={auth.data} title="Relatórios" subtitle="Histórico completo das notas lançadas." onLogout={() => logout.mutate()}>
     <section className="overflow-hidden rounded-3xl bg-[#172136] p-6 text-white shadow-xl shadow-rvd-plum/10 sm:p-8"><div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between"><div className="flex items-center gap-4"><span className="flex size-14 items-center justify-center rounded-2xl bg-white/10 text-rvd-blue"><ClipboardList className="size-7" /></span><div><p className="font-display text-3xl font-extrabold">Relatórios</p><p className="mt-1 text-sm text-white/75">Consolidado operacional de agendamentos e recebimentos.</p></div></div><div className="flex flex-wrap gap-3"><Button onClick={() => appointments.refetch()} variant="ghost" className="h-11 rounded-xl bg-surface font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"><RefreshCw className="size-4" />Carregar relatório</Button><Button onClick={exportExcel} disabled={!rows.length} className="h-11 rounded-xl bg-rvd-blue font-bold text-rvd-plum hover:bg-rvd-blue-pale"><Download className="size-4" />Exportar Excel ({rows.length})</Button></div></div></section>
