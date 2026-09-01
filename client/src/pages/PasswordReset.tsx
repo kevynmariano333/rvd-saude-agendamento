@@ -31,12 +31,12 @@ export default function PasswordReset() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-rvd-plum-pale px-4 py-10">
-      <section className="w-full max-w-md rounded-3xl bg-white p-7 shadow-xl sm:p-9">
+      <section className="w-full max-w-md rounded-3xl bg-surface p-7 shadow-xl sm:p-9">
         <div className="flex items-center gap-3">
           <img src="/RVD-Saude.png" alt="RVD Saúde" className="size-12 rounded-2xl object-contain" />
           <div>
-            <p className="font-display text-lg font-extrabold text-rvd-plum">RVD Saúde</p>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-rvd-plum/70">
+            <p className="font-display text-lg font-extrabold text-ink">RVD Saúde</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-ink-faint">
               Sistema de Agendamento
             </p>
           </div>
@@ -45,8 +45,8 @@ export default function PasswordReset() {
         {!token ? (
           <div className="mt-8 text-center">
             <TriangleAlert className="mx-auto size-9 text-rvd-plum" />
-            <h1 className="mt-4 font-display text-xl font-extrabold text-rvd-plum">Link inválido</h1>
-            <p className="mt-2 text-sm leading-6 text-rvd-plum">
+            <h1 className="mt-4 font-display text-xl font-extrabold text-ink">Link inválido</h1>
+            <p className="mt-2 text-sm leading-6 text-ink-soft">
               Este endereço não traz um código de redefinição. Peça um novo e-mail pela tela de acesso.
             </p>
             <Button
@@ -59,8 +59,8 @@ export default function PasswordReset() {
         ) : done ? (
           <div className="mt-8 text-center">
             <CheckCircle2 className="mx-auto size-9 text-emerald-600" />
-            <h1 className="mt-4 font-display text-xl font-extrabold text-rvd-plum">Senha alterada</h1>
-            <p className="mt-2 text-sm leading-6 text-rvd-plum">
+            <h1 className="mt-4 font-display text-xl font-extrabold text-ink">Senha alterada</h1>
+            <p className="mt-2 text-sm leading-6 text-ink-soft">
               Sua nova senha já está valendo. Entre no portal com ela.
             </p>
             <Button
@@ -77,8 +77,8 @@ export default function PasswordReset() {
                 <KeyRound className="size-5" />
               </span>
               <div>
-                <h1 className="font-display text-xl font-extrabold text-rvd-plum">Definir nova senha</h1>
-                <p className="mt-1 text-sm text-rvd-plum">Escolha uma senha com pelo menos 6 caracteres.</p>
+                <h1 className="font-display text-xl font-extrabold text-ink">Definir nova senha</h1>
+                <p className="mt-1 text-sm text-ink-soft">Escolha uma senha com pelo menos 6 caracteres.</p>
               </div>
             </div>
 
@@ -93,7 +93,7 @@ export default function PasswordReset() {
                   value={password}
                   onChange={event => setPassword(event.target.value)}
                   placeholder="Sua nova senha"
-                  className="mt-2 h-12 border-rvd-plum-soft bg-white text-rvd-plum"
+                  className="mt-2 h-12 border-line bg-surface text-rvd-plum"
                 />
               </div>
               <div>
@@ -108,7 +108,7 @@ export default function PasswordReset() {
                   value={confirmation}
                   onChange={event => setConfirmation(event.target.value)}
                   placeholder="Repita a senha"
-                  className="mt-2 h-12 border-rvd-plum-soft bg-white text-rvd-plum"
+                  className="mt-2 h-12 border-line bg-surface text-rvd-plum"
                 />
               </div>
               <Button
@@ -120,7 +120,7 @@ export default function PasswordReset() {
               </Button>
             </form>
 
-            <p className="mt-5 text-center text-xs leading-5 text-rvd-plum/70">
+            <p className="mt-5 text-center text-xs leading-5 text-ink-soft">
               O link vale por 1 hora e só pode ser usado uma vez.
             </p>
           </>

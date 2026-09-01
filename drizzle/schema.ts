@@ -10,7 +10,7 @@ import {
   varchar,
 } from "drizzle-orm/mysql-core";
 
-export const userRoles = ["admin", "operator", "supplier"] as const;
+export const userRoles = ["admin", "operator", "supplier", "portaria", "operacao"] as const;
 export const appointmentStatuses = ["pending", "scheduled", "received", "completed", "backlog", "rejected"] as const;
 export const appointmentSources = ["portal", "manual_xml"] as const;
 export const suggestionStatuses = ["pending", "accepted", "declined"] as const;
@@ -18,11 +18,46 @@ export const suggestionStatuses = ["pending", "accepted", "declined"] as const;
 // held for an operator's decision when it joins a company that already exists.
 export const userAccessStatuses = ["approved", "pending", "rejected"] as const;
 
+// Portaria (gate) module. A truck arriving at the unit opens an attendance:
+// the gate registers it and decides the entry, the yard operation carries it
+// through to conclusion. Every step is appended to attendanceEvents so the
+// protocol can be audited later.
+export const attendanceServiceTypes = ["coleta", "recebimento"] as const;
+export const attendanceClassifications = ["amil", "llt", "rvd"] as const;
+export const attendanceClassificationDetails = [
+  "maternidade",
+  "hospital",
+  "sedex",
+  "mercado_livre",
+  "nao_aplicavel",
+] as const;
+export const attendanceStatuses = [
+  "aguardando",
+  "aprovado",
+  "recusado",
+  "em_atendimento",
+  "liberado",
+  "concluido",
+] as const;
+export const attendanceEventTypes = [
+  "chegada_registrada",
+  "entrada_aprovada",
+  "entrada_recusada",
+  "atendimento_iniciado",
+  "liberacao_registrada",
+  "atendimento_concluido",
+] as const;
+
 export type UserRole = (typeof userRoles)[number];
 export type AppointmentStatus = (typeof appointmentStatuses)[number];
 export type AppointmentSource = (typeof appointmentSources)[number];
 export type SuggestionStatus = (typeof suggestionStatuses)[number];
 export type UserAccessStatus = (typeof userAccessStatuses)[number];
+export type AttendanceServiceType = (typeof attendanceServiceTypes)[number];
+export type AttendanceClassification = (typeof attendanceClassifications)[number];
+export type AttendanceClassificationDetail = (typeof attendanceClassificationDetails)[number];
+export type AttendanceStatus = (typeof attendanceStatuses)[number];
+export type AttendanceEventType = (typeof attendanceEventTypes)[number];
 
 export const users = mysqlTable(
   "users",
@@ -154,6 +189,58 @@ export const appointmentMessages = mysqlTable(
   table => [index("appointment_messages_appointment_idx").on(table.appointmentId, table.createdAt)]
 );
 
+export const attendances = mysqlTable(
+  "attendances",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    protocol: varchar("protocol", { length: 32 }).notNull().unique(),
+    driverName: varchar("driverName", { length: 160 }).notNull(),
+    licensePlate: varchar("licensePlate", { length: 12 }).notNull(),
+    carrier: varchar("carrier", { length: 160 }).notNull(),
+    serviceType: mysqlEnum("serviceType", attendanceServiceTypes).notNull(),
+    classification: mysqlEnum("classification", attendanceClassifications).notNull(),
+    classificationDetail: mysqlEnum("classificationDetail", attendanceClassificationDetails)
+      .default("nao_aplicavel")
+      .notNull(),
+    status: mysqlEnum("status", attendanceStatuses).default("aguardando").notNull(),
+    arrivalAt: timestamp("arrivalAt").defaultNow().notNull(),
+    decisionAt: datetime("decisionAt", { mode: "date" }),
+    releasedAt: datetime("releasedAt", { mode: "date" }),
+    concludedAt: datetime("concludedAt", { mode: "date" }),
+    refusalReason: text("refusalReason"),
+    notes: text("notes"),
+    createdById: int("createdById")
+      .notNull()
+      .references(() => users.id),
+    decisionById: int("decisionById").references(() => users.id, { onDelete: "set null" }),
+    operatedById: int("operatedById").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    index("attendances_status_idx").on(table.status),
+    index("attendances_service_type_idx").on(table.serviceType),
+    index("attendances_arrival_at_idx").on(table.arrivalAt),
+  ]
+);
+
+export const attendanceEvents = mysqlTable(
+  "attendanceEvents",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    attendanceId: int("attendanceId")
+      .notNull()
+      .references(() => attendances.id, { onDelete: "cascade" }),
+    eventType: mysqlEnum("eventType", attendanceEventTypes).notNull(),
+    description: text("description"),
+    performedById: int("performedById")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [index("attendance_events_attendance_idx").on(table.attendanceId, table.createdAt)]
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Appointment = typeof appointments.$inferSelect;
@@ -161,3 +248,7 @@ export type InsertAppointment = typeof appointments.$inferInsert;
 export type AppointmentStatusHistory = typeof appointmentStatusHistory.$inferSelect;
 export type AppointmentSuggestion = typeof appointmentSuggestions.$inferSelect;
 export type AppointmentMessage = typeof appointmentMessages.$inferSelect;
+export type Attendance = typeof attendances.$inferSelect;
+export type InsertAttendance = typeof attendances.$inferInsert;
+export type AttendanceEvent = typeof attendanceEvents.$inferSelect;
+export type InsertAttendanceEvent = typeof attendanceEvents.$inferInsert;

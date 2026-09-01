@@ -1,7 +1,8 @@
+import { EmptyState, Panel, PanelBody, PanelHeader } from "@/components/PortalKit";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { formatCnpj } from "@/lib/portal";
-import { CheckCircle2, ShieldCheck, UserCheck, X } from "lucide-react";
+import { formatCnpj, roleLabel, type PortalRole } from "@/lib/portal";
+import { CheckCircle2, ShieldCheck, UserCheck, UsersRound, X } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -11,81 +12,89 @@ type PendingRequest = {
   id: number;
   name: string | null;
   email: string | null;
-  role: "admin" | "operator" | "supplier";
+  role: PortalRole;
   companyName: string | null;
   companyCnpj: string | null;
 };
+
+/** Perfis internos que o administrador pode atribuir a uma conta já existente. */
+const assignableRoles = ["operator", "portaria", "operacao"] as const;
 
 export default function AccessRequests() {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
   const utils = trpc.useUtils();
-  const pending = trpc.accessRequests.listPending.useQuery(undefined, {
-    enabled: auth.data?.role === "admin",
-  });
+  const isAdmin = auth.data?.role === "admin";
+  const pending = trpc.accessRequests.listPending.useQuery(undefined, { enabled: isAdmin });
+  const staff = trpc.staff.list.useQuery(undefined, { enabled: isAdmin });
 
   const decide = trpc.accessRequests.decide.useMutation({
     onSuccess: (_result, variables) => {
       toast.success(variables.approve ? "Acesso liberado." : "Acesso recusado.");
       utils.accessRequests.listPending.invalidate();
+      utils.staff.list.invalidate();
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  const setRole = trpc.staff.setRole.useMutation({
+    onSuccess: () => {
+      toast.success("Perfil atualizado.");
+      utils.staff.list.invalidate();
     },
     onError: error => toast.error(error.message),
   });
 
   useEffect(() => {
-    if (auth.data && auth.data.role !== "admin") setLocation(auth.data.role === "supplier" ? "/fornecedor" : "/operador");
+    if (auth.data && auth.data.role !== "admin") {
+      setLocation(auth.data.role === "supplier" ? "/fornecedor" : "/operador");
+    }
     if (auth.data === null) setLocation("/");
   }, [auth.data, setLocation]);
 
-  if (!auth.data || auth.data.role !== "admin") return <div className="min-h-screen bg-white" />;
+  if (!auth.data || !isAdmin) return <div className="min-h-screen bg-canvas" />;
 
   const requests = pending.data ?? [];
+  const team = staff.data ?? [];
 
   return (
     <PortalLayout
       user={auth.data}
       title="Acessos ao sistema"
-      subtitle="Todo cadastro novo passa por aqui antes de ter acesso ao sistema."
+      subtitle="Todo cadastro novo passa por aqui antes de ter acesso, e é aqui que os perfis internos são definidos."
     >
-      <section className="rounded-3xl border border-rvd-plum-soft bg-white p-5 sm:p-7">
-        <div className="flex items-center gap-3">
-          <span className="rounded-2xl bg-rvd-blue-pale p-3 text-rvd-plum">
-            <ShieldCheck className="size-5" />
-          </span>
-          <div>
-            <p className="text-sm font-bold uppercase tracking-[0.12em] text-rvd-plum">Aprovação</p>
-            <h2 className="mt-1 font-display text-xl font-extrabold text-rvd-plum">Solicitações pendentes</h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-rvd-plum">
-              Nenhum cadastro entra sozinho: operadores e fornecedores ficam sem acesso até você aprovar.
-              Um operador aprovado enxerga os agendamentos de todos os fornecedores; um fornecedor enxerga
-              as notas do próprio CNPJ.
-            </p>
-          </div>
-        </div>
-
-        {pending.isLoading ? (
-          <div className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando solicitações...</div>
-        ) : requests.length ? (
-          <div className="mt-7 space-y-3">
-            {requests.map((request: PendingRequest) => (
-              <article
-                key={request.id}
-                className="rounded-2xl border border-rvd-plum-soft p-4 transition hover:border-rvd-plum"
-              >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-6">
+        <Panel>
+          <PanelHeader
+            eyebrow="Aprovação"
+            title="Solicitações pendentes"
+            description="Nenhum cadastro entra sozinho: a conta fica sem acesso até você aprovar."
+            icon={ShieldCheck}
+            actions={
+              <span className="rounded-lg bg-canvas px-3 py-1.5 font-display text-lg font-extrabold tabular-nums text-ink">
+                {requests.length}
+              </span>
+            }
+          />
+          {pending.isLoading ? (
+            <PanelBody>
+              <p className="text-sm text-ink-soft">Carregando solicitações...</p>
+            </PanelBody>
+          ) : requests.length ? (
+            <ul className="divide-y divide-line">
+              {requests.map((request: PendingRequest) => (
+                <li key={request.id} className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                   <div className="min-w-0">
-                    <p className="font-display text-lg font-extrabold text-rvd-plum">
-                      {request.companyName || request.name || "Fornecedor"}
+                    <p className="font-display text-base font-extrabold text-ink">
+                      {request.companyName || request.name || "Novo acesso"}
                     </p>
-                    <p className="mt-1 text-sm text-rvd-plum">{request.email}</p>
+                    <p className="mt-0.5 text-sm text-ink-soft">{request.email}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="inline-flex rounded-full bg-rvd-blue-pale px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">
-                        {request.role === "supplier" ? "Fornecedor" : "Operador"}
+                      <span className="inline-flex rounded-full bg-rvd-plum-pale/60 px-2.5 py-1 text-[11px] font-bold text-rvd-plum">
+                        {roleLabel[request.role]}
                       </span>
                       {request.companyCnpj && (
-                        <span className="text-xs font-bold uppercase tracking-wide text-rvd-plum">
-                          CNPJ {formatCnpj(request.companyCnpj)}
-                        </span>
+                        <span className="text-xs text-ink-faint">CNPJ {formatCnpj(request.companyCnpj)}</span>
                       )}
                     </div>
                   </div>
@@ -93,8 +102,8 @@ export default function AccessRequests() {
                     <Button
                       onClick={() => decide.mutate({ userId: request.id, approve: false })}
                       disabled={decide.isPending}
-                      variant="ghost"
-                      className="h-10 rounded-xl border border-rvd-plum-soft px-4 text-xs font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"
+                      variant="outline"
+                      className="h-10 rounded-xl border-line px-4 text-xs font-bold text-state-stop hover:bg-state-stop-bg"
                     >
                       <X className="size-4" />
                       Recusar
@@ -102,26 +111,84 @@ export default function AccessRequests() {
                     <Button
                       onClick={() => decide.mutate({ userId: request.id, approve: true })}
                       disabled={decide.isPending}
-                      className="h-10 rounded-xl bg-rvd-plum px-4 text-xs font-bold text-white hover:bg-rvd-plum"
+                      className="h-10 rounded-xl bg-rvd-plum px-4 text-xs font-bold text-white hover:bg-rvd-plum/90"
                     >
                       <UserCheck className="size-4" />
                       Aprovar
                     </Button>
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-7 rounded-2xl bg-rvd-plum-pale px-6 py-14 text-center">
-            <CheckCircle2 className="mx-auto size-8 text-rvd-plum" />
-            <h3 className="mt-4 font-display text-lg font-extrabold text-rvd-plum">Nenhuma solicitação pendente</h3>
-            <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-rvd-plum">
-              Quando alguém pedir acesso a um CNPJ já cadastrado, o pedido aparece aqui.
-            </p>
-          </div>
-        )}
-      </section>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState
+              icon={CheckCircle2}
+              title="Nenhuma solicitação pendente"
+              description="Quando alguém pedir acesso ao sistema, o pedido aparece aqui para sua decisão."
+            />
+          )}
+        </Panel>
+
+        <Panel>
+          <PanelHeader
+            eyebrow="Equipe interna"
+            title="Perfis de acesso"
+            description="Defina quem atua no agendamento, na portaria ou no pátio. O administrador responde por todos."
+            icon={UsersRound}
+          />
+          {staff.isLoading ? (
+            <PanelBody>
+              <p className="text-sm text-ink-soft">Carregando equipe...</p>
+            </PanelBody>
+          ) : team.length ? (
+            <ul className="divide-y divide-line">
+              {team.map(member => (
+                <li key={member.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-ink">{member.name || "Conta sem nome"}</p>
+                    <p className="mt-0.5 truncate text-sm text-ink-soft">{member.email || "E-mail não informado"}</p>
+                    {member.accessStatus !== "approved" && (
+                      <span className="mt-1.5 inline-flex rounded-full bg-state-wait-bg px-2.5 py-0.5 text-[11px] font-bold text-state-wait">
+                        {member.accessStatus === "pending" ? "Aguardando aprovação" : "Acesso recusado"}
+                      </span>
+                    )}
+                  </div>
+                  {member.role === "admin" ? (
+                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-rvd-plum-pale/60 px-3 py-1.5 text-xs font-bold text-rvd-plum">
+                      <ShieldCheck className="size-4" />
+                      Acesso total
+                    </span>
+                  ) : (
+                    <div className="flex shrink-0 flex-wrap gap-1 rounded-xl bg-canvas p-1">
+                      {assignableRoles.map(option => {
+                        const active = member.role === option;
+                        return (
+                          <button
+                            key={option}
+                            onClick={() => setRole.mutate({ userId: member.id, role: option })}
+                            disabled={setRole.isPending || active}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                              active ? "bg-surface text-rvd-plum shadow-sm" : "text-ink-soft hover:text-ink"
+                            }`}
+                          >
+                            {roleLabel[option]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState
+              icon={UsersRound}
+              title="Nenhuma conta interna"
+              description="Operadores, portaria e operação aparecem aqui depois do primeiro cadastro."
+            />
+          )}
+        </Panel>
+      </div>
     </PortalLayout>
   );
 }
