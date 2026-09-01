@@ -36,9 +36,13 @@ export function isPortalYard(role: PortalRole) {
   return role === "operacao" || role === "admin";
 }
 
-/** O pátio é interno: o fornecedor nunca o enxerga. */
+/**
+ * Cada perfil enxerga o seu posto de trabalho. O pátio é da Portaria e da
+ * Operação; quem cuida de agendamentos não entra ali, e o fornecedor nunca.
+ * O administrador responde pelo sistema todo e é o único que vê tudo.
+ */
 export function canSeeAttendances(role: PortalRole) {
-  return role !== "supplier";
+  return role === "portaria" || role === "operacao" || role === "admin";
 }
 
 /** A tela em que cada perfil começa depois de entrar. */

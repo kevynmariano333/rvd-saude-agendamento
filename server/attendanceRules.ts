@@ -18,8 +18,12 @@ export function canManageOperation(role: UserRole) {
   return role === "operacao" || role === "admin";
 }
 
+/**
+ * O pátio é da Portaria e da Operação. Quem cuida de agendamentos tem o seu
+ * próprio posto e não entra aqui; o administrador responde por tudo.
+ */
 export function canViewAttendances(role: UserRole) {
-  return role !== "supplier";
+  return role === "portaria" || role === "operacao" || role === "admin";
 }
 
 /** Each classification carries its own subtypes; LLT has none. */

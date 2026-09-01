@@ -130,7 +130,7 @@ function assertOperacao(role: UserRole) {
 }
 
 function assertAttendanceViewer(role: UserRole) {
-  if (!canViewAttendances(role)) throw new TRPCError({ code: "FORBIDDEN", message: "O pátio é restrito às equipes internas." });
+  if (!canViewAttendances(role)) throw new TRPCError({ code: "FORBIDDEN", message: "O pátio é restrito às equipes da Portaria e da Operação." });
 }
 
 async function getExistingAttendance(attendanceId: number) {

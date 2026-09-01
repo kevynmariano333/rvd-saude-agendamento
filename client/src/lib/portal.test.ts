@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCnpj, getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment } from "./portal";
+import { canSeeAttendances, formatCnpj, getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, homePathFor, isPortalGate, isPortalOperator, isPortalYard } from "./portal";
 
 describe("momento exibido do agendamento", () => {
   it("prioriza a data e hora reais quando a nota foi recebida", () => {
@@ -34,5 +34,47 @@ describe("formatCnpj", () => {
 
   it("aceita um valor já formatado", () => {
     expect(formatCnpj("06.033.403/0001-13")).toBe("06.033.403/0001-13");
+  });
+});
+
+describe("destino inicial de cada perfil", () => {
+  it("leva cada perfil para a tela em que ele trabalha", () => {
+    expect(homePathFor("supplier")).toBe("/fornecedor");
+    expect(homePathFor("portaria")).toBe("/portaria");
+    expect(homePathFor("operacao")).toBe("/operacao");
+    expect(homePathFor("operator")).toBe("/operador/dashboard");
+    expect(homePathFor("admin")).toBe("/operador/dashboard");
+  });
+
+  // Sem isto, quem é da Portaria caía numa tela de agendamentos que o servidor
+  // recusa e ficava vendo erro em vez da própria fila.
+  it("nunca manda um perfil para uma tela que ele não pode abrir", () => {
+    for (const role of ["supplier", "portaria", "operacao"] as const) {
+      expect(homePathFor(role).startsWith("/operador")).toBe(false);
+    }
+  });
+});
+
+describe("separação de responsabilidades entre os perfis", () => {
+  it("mantém portão, pátio e agendamentos separados, com o administrador em todos", () => {
+    expect(isPortalGate("portaria")).toBe(true);
+    expect(isPortalGate("operacao")).toBe(false);
+    expect(isPortalYard("operacao")).toBe(true);
+    expect(isPortalYard("portaria")).toBe(false);
+    expect(isPortalOperator("portaria")).toBe(false);
+    expect(isPortalOperator("operacao")).toBe(false);
+    for (const check of [isPortalGate, isPortalYard, isPortalOperator]) {
+      expect(check("admin")).toBe(true);
+      expect(check("supplier")).toBe(false);
+    }
+  });
+
+  it("deixa o pátio visível só a quem trabalha nele", () => {
+    for (const role of ["admin", "portaria", "operacao"] as const) {
+      expect(canSeeAttendances(role)).toBe(true);
+    }
+    for (const role of ["supplier", "operator"] as const) {
+      expect(canSeeAttendances(role)).toBe(false);
+    }
   });
 });

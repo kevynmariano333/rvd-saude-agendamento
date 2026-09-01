@@ -25,7 +25,6 @@ import {
 import { homePathFor, isPortalYard, type PortalRole } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
 import {
-  CircleAlert,
   Inbox,
   PackageCheck,
   Play,
@@ -68,9 +67,6 @@ export default function OperacaoPage() {
   const records = trpc.attendances.list.useQuery({ statuses: activeStatuses }, { refetchInterval: 20_000 });
   const overview = trpc.attendances.overview.useQuery(undefined, { refetchInterval: 20_000 });
 
-  const role = (auth.data?.role ?? "supplier") as PortalRole;
-  const canManage = isPortalYard(role);
-
   const refreshBoard = () => {
     utils.attendances.list.invalidate();
     utils.attendances.overview.invalidate();
@@ -100,7 +96,8 @@ export default function OperacaoPage() {
 
   useEffect(() => {
     if (auth.data === null) setLocation("/");
-    if (auth.data?.role === "supplier") setLocation(homePathFor("supplier"));
+    const current = auth.data?.role as PortalRole | undefined;
+    if (current && !isPortalYard(current)) setLocation(homePathFor(current));
   }, [auth.data, setLocation]);
 
   const all = useMemo(() => records.data ?? [], [records.data]);
@@ -110,7 +107,7 @@ export default function OperacaoPage() {
   );
 
   if (auth.isLoading) return <LoadingTruck label="Abrindo o pátio" />;
-  if (!auth.data || auth.data.role === "supplier") return <div className="min-h-screen bg-canvas" />;
+  if (!auth.data || !isPortalYard(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
 
   const queue = incoming.data ?? [];
   const metrics = overview.data;
@@ -151,15 +148,6 @@ export default function OperacaoPage() {
           />
         </section>
 
-        {!canManage && (
-          <div className="flex items-start gap-3 rounded-xl border border-state-wait/30 bg-state-wait-bg px-4 py-3 text-sm text-state-wait">
-            <CircleAlert className="mt-0.5 size-4 shrink-0" />
-            <p>
-              Seu perfil acompanha o pátio, mas não decide recebimentos nem conduz atendimentos. Fale com o
-              administrador para receber o perfil de Operação.
-            </p>
-          </div>
-        )}
 
         <Panel>
           <PanelHeader
@@ -205,7 +193,7 @@ export default function OperacaoPage() {
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <Button
                       onClick={() => decide.mutate({ attendanceId: item.id, decision: "aprovar" })}
-                      disabled={!canManage || decide.isPending}
+                      disabled={decide.isPending}
                       className="h-9 rounded-lg bg-state-go px-3.5 text-xs font-bold text-white hover:bg-state-go/90"
                     >
                       <ShieldCheck className="size-4" />
@@ -216,7 +204,7 @@ export default function OperacaoPage() {
                         setRefusalReason("");
                         setRefusal({ id: item.id, protocol: item.protocol, plate: item.licensePlate });
                       }}
-                      disabled={!canManage || decide.isPending}
+                      disabled={decide.isPending}
                       variant="outline"
                       className="h-9 rounded-lg border-line bg-surface px-3.5 text-xs font-bold text-state-stop hover:bg-state-stop-bg"
                     >
@@ -309,7 +297,7 @@ export default function OperacaoPage() {
                       {item.status === "aprovado" && (
                         <Button
                           onClick={() => execute.mutate({ attendanceId: item.id, action: "iniciar" })}
-                          disabled={!canManage || execute.isPending}
+                          disabled={execute.isPending}
                           className="h-9 rounded-lg bg-rvd-plum px-3.5 text-xs font-bold text-white hover:bg-rvd-plum/90"
                         >
                           <Play className="size-4" />
@@ -319,7 +307,7 @@ export default function OperacaoPage() {
                       {item.status === "em_atendimento" && (
                         <Button
                           onClick={() => execute.mutate({ attendanceId: item.id, action: "liberar" })}
-                          disabled={!canManage || execute.isPending}
+                          disabled={execute.isPending}
                           className="h-9 rounded-lg bg-state-move px-3.5 text-xs font-bold text-white hover:bg-state-move/90"
                         >
                           <Send className="size-4" />
@@ -331,7 +319,7 @@ export default function OperacaoPage() {
                       {item.status === "liberado" && (
                         <Button
                           onClick={() => execute.mutate({ attendanceId: item.id, action: "concluir" })}
-                          disabled={!canManage || execute.isPending}
+                          disabled={execute.isPending}
                           variant="outline"
                           className="h-9 rounded-lg border-line bg-surface px-3.5 text-xs font-bold text-state-go hover:bg-state-go-bg"
                         >

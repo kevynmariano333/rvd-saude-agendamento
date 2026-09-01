@@ -18,7 +18,7 @@ import {
 } from "@/lib/attendance";
 import { homePathFor, isPortalGate, type PortalRole } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
-import { CircleAlert, ClipboardList, ClipboardPlus, Clock3, SendHorizontal, ShieldCheck, Timer, Truck, XCircle } from "lucide-react";
+import { ClipboardList, ClipboardPlus, Clock3, SendHorizontal, ShieldCheck, Timer, Truck, XCircle } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -51,9 +51,6 @@ export default function PortariaPage() {
   const sent = trpc.attendances.list.useQuery(undefined, { refetchInterval: 20_000 });
   const overview = trpc.attendances.overview.useQuery(undefined, { refetchInterval: 20_000 });
 
-  const role = (auth.data?.role ?? "supplier") as PortalRole;
-  const canManage = isPortalGate(role);
-
   const create = trpc.attendances.create.useMutation({
     onSuccess: attendance => {
       toast.success(
@@ -79,11 +76,12 @@ export default function PortariaPage() {
 
   useEffect(() => {
     if (auth.data === null) setLocation("/");
-    if (auth.data?.role === "supplier") setLocation(homePathFor("supplier"));
+    const current = auth.data?.role as PortalRole | undefined;
+    if (current && !isPortalGate(current)) setLocation(homePathFor(current));
   }, [auth.data, setLocation]);
 
   if (auth.isLoading) return <LoadingTruck label="Abrindo a portaria" />;
-  if (!auth.data || auth.data.role === "supplier") return <div className="min-h-screen bg-canvas" />;
+  if (!auth.data || !isPortalGate(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm(current => ({ ...current, [key]: value }));
@@ -91,7 +89,6 @@ export default function PortariaPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!canManage) return toast.error("Seu perfil não pode registrar chegadas.");
     create.mutate({ ...form, notes: form.notes.trim() || undefined });
   }
 
@@ -119,15 +116,6 @@ export default function PortariaPage() {
           />
         </section>
 
-        {!canManage && (
-          <div className="flex items-start gap-3 rounded-xl border border-state-wait/30 bg-state-wait-bg px-4 py-3 text-sm text-state-wait">
-            <CircleAlert className="mt-0.5 size-4 shrink-0" />
-            <p>
-              Seu perfil acompanha a portaria, mas não registra chegadas. Fale com o administrador para receber o perfil
-              de Portaria.
-            </p>
-          </div>
-        )}
 
         <Panel>
           <PanelHeader
@@ -146,7 +134,7 @@ export default function PortariaPage() {
                   placeholder="Nome completo"
                   required
                   minLength={3}
-                  disabled={!canManage}
+                 
                   className={fieldClass}
                 />
               </FieldShell>
@@ -158,7 +146,7 @@ export default function PortariaPage() {
                   placeholder="ABC1D23"
                   required
                   minLength={7}
-                  disabled={!canManage}
+                 
                   className={`${fieldClass} font-mono uppercase tracking-wide`}
                 />
               </FieldShell>
@@ -170,7 +158,7 @@ export default function PortariaPage() {
                   placeholder="Empresa do transporte"
                   required
                   minLength={2}
-                  disabled={!canManage}
+                 
                   className={fieldClass}
                 />
               </FieldShell>
@@ -179,7 +167,7 @@ export default function PortariaPage() {
                   id="serviceType"
                   value={form.serviceType}
                   onChange={event => update("serviceType", event.target.value as AttendanceServiceType)}
-                  disabled={!canManage}
+                 
                   className={fieldClass}
                 >
                   {(Object.keys(serviceTypeCopy) as AttendanceServiceType[]).map(value => (
@@ -194,7 +182,7 @@ export default function PortariaPage() {
                   id="classification"
                   value={form.classification}
                   onChange={event => update("classification", event.target.value as AttendanceClassification)}
-                  disabled={!canManage}
+                 
                   className={fieldClass}
                 >
                   {(Object.keys(classificationCopy) as AttendanceClassification[]).map(value => (
@@ -209,7 +197,7 @@ export default function PortariaPage() {
                   id="classificationDetail"
                   value={form.classificationDetail}
                   onChange={event => update("classificationDetail", event.target.value as AttendanceClassificationDetail)}
-                  disabled={!canManage}
+                 
                   className={fieldClass}
                 >
                   {classificationDetailsFor(form.classification).map(value => (
@@ -231,7 +219,7 @@ export default function PortariaPage() {
                   onChange={event => update("notes", event.target.value)}
                   placeholder="Ex.: carga refrigerada, entrega parcial, documento pendente"
                   maxLength={1000}
-                  disabled={!canManage}
+                 
                   className={`${fieldClass} min-h-20 resize-y py-2.5`}
                 />
               </FieldShell>
@@ -239,7 +227,7 @@ export default function PortariaPage() {
             <div className="flex justify-end border-t border-line px-5 py-4 sm:px-6">
               <Button
                 type="submit"
-                disabled={!canManage || create.isPending}
+                disabled={create.isPending}
                 className="h-11 rounded-xl bg-rvd-plum px-5 text-sm font-bold text-white hover:bg-rvd-plum/90"
               >
                 <SendHorizontal className="size-4" />

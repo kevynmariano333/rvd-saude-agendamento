@@ -53,23 +53,28 @@ export default function PortalLayout({
   const logoutMutation = trpc.auth.logout.useMutation();
   const unreadCount = notifications.data?.length ?? 0;
 
-  // A navegação segue a responsabilidade do perfil: quem trabalha no portão vê
-  // o portão. Itens de administração ficam no menu da conta, e não competindo
-  // com a operação do dia na barra principal.
-  const nav = isOperator
-    ? [
-        { label: "Dashboard", path: "/operador/dashboard", icon: LayoutDashboard },
-        { label: "Agendamentos", path: "/operador", icon: ClipboardList },
-        { label: "Calendário", path: "/operador/calendario", icon: CalendarDays },
-        { label: "Relatórios", path: "/operador/relatorios", icon: BarChart3 },
-        { label: "Portaria", path: "/portaria", icon: DoorOpen },
-        { label: "Operação", path: "/operacao", icon: PackageCheck },
-      ]
-    : isPortalGate(role)
-      ? [{ label: "Portaria", path: "/portaria", icon: DoorOpen }]
-      : isPortalYard(role)
-        ? [{ label: "Operação", path: "/operacao", icon: PackageCheck }]
-        : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }];
+  // Cada perfil vê só o seu posto de trabalho: quem cuida de agendamentos não
+  // tem o pátio no menu, e quem trabalha no portão não tem a agenda. O
+  // administrador é o único que enxerga tudo. Itens de administração ficam no
+  // menu da conta, sem competir com a operação do dia na barra principal.
+  const schedulingNav = [
+    { label: "Dashboard", path: "/operador/dashboard", icon: LayoutDashboard },
+    { label: "Agendamentos", path: "/operador", icon: ClipboardList },
+    { label: "Calendário", path: "/operador/calendario", icon: CalendarDays },
+    { label: "Relatórios", path: "/operador/relatorios", icon: BarChart3 },
+  ];
+  const gateNav = [{ label: "Portaria", path: "/portaria", icon: DoorOpen }];
+  const yardNav = [{ label: "Operação", path: "/operacao", icon: PackageCheck }];
+
+  const nav = isAdmin
+    ? [...schedulingNav, ...gateNav, ...yardNav]
+    : isOperator
+      ? schedulingNav
+      : isPortalGate(role)
+        ? gateNav
+        : isPortalYard(role)
+          ? yardNav
+          : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }];
 
   const adminNav = isAdmin
     ? [

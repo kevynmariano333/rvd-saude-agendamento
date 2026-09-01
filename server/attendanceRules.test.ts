@@ -23,10 +23,13 @@ describe("perfis operacionais", () => {
     expect(canManageOperation("admin")).toBe(true);
   });
 
-  it("mantém o pátio fora do alcance do fornecedor", () => {
-    expect(canViewAttendances("supplier")).toBe(false);
-    expect(canViewAttendances("operator")).toBe(true);
+  it("mantém o pátio com quem trabalha nele", () => {
     expect(canViewAttendances("portaria")).toBe(true);
+    expect(canViewAttendances("operacao")).toBe(true);
+    expect(canViewAttendances("admin")).toBe(true);
+    // Fornecedor e operador de agendamentos têm os seus próprios postos.
+    expect(canViewAttendances("supplier")).toBe(false);
+    expect(canViewAttendances("operator")).toBe(false);
   });
 });
 

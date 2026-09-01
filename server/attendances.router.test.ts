@@ -196,16 +196,25 @@ describe("visibilidade do pátio", () => {
 
   it("mantém o fornecedor fora da fila e do histórico", async () => {
     const caller = appRouter.createCaller(context("supplier", 12));
-    await expect(caller.attendances.list({})).rejects.toThrow(/equipes internas/);
-    await expect(caller.attendances.history({ attendanceId: 1 })).rejects.toThrow(/equipes internas/);
-    await expect(caller.attendances.overview()).rejects.toThrow(/equipes internas/);
+    await expect(caller.attendances.list({})).rejects.toThrow(/Portaria e da Operação/);
+    await expect(caller.attendances.history({ attendanceId: 1 })).rejects.toThrow(/Portaria e da Operação/);
+    await expect(caller.attendances.overview()).rejects.toThrow(/Portaria e da Operação/);
   });
 
-  it("deixa o operador de agendamentos acompanhar sem agir", async () => {
+  // Cada perfil no seu posto: quem cuida de agendamentos tem a própria agenda e
+  // não enxerga o pátio.
+  it("mantém o operador de agendamentos fora do pátio", async () => {
     const caller = appRouter.createCaller(context("operator"));
-    await expect(caller.attendances.list({})).resolves.toHaveLength(2);
+    await expect(caller.attendances.list({})).rejects.toThrow(/Portaria e da Operação/);
+    await expect(caller.attendances.overview()).rejects.toThrow(/Portaria e da Operação/);
     await expect(caller.attendances.create(arrival)).rejects.toThrow(/Portaria/);
     await expect(caller.attendances.executeAction({ attendanceId: 1, action: "iniciar" })).rejects.toThrow(/Operação/);
+  });
+
+  it("deixa Portaria, Operação e administrador lerem a fila", async () => {
+    for (const role of ["portaria", "operacao", "admin"] as const) {
+      await expect(appRouter.createCaller(context(role)).attendances.list({})).resolves.toHaveLength(2);
+    }
   });
 
   it("resume a fila em indicadores", async () => {
