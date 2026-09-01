@@ -27,8 +27,13 @@ export const attendanceClassifications = ["amil", "llt", "rvd"] as const;
 export const attendanceClassificationDetails = [
   "maternidade",
   "hospital",
-  "sedex",
   "mercado_livre",
+  "correios",
+  "braspress",
+  "excargo",
+  "rodonaves",
+  "br4",
+  "jamef",
   "nao_aplicavel",
 ] as const;
 export const attendanceStatuses = [
@@ -195,7 +200,11 @@ export const attendances = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     protocol: varchar("protocol", { length: 32 }).notNull().unique(),
     driverName: varchar("driverName", { length: 160 }).notNull(),
+    driverDocument: varchar("driverDocument", { length: 32 }),
     licensePlate: varchar("licensePlate", { length: 12 }).notNull(),
+    // Um caminhão costuma trazer várias notas do mesmo motorista, então os
+    // números ficam em uma lista JSON no próprio protocolo.
+    invoiceNumbersJson: text("invoiceNumbersJson"),
     carrier: varchar("carrier", { length: 160 }).notNull(),
     serviceType: mysqlEnum("serviceType", attendanceServiceTypes).notNull(),
     classification: mysqlEnum("classification", attendanceClassifications).notNull(),

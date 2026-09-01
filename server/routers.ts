@@ -50,6 +50,7 @@ import {
   getAttendanceById,
   listAttendanceEvents,
   listAttendances,
+  listAttendancesByDay,
   listStaffUsers,
   setUserRole,
 } from "./db";
@@ -71,8 +72,10 @@ import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { buildDashboardMetrics } from "./dashboardMetrics";
 import { buildAttendanceMetrics } from "./attendanceMetrics";
 import {
+  attendanceActionOwner,
   canManageOperation,
   canManagePortaria,
+  canPerformAttendanceAction,
   canViewAttendances,
   isValidClassificationDetail,
   validateEntryDecision,
@@ -617,6 +620,22 @@ export const appRouter = router({
         assertAttendanceViewer(ctx.user.role);
         return listAttendances(input ?? {});
       }),
+    // O registro do dia é o que a operação de agendamentos consulta para saber
+    // quais fornecedores e transportadoras entraram — por isso é o único ponto
+    // do pátio aberto a ela.
+    dayLog: protectedProcedure
+      .input(z.object({ date: z.string().datetime().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (!canViewAttendances(ctx.user.role) && !isOperator(ctx.user.role)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Registro restrito às equipes internas." });
+        }
+        const reference = input?.date ? new Date(input.date) : new Date();
+        if (Number.isNaN(reference.getTime())) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Data inválida." });
+        }
+        return listAttendancesByDay(reference);
+      }),
+
     overview: protectedProcedure.query(async ({ ctx }) => {
       assertAttendanceViewer(ctx.user.role);
       return buildAttendanceMetrics(await listAttendances());
@@ -632,6 +651,8 @@ export const appRouter = router({
       .input(
         z.object({
           driverName: z.string().trim().min(3, "Informe o nome do motorista.").max(160),
+          driverDocument: z.string().trim().max(32).optional(),
+          invoiceNumbers: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
           licensePlate: z.string().trim().min(7, "Informe a placa completa.").max(12),
           carrier: z.string().trim().min(2, "Informe a transportadora.").max(160),
           serviceType: z.enum(attendanceServiceTypes),
@@ -661,7 +682,12 @@ export const appRouter = router({
     executeAction: protectedProcedure
       .input(z.object({ attendanceId: z.number().int().positive(), action: z.enum(["iniciar", "liberar", "concluir"]) }))
       .mutation(async ({ ctx, input }) => {
-        assertOperacao(ctx.user.role);
+        if (!canPerformAttendanceAction(ctx.user.role, input.action)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Esta etapa é da ${attendanceActionOwner[input.action]}.`,
+          });
+        }
         const attendance = await getExistingAttendance(input.attendanceId);
         const invalid = validateOperationalTransition(attendance.status, input.action);
         if (invalid) throw new TRPCError({ code: "BAD_REQUEST", message: invalid });

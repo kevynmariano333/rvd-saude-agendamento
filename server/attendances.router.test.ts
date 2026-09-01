@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getAttendanceById: vi.fn(),
   listAttendanceEvents: vi.fn(),
   listAttendances: vi.fn(),
+  listAttendancesByDay: vi.fn(),
   listStaffUsers: vi.fn(),
   setUserRole: vi.fn(),
 }));
@@ -83,7 +84,7 @@ describe("procedures da Portaria", () => {
 
   it("recusa uma categoria que não pertence à classificação", async () => {
     await expect(
-      appRouter.createCaller(context("portaria")).attendances.create({ ...arrival, classificationDetail: "sedex" })
+      appRouter.createCaller(context("portaria")).attendances.create({ ...arrival, classificationDetail: "correios" })
     ).rejects.toThrow(/não corresponde à classificação/);
     expect(mocks.createAttendance).not.toHaveBeenCalled();
   });
@@ -153,18 +154,39 @@ describe("procedures da Operação", () => {
     mocks.executeAttendanceAction.mockResolvedValue(attendance({ status: "em_atendimento" }));
   });
 
-  it("inicia um atendimento aprovado", async () => {
-    await appRouter.createCaller(context("operacao")).attendances.executeAction({ attendanceId: 1, action: "iniciar" });
+  it("deixa a Portaria abrir a entrada de um recebimento aceito", async () => {
+    await appRouter.createCaller(context("portaria")).attendances.executeAction({ attendanceId: 1, action: "iniciar" });
     expect(mocks.executeAttendanceAction).toHaveBeenCalledWith(
       expect.objectContaining({ action: "iniciar", operatedById: 7 })
     );
   });
 
-  it("impede que a Portaria conduza o pátio", async () => {
+  it("impede a Operação de abrir a entrada — o portão é da Portaria", async () => {
     await expect(
-      appRouter.createCaller(context("portaria")).attendances.executeAction({ attendanceId: 1, action: "iniciar" })
-    ).rejects.toThrow(/Operação/);
+      appRouter.createCaller(context("operacao")).attendances.executeAction({ attendanceId: 1, action: "iniciar" })
+    ).rejects.toThrow(/Portaria/);
     expect(mocks.executeAttendanceAction).not.toHaveBeenCalled();
+  });
+
+  it("deixa a liberação da doca com a Operação", async () => {
+    mocks.getAttendanceById.mockResolvedValue(attendance({ status: "em_atendimento" }));
+    await appRouter.createCaller(context("operacao")).attendances.executeAction({ attendanceId: 1, action: "liberar" });
+    expect(mocks.executeAttendanceAction).toHaveBeenCalledWith(expect.objectContaining({ action: "liberar" }));
+
+    await expect(
+      appRouter.createCaller(context("portaria")).attendances.executeAction({ attendanceId: 1, action: "liberar" })
+    ).rejects.toThrow(/Operação/);
+  });
+
+  it("deixa a saída com a Portaria, e só depois da liberação", async () => {
+    mocks.getAttendanceById.mockResolvedValue(attendance({ status: "liberado" }));
+    await appRouter.createCaller(context("portaria")).attendances.executeAction({ attendanceId: 1, action: "concluir" });
+    expect(mocks.executeAttendanceAction).toHaveBeenCalledWith(expect.objectContaining({ action: "concluir" }));
+
+    mocks.getAttendanceById.mockResolvedValue(attendance({ status: "em_atendimento" }));
+    await expect(
+      appRouter.createCaller(context("portaria")).attendances.executeAction({ attendanceId: 1, action: "concluir" })
+    ).rejects.toThrow(/não está disponível para o status atual/);
   });
 
   it("bloqueia uma ação fora da ordem do fluxo", async () => {
@@ -208,7 +230,7 @@ describe("visibilidade do pátio", () => {
     await expect(caller.attendances.list({})).rejects.toThrow(/Portaria e da Operação/);
     await expect(caller.attendances.overview()).rejects.toThrow(/Portaria e da Operação/);
     await expect(caller.attendances.create(arrival)).rejects.toThrow(/Portaria/);
-    await expect(caller.attendances.executeAction({ attendanceId: 1, action: "iniciar" })).rejects.toThrow(/Operação/);
+    await expect(caller.attendances.executeAction({ attendanceId: 1, action: "iniciar" })).rejects.toThrow(/Portaria/);
   });
 
   it("deixa Portaria, Operação e administrador lerem a fila", async () => {

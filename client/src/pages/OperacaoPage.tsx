@@ -27,7 +27,6 @@ import { trpc } from "@/lib/trpc";
 import {
   Inbox,
   PackageCheck,
-  Play,
   RadioTower,
   Send,
   ShieldCheck,
@@ -44,11 +43,8 @@ type ServiceFilter = "todos" | AttendanceServiceType;
 /** O pátio conduz o que já foi aceito e ainda não encerrou. */
 const activeStatuses: AttendanceStatus[] = ["aprovado", "em_atendimento", "liberado"];
 
-const actionCopy = {
-  iniciar: "Atendimento iniciado.",
-  liberar: "Liberação registrada.",
-  concluir: "Atendimento concluído.",
-} as const;
+/** Da doca, a Operação só registra a liberação: o portão é da Portaria. */
+const actionCopy = { liberar: "Liberação registrada. A Portaria pode encerrar a saída." } as const;
 
 /**
  * Tela da Operação. É aqui que se aceita ou recusa o recebimento enviado pela
@@ -87,8 +83,8 @@ export default function OperacaoPage() {
   });
 
   const execute = trpc.attendances.executeAction.useMutation({
-    onSuccess: (_, variables) => {
-      toast.success(actionCopy[variables.action]);
+    onSuccess: () => {
+      toast.success(actionCopy.liberar);
       refreshBoard();
     },
     onError: error => toast.error(error.message),
@@ -116,15 +112,15 @@ export default function OperacaoPage() {
     <PortalLayout
       user={auth.data}
       title="Operação"
-      subtitle="Aceite ou recuse os recebimentos enviados pela Portaria e conduza o caminhão até a conclusão."
+      subtitle="Aceite ou recuse os recebimentos enviados pela Portaria e libere a doca quando o atendimento terminar."
     >
       <div className="space-y-6">
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Aguardando sua decisão" value={queue.length} hint="Enviados pela Portaria" icon={Inbox} tone="wait" />
           <StatCard
-            label="Aguardando início"
+            label="Aguardando a Portaria"
             value={all.filter(item => item.status === "aprovado").length}
-            hint="Aceitos e ainda não iniciados"
+            hint="Aceitos, esperando a entrada"
             icon={Truck}
             tone="go"
           />
@@ -235,7 +231,7 @@ export default function OperacaoPage() {
           <PanelHeader
             eyebrow="Fluxo do pátio"
             title="Atendimentos aceitos"
-            description="Cada caminhão avança na ordem: iniciar, liberar e concluir."
+            description="A Portaria abre a entrada, a Operação libera a doca e a Portaria fecha a saída."
             icon={PackageCheck}
             actions={
               <SegmentedControl
@@ -295,14 +291,9 @@ export default function OperacaoPage() {
                   <td>
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       {item.status === "aprovado" && (
-                        <Button
-                          onClick={() => execute.mutate({ attendanceId: item.id, action: "iniciar" })}
-                          disabled={execute.isPending}
-                          className="h-9 rounded-lg bg-rvd-plum px-3.5 text-xs font-bold text-white hover:bg-rvd-plum/90"
-                        >
-                          <Play className="size-4" />
-                          Iniciar
-                        </Button>
+                        <span className="rounded-lg bg-canvas px-3 py-2 text-xs font-bold text-ink-soft">
+                          Aguardando a Portaria liberar a entrada
+                        </span>
                       )}
                       {item.status === "em_atendimento" && (
                         <Button
@@ -314,18 +305,10 @@ export default function OperacaoPage() {
                           Liberar
                         </Button>
                       )}
-                      {/* Concluir só depois de liberar: pular a liberação deixaria
-                          o protocolo sem releasedAt e sem o evento de liberação. */}
                       {item.status === "liberado" && (
-                        <Button
-                          onClick={() => execute.mutate({ attendanceId: item.id, action: "concluir" })}
-                          disabled={execute.isPending}
-                          variant="outline"
-                          className="h-9 rounded-lg border-line bg-surface px-3.5 text-xs font-bold text-state-go hover:bg-state-go-bg"
-                        >
-                          <PackageCheck className="size-4" />
-                          Concluir
-                        </Button>
+                        <span className="rounded-lg bg-canvas px-3 py-2 text-xs font-bold text-ink-soft">
+                          Na Portaria para registrar a saída
+                        </span>
                       )}
                       <Button
                         onClick={() => setHistoryFor({ id: item.id, protocol: item.protocol })}

@@ -737,6 +737,26 @@ export async function listAttendances(filters: AttendanceFilters = {}) {
     .orderBy(desc(attendances.arrivalAt));
 }
 
+/**
+ * Tudo que chegou ao portão em um dia, do que ainda espera ao que já saiu.
+ * É o registro que a Portaria e a operação de agendamentos consultam depois —
+ * a fila de trabalho esvazia, este histórico não.
+ */
+export async function listAttendancesByDay(reference: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  const start = new Date(reference);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  return db
+    .select()
+    .from(attendances)
+    .where(and(gte(attendances.arrivalAt, start), lte(attendances.arrivalAt, end)))
+    .orderBy(desc(attendances.arrivalAt));
+}
+
 export async function getAttendanceById(id: number) {
   const db = await getDb();
   if (!db) return null;
@@ -794,6 +814,8 @@ async function recordAttendanceEvent(input: {
 
 export async function createAttendance(input: {
   driverName: string;
+  driverDocument?: string;
+  invoiceNumbers?: string[];
   licensePlate: string;
   carrier: string;
   serviceType: AttendanceServiceType;
@@ -805,19 +827,23 @@ export async function createAttendance(input: {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
 
+  const { invoiceNumbers, ...columns } = input;
   const [result] = await db.insert(attendances).values({
-    ...input,
+    ...columns,
     licensePlate: input.licensePlate.toUpperCase().replace(/\s/g, ""),
+    driverDocument: input.driverDocument?.trim() || null,
     notes: input.notes?.trim() || null,
+    invoiceNumbersJson: invoiceNumbers?.length ? JSON.stringify(invoiceNumbers) : null,
     protocol: createAttendanceProtocol(),
   });
   const attendanceId = Number((result as { insertId?: number }).insertId);
   if (!attendanceId) throw new Error("Não foi possível registrar a chegada.");
 
+  const invoiceSummary = invoiceNumbers?.length ? ` Nota(s): ${invoiceNumbers.join(", ")}.` : "";
   await recordAttendanceEvent({
     attendanceId,
     eventType: "chegada_registrada",
-    description: `Chegada registrada na Portaria e enviada para a Operação decidir o ${input.serviceType}.`,
+    description: `Chegada registrada na Portaria e enviada para a Operação decidir o ${input.serviceType}.${invoiceSummary}`,
     performedById: input.createdById,
   });
   return getAttendanceById(attendanceId);

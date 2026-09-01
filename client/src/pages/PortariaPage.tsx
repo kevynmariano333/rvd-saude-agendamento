@@ -1,7 +1,16 @@
 import AttendanceHistoryDialog from "@/components/AttendanceHistoryDialog";
 import AttendanceStatusBadge from "@/components/AttendanceStatusBadge";
 import LoadingTruck from "@/components/LoadingTruck";
-import { EmptyState, FieldShell, Panel, PanelBody, PanelHeader, StatCard, fieldClass } from "@/components/PortalKit";
+import {
+  DataTable,
+  EmptyState,
+  FieldShell,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  StatCard,
+  fieldClass,
+} from "@/components/PortalKit";
 import { Button } from "@/components/ui/button";
 import {
   classificationCopy,
@@ -11,21 +20,40 @@ import {
   formatArrival,
   formatElapsed,
   formatWaitMinutes,
+  parseInvoiceNumbers,
   serviceTypeCopy,
   type AttendanceClassification,
   type AttendanceClassificationDetail,
   type AttendanceServiceType,
+  type AttendanceStatus,
 } from "@/lib/attendance";
 import { homePathFor, isPortalGate, type PortalRole } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
-import { ClipboardList, ClipboardPlus, Clock3, SendHorizontal, ShieldCheck, Timer, Truck, XCircle } from "lucide-react";
+import {
+  ClipboardList,
+  ClipboardPlus,
+  Clock3,
+  DoorOpen,
+  LogOut,
+  Plus,
+  SendHorizontal,
+  ShieldCheck,
+  Timer,
+  Truck,
+  X,
+  XCircle,
+} from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import PortalLayout from "./PortalLayout";
 
+/** O que a Portaria ainda tem para fazer no pátio, do aceite até a saída. */
+const yardStatuses: AttendanceStatus[] = ["aprovado", "em_atendimento", "liberado"];
+
 const emptyForm = {
   driverName: "",
+  driverDocument: "",
   licensePlate: "",
   carrier: "",
   serviceType: "recebimento" as AttendanceServiceType,
@@ -35,21 +63,31 @@ const emptyForm = {
 };
 
 /**
- * Tela da Portaria. Aqui se registra a chegada do caminhão e ela segue para a
- * Operação decidir se aceita o recebimento — a Portaria não decide, ela envia e
- * acompanha a resposta para saber o que dizer ao motorista no portão.
+ * Tela da Portaria. O portão é o começo e o fim do caminho do caminhão: aqui se
+ * registra a chegada e se envia para a Operação decidir, aqui se abre a entrada
+ * depois do aceite e aqui se fecha o protocolo quando o caminhão vai embora.
  */
 export default function PortariaPage() {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
   const utils = trpc.useUtils();
   const [form, setForm] = useState(emptyForm);
+  // Um caminhão costuma trazer várias notas do mesmo motorista.
+  const [invoiceNumbers, setInvoiceNumbers] = useState<string[]>([""]);
   const [historyFor, setHistoryFor] = useState<{ id: number; protocol: string } | null>(null);
 
   // A resposta da Operação chega enquanto o caminhão está parado no acesso,
-  // então a lista se atualiza sozinha em vez de depender de recarregar a página.
-  const sent = trpc.attendances.list.useQuery(undefined, { refetchInterval: 20_000 });
+  // então as listas se atualizam sozinhas em vez de depender de recarregar.
+  const waiting = trpc.attendances.list.useQuery({ status: "aguardando" }, { refetchInterval: 20_000 });
+  const yard = trpc.attendances.list.useQuery({ statuses: yardStatuses }, { refetchInterval: 20_000 });
+  const dayLog = trpc.attendances.dayLog.useQuery(undefined, { refetchInterval: 60_000 });
   const overview = trpc.attendances.overview.useQuery(undefined, { refetchInterval: 20_000 });
+
+  const refreshBoard = () => {
+    utils.attendances.list.invalidate();
+    utils.attendances.dayLog.invalidate();
+    utils.attendances.overview.invalidate();
+  };
 
   const create = trpc.attendances.create.useMutation({
     onSuccess: attendance => {
@@ -59,13 +97,23 @@ export default function PortariaPage() {
           : "Chegada enviada para a Operação."
       );
       setForm(emptyForm);
-      utils.attendances.list.invalidate();
-      utils.attendances.overview.invalidate();
+      setInvoiceNumbers([""]);
+      refreshBoard();
     },
     onError: error => toast.error(error.message),
   });
 
-  // A categoria depende da classificação: trocar de AMIL para LLT deixaria um
+  const execute = trpc.attendances.executeAction.useMutation({
+    onSuccess: (_, variables) => {
+      toast.success(
+        variables.action === "iniciar" ? "Entrada liberada no portão." : "Saída registrada. Protocolo encerrado."
+      );
+      refreshBoard();
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  // A categoria depende da classificação: trocar de AMIL para RVD deixaria um
   // subtipo inválido selecionado, que o servidor recusaria no envio.
   useEffect(() => {
     const allowed = classificationDetailsFor(form.classification);
@@ -87,25 +135,37 @@ export default function PortariaPage() {
     setForm(current => ({ ...current, [key]: value }));
   }
 
+  function updateInvoice(index: number, value: string) {
+    setInvoiceNumbers(current => current.map((item, position) => (position === index ? value : item)));
+  }
+
   function submit(event: FormEvent) {
     event.preventDefault();
-    create.mutate({ ...form, notes: form.notes.trim() || undefined });
+    const notes = form.notes.trim();
+    create.mutate({
+      ...form,
+      driverDocument: form.driverDocument.trim() || undefined,
+      notes: notes || undefined,
+      invoiceNumbers: invoiceNumbers.map(item => item.trim()).filter(Boolean),
+    });
   }
 
   const metrics = overview.data;
-  const items = sent.data ?? [];
-  const waiting = items.filter(item => item.status === "aguardando");
+  const pending = waiting.data ?? [];
+  const inYard = yard.data ?? [];
+  const today = dayLog.data ?? [];
+  const enteredToday = today.filter(item => item.status !== "aguardando" && item.status !== "recusado");
 
   return (
     <PortalLayout
       user={auth.data}
       title="Portaria"
-      subtitle="Registre a chegada do caminhão e envie para a Operação decidir o recebimento."
+      subtitle="Registre a chegada, libere a entrada depois do aceite da Operação e feche o protocolo na saída."
     >
       <div className="space-y-6">
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Aguardando a Operação" value={metrics?.awaiting ?? "—"} hint="Enviados e sem resposta" icon={Clock3} tone="wait" />
-          <StatCard label="Recebimentos aceitos" value={metrics?.approved ?? "—"} hint="Liberados para entrar" icon={ShieldCheck} tone="go" />
+          <StatCard label="Entradas aprovadas hoje" value={enteredToday.length} hint="Caminhões que entraram" icon={ShieldCheck} tone="go" />
           <StatCard label="Recebimentos recusados" value={metrics?.refused ?? "—"} hint="Com o motivo registrado" icon={XCircle} tone="stop" />
           <StatCard
             label="Espera média"
@@ -116,12 +176,11 @@ export default function PortariaPage() {
           />
         </section>
 
-
         <Panel>
           <PanelHeader
             eyebrow="Nova chegada"
             title="Registrar e enviar para a Operação"
-            description="Os dados do motorista e da carga abrem o protocolo e vão para a decisão de quem recebe."
+            description="Os dados do motorista e das notas abrem o protocolo e vão para a decisão de quem recebe."
             icon={ClipboardPlus}
           />
           <form onSubmit={submit}>
@@ -134,7 +193,16 @@ export default function PortariaPage() {
                   placeholder="Nome completo"
                   required
                   minLength={3}
-                 
+                  className={fieldClass}
+                />
+              </FieldShell>
+              <FieldShell label="RG" htmlFor="driverDocument">
+                <input
+                  id="driverDocument"
+                  value={form.driverDocument}
+                  onChange={event => update("driverDocument", event.target.value)}
+                  placeholder="Documento do motorista"
+                  maxLength={32}
                   className={fieldClass}
                 />
               </FieldShell>
@@ -146,7 +214,6 @@ export default function PortariaPage() {
                   placeholder="ABC1D23"
                   required
                   minLength={7}
-                 
                   className={`${fieldClass} font-mono uppercase tracking-wide`}
                 />
               </FieldShell>
@@ -158,7 +225,6 @@ export default function PortariaPage() {
                   placeholder="Empresa do transporte"
                   required
                   minLength={2}
-                 
                   className={fieldClass}
                 />
               </FieldShell>
@@ -167,7 +233,6 @@ export default function PortariaPage() {
                   id="serviceType"
                   value={form.serviceType}
                   onChange={event => update("serviceType", event.target.value as AttendanceServiceType)}
-                 
                   className={fieldClass}
                 >
                   {(Object.keys(serviceTypeCopy) as AttendanceServiceType[]).map(value => (
@@ -182,7 +247,6 @@ export default function PortariaPage() {
                   id="classification"
                   value={form.classification}
                   onChange={event => update("classification", event.target.value as AttendanceClassification)}
-                 
                   className={fieldClass}
                 >
                   {(Object.keys(classificationCopy) as AttendanceClassification[]).map(value => (
@@ -197,7 +261,6 @@ export default function PortariaPage() {
                   id="classificationDetail"
                   value={form.classificationDetail}
                   onChange={event => update("classificationDetail", event.target.value as AttendanceClassificationDetail)}
-                 
                   className={fieldClass}
                 >
                   {classificationDetailsFor(form.classification).map(value => (
@@ -207,6 +270,46 @@ export default function PortariaPage() {
                   ))}
                 </select>
               </FieldShell>
+
+              <div className="grid gap-1.5 sm:col-span-2 xl:col-span-3">
+                <span className="text-xs font-bold uppercase tracking-[0.08em] text-ink-soft">Número da nota</span>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {invoiceNumbers.map((number, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        value={number}
+                        onChange={event => updateInvoice(index, event.target.value)}
+                        placeholder={index === 0 ? "Ex.: 123456" : "Outra nota do mesmo motorista"}
+                        maxLength={60}
+                        aria-label={`Número da nota ${index + 1}`}
+                        className={fieldClass}
+                      />
+                      {invoiceNumbers.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setInvoiceNumbers(current => current.filter((_, position) => position !== index))}
+                          aria-label={`Remover a nota ${index + 1}`}
+                          className="size-11 shrink-0 rounded-xl border-line p-0 text-ink-soft hover:text-state-stop"
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setInvoiceNumbers(current => [...current, ""])}
+                  className="mt-1 h-9 w-fit rounded-lg border-line px-3 text-xs font-bold text-ink-soft hover:text-ink"
+                >
+                  <Plus className="size-4" />
+                  Adicionar nota
+                </Button>
+                <p className="text-xs text-ink-faint">O mesmo motorista costuma trazer mais de uma nota.</p>
+              </div>
+
               <FieldShell
                 label="Observações para a Operação"
                 htmlFor="notes"
@@ -219,8 +322,7 @@ export default function PortariaPage() {
                   onChange={event => update("notes", event.target.value)}
                   placeholder="Ex.: carga refrigerada, entrega parcial, documento pendente"
                   maxLength={1000}
-                 
-                  className={`${fieldClass} min-h-20 resize-y py-2.5`}
+                  className={`${fieldClass} min-h-24 resize-y py-2.5`}
                 />
               </FieldShell>
             </PanelBody>
@@ -239,30 +341,28 @@ export default function PortariaPage() {
 
         <Panel>
           <PanelHeader
-            eyebrow="Acompanhamento do portão"
-            title="Enviados para a Operação"
-            description="A resposta da Operação aparece aqui — é o que você informa ao motorista."
-            icon={ClipboardList}
+            eyebrow="No portão agora"
+            title="Entradas e saídas"
+            description="Depois do aceite da Operação, é a Portaria que abre a entrada e registra a saída."
+            icon={DoorOpen}
             actions={
               <span className="rounded-lg bg-canvas px-3 py-1.5 text-xs font-bold text-ink-soft">
-                {waiting.length} sem resposta
+                {pending.length} aguardando resposta
               </span>
             }
           />
-          {sent.isLoading ? (
+          {yard.isLoading ? (
             <PanelBody>
-              <p className="text-sm text-ink-soft">Consultando os envios...</p>
+              <p className="text-sm text-ink-soft">Consultando o pátio...</p>
             </PanelBody>
-          ) : items.length ? (
+          ) : inYard.length ? (
             <ul className="divide-y divide-line">
-              {items.map(item => (
+              {inYard.map(item => (
                 <li key={item.id} className="px-5 py-4 sm:px-6">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-xs font-bold text-ink-faint">{item.protocol}</span>
                     <AttendanceStatusBadge status={item.status} />
-                    {item.status === "aguardando" && (
-                      <span className="ml-auto text-xs font-bold text-ink-soft">há {formatElapsed(item.arrivalAt)}</span>
-                    )}
+                    <span className="ml-auto text-xs font-bold text-ink-soft">na unidade há {formatElapsed(item.arrivalAt)}</span>
                   </div>
                   <p className="mt-2 font-display text-lg font-extrabold tracking-tight text-ink">
                     <span className="font-mono">{item.licensePlate}</span>
@@ -273,21 +373,38 @@ export default function PortariaPage() {
                     {item.carrier} — {serviceTypeCopy[item.serviceType]} ·{" "}
                     {classificationLabel(item.classification, item.classificationDetail)}
                   </p>
-                  <p className="mt-0.5 text-xs text-ink-faint">Chegada em {formatArrival(item.arrivalAt)}</p>
-                  {item.notes && <p className="mt-2 rounded-lg bg-canvas px-3 py-2 text-sm text-ink-soft">{item.notes}</p>}
-                  {item.status === "recusado" && item.refusalReason && (
-                    <p className="mt-2 rounded-lg border border-state-stop/20 bg-state-stop-bg px-3 py-2 text-sm text-state-stop">
-                      <span className="font-bold">Motivo da recusa: </span>
-                      {item.refusalReason}
-                    </p>
-                  )}
-                  <div className="mt-3">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {item.status === "aprovado" && (
+                      <Button
+                        onClick={() => execute.mutate({ attendanceId: item.id, action: "iniciar" })}
+                        disabled={execute.isPending}
+                        className="h-9 rounded-lg bg-state-go px-3.5 text-xs font-bold text-white hover:bg-state-go/90"
+                      >
+                        <DoorOpen className="size-4" />
+                        Liberar entrada
+                      </Button>
+                    )}
+                    {item.status === "em_atendimento" && (
+                      <span className="rounded-lg bg-canvas px-3 py-2 text-xs font-bold text-ink-soft">
+                        Na doca com a Operação
+                      </span>
+                    )}
+                    {item.status === "liberado" && (
+                      <Button
+                        onClick={() => execute.mutate({ attendanceId: item.id, action: "concluir" })}
+                        disabled={execute.isPending}
+                        className="h-9 rounded-lg bg-rvd-plum px-3.5 text-xs font-bold text-white hover:bg-rvd-plum/90"
+                      >
+                        <LogOut className="size-4" />
+                        Registrar saída
+                      </Button>
+                    )}
                     <Button
                       onClick={() => setHistoryFor({ id: item.id, protocol: item.protocol })}
-                      variant="outline"
-                      className="h-9 rounded-lg border-line bg-surface px-3.5 text-xs font-bold text-ink-soft hover:text-ink"
+                      variant="ghost"
+                      className="h-9 rounded-lg px-3 text-xs font-bold text-ink-soft hover:text-ink"
                     >
-                      Histórico do protocolo
+                      Histórico
                     </Button>
                   </div>
                 </li>
@@ -296,8 +413,96 @@ export default function PortariaPage() {
           ) : (
             <EmptyState
               icon={Truck}
-              title="Nenhuma chegada registrada"
-              description="Ao registrar uma chegada, ela aparece aqui até a Operação responder se aceita o recebimento."
+              title="Nenhum caminhão no pátio"
+              description="Os caminhões aceitos pela Operação aparecem aqui para você liberar a entrada e depois a saída."
+            />
+          )}
+        </Panel>
+
+        <Panel>
+          <PanelHeader
+            eyebrow="Registro do dia"
+            title="Tudo que passou pelo portão hoje"
+            description="Fica aqui mesmo depois de concluído, com as notas, o motivo da recusa e o histórico."
+            icon={ClipboardList}
+            actions={
+              <span className="rounded-lg bg-canvas px-3 py-1.5 font-display text-lg font-extrabold tabular-nums text-ink">
+                {today.length}
+              </span>
+            }
+          />
+          {dayLog.isLoading ? (
+            <PanelBody>
+              <p className="text-sm text-ink-soft">Consultando o registro...</p>
+            </PanelBody>
+          ) : today.length ? (
+            <DataTable
+              head={
+                <>
+                  <th>Caminhão</th>
+                  <th>Atendimento</th>
+                  <th>Notas</th>
+                  <th>Chegada</th>
+                  <th>Status</th>
+                  <th className="text-right">Registro</th>
+                </>
+              }
+            >
+              {today.map(item => {
+                const invoices = parseInvoiceNumbers(item.invoiceNumbersJson);
+                return (
+                  <tr key={item.id} className="align-top transition-colors hover:bg-canvas/70 [&>td]:px-5 [&>td]:py-4 sm:[&>td]:px-6">
+                    <td>
+                      <p className="font-mono text-sm font-bold text-ink">{item.licensePlate}</p>
+                      <p className="mt-0.5 text-xs text-ink-soft">
+                        {item.driverName}
+                        {item.driverDocument ? ` · RG ${item.driverDocument}` : ""}
+                      </p>
+                      <p className="mt-0.5 text-xs text-ink-faint">{item.carrier}</p>
+                    </td>
+                    <td>
+                      <p className="text-sm font-bold text-ink">{serviceTypeCopy[item.serviceType]}</p>
+                      <p className="mt-0.5 text-xs text-ink-soft">
+                        {classificationLabel(item.classification, item.classificationDetail)}
+                      </p>
+                    </td>
+                    <td>
+                      {invoices.length ? (
+                        <p className="font-mono text-xs text-ink">{invoices.join(", ")}</p>
+                      ) : (
+                        <span className="text-xs text-ink-faint">—</span>
+                      )}
+                    </td>
+                    <td>
+                      <p className="text-xs text-ink-soft">{formatArrival(item.arrivalAt)}</p>
+                      {item.concludedAt && (
+                        <p className="mt-0.5 text-xs text-ink-faint">Saída {formatArrival(item.concludedAt)}</p>
+                      )}
+                    </td>
+                    <td>
+                      <AttendanceStatusBadge status={item.status} />
+                      {item.status === "recusado" && item.refusalReason && (
+                        <p className="mt-1.5 max-w-xs text-xs text-state-stop">{item.refusalReason}</p>
+                      )}
+                    </td>
+                    <td className="text-right">
+                      <Button
+                        onClick={() => setHistoryFor({ id: item.id, protocol: item.protocol })}
+                        variant="ghost"
+                        className="h-8 rounded-lg px-2.5 text-xs font-bold text-ink-soft hover:text-ink"
+                      >
+                        Histórico
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </DataTable>
+          ) : (
+            <EmptyState
+              icon={ClipboardList}
+              title="Nenhuma chegada hoje"
+              description="Cada caminhão registrado hoje aparece aqui e continua aparecendo depois de sair."
             />
           )}
         </Panel>
