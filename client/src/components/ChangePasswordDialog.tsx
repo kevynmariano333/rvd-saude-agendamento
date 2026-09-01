@@ -44,14 +44,14 @@ export default function ChangePasswordDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md overflow-hidden rounded-[2rem] !border !border-rvd-plum-soft !bg-white p-0 shadow-2xl">
-        <div className="bg-white p-7">
+      <DialogContent className="max-w-md overflow-hidden rounded-[2rem] !border !border-line !bg-surface p-0 shadow-2xl">
+        <div className="bg-surface p-7">
           <div className="flex items-start gap-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-rvd-blue-pale text-rvd-plum">
               <KeyRound className="size-5" />
             </span>
             <div>
-              <DialogTitle className="font-display text-xl font-extrabold text-rvd-plum">
+              <DialogTitle className="font-display text-xl font-extrabold text-ink">
                 Alterar senha
               </DialogTitle>
               <DialogDescription className="mt-1 text-rvd-plum">
@@ -70,7 +70,7 @@ export default function ChangePasswordDialog({
                 required
                 value={currentPassword}
                 onChange={event => setCurrentPassword(event.target.value)}
-                className="mt-2 h-12 border-rvd-plum-soft bg-white text-rvd-plum"
+                className="mt-2 h-12 border-line bg-surface text-rvd-plum"
               />
             </div>
             <div>
@@ -83,7 +83,7 @@ export default function ChangePasswordDialog({
                 required
                 value={newPassword}
                 onChange={event => setNewPassword(event.target.value)}
-                className="mt-2 h-12 border-rvd-plum-soft bg-white text-rvd-plum"
+                className="mt-2 h-12 border-line bg-surface text-rvd-plum"
               />
             </div>
             <div>
@@ -96,7 +96,7 @@ export default function ChangePasswordDialog({
                 required
                 value={confirmation}
                 onChange={event => setConfirmation(event.target.value)}
-                className="mt-2 h-12 border-rvd-plum-soft bg-white text-rvd-plum"
+                className="mt-2 h-12 border-line bg-surface text-rvd-plum"
               />
             </div>
 
@@ -105,7 +105,7 @@ export default function ChangePasswordDialog({
                 type="button"
                 variant="ghost"
                 onClick={() => onOpenChange(false)}
-                className="h-11 flex-1 rounded-xl border border-rvd-plum-soft bg-white font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"
+                className="h-11 flex-1 rounded-xl border border-line bg-surface font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"
               >
                 Cancelar
               </Button>

@@ -1,6 +1,14 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { appointmentStatuses, type AppointmentStatus } from "../drizzle/schema";
+import {
+  appointmentStatuses,
+  attendanceClassificationDetails,
+  attendanceClassifications,
+  attendanceServiceTypes,
+  attendanceStatuses,
+  type AppointmentStatus,
+  type UserRole,
+} from "../drizzle/schema";
 import {
   type AppointmentFilters,
   createAppointment,
@@ -36,6 +44,14 @@ import {
   setUserAccessStatus,
   createPasswordResetToken,
   getPasswordResetToken,
+  createAttendance,
+  decideAttendanceEntry,
+  executeAttendanceAction,
+  getAttendanceById,
+  listAttendanceEvents,
+  listAttendances,
+  listStaffUsers,
+  setUserRole,
 } from "./db";
 import { canApplySuggestion, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canTransitionAppointment, isOperator } from "./permissions";
 import { clearRvdSession, createRvdSession } from "./session";
@@ -53,16 +69,32 @@ import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, re
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { buildDashboardMetrics } from "./dashboardMetrics";
+import { buildAttendanceMetrics } from "./attendanceMetrics";
+import {
+  canManageOperation,
+  canManagePortaria,
+  canViewAttendances,
+  isValidClassificationDetail,
+  validateEntryDecision,
+  validateOperationalTransition,
+} from "./attendanceRules";
 
-const localProfileSchema = z.enum(["operator", "supplier"]);
+const localProfileSchema = z.enum(["operator", "supplier", "portaria", "operacao"]);
 const statusSchema = z.enum(appointmentStatuses);
 const demoLogin = "admin";
 const demoPassword = "admin";
 
 function demoAccountFor(profile: z.infer<typeof localProfileSchema>) {
-  return profile === "supplier"
-    ? { email: "teste.fornecedor@rvdsaude.local", name: "Fornecedor de Teste RVD Saúde", companyName: "Fornecedor de Teste RVD Saúde", companyCnpj: "00000000000000" }
-    : { email: "teste.operador@rvdsaude.local", name: "Operador de Teste RVD Saúde" };
+  if (profile === "supplier") return { email: "teste.fornecedor@rvdsaude.local", name: "Fornecedor de Teste RVD Saúde", companyName: "Fornecedor de Teste RVD Saúde", companyCnpj: "00000000000000" };
+  if (profile === "portaria") return { email: "teste.portaria@rvdsaude.local", name: "Portaria de Teste RVD Saúde" };
+  if (profile === "operacao") return { email: "teste.operacao@rvdsaude.local", name: "Operação de Teste RVD Saúde" };
+  return { email: "teste.operador@rvdsaude.local", name: "Operador de Teste RVD Saúde" };
+}
+
+/** O administrador responde por toda a operação interna, então entra por
+ * qualquer perfil interno; o de fornecedor continua fora do seu alcance. */
+function demoRoleFor(profile: z.infer<typeof localProfileSchema>): UserRole {
+  return profile === "operator" ? "admin" : profile;
 }
 
 function hashPassword(password: string, salt = nanoid(16)) {
@@ -81,15 +113,33 @@ function publicUser(user: { id: number; name: string | null; email: string | nul
   return { id: user.id, name: user.name, email: user.email, role: user.role };
 }
 
-function assertOperator(role: "admin" | "operator" | "supplier") {
+function assertOperator(role: UserRole) {
   if (!isOperator(role)) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito ao perfil de operador." });
 }
 
-function assertAdmin(role: "admin" | "operator" | "supplier") {
+function assertAdmin(role: UserRole) {
   if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Ação restrita ao Administrador." });
 }
 
-type ScopedUser = { id: number; role: "admin" | "operator" | "supplier"; companyCnpj?: string | null };
+function assertPortaria(role: UserRole) {
+  if (!canManagePortaria(role)) throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o perfil de Portaria pode executar esta ação." });
+}
+
+function assertOperacao(role: UserRole) {
+  if (!canManageOperation(role)) throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o perfil de Operação pode executar esta ação." });
+}
+
+function assertAttendanceViewer(role: UserRole) {
+  if (!canViewAttendances(role)) throw new TRPCError({ code: "FORBIDDEN", message: "O pátio é restrito às equipes internas." });
+}
+
+async function getExistingAttendance(attendanceId: number) {
+  const attendance = await getAttendanceById(attendanceId);
+  if (!attendance) throw new TRPCError({ code: "NOT_FOUND", message: "Atendimento não localizado." });
+  return attendance;
+}
+
+type ScopedUser = { id: number; role: UserRole; companyCnpj?: string | null };
 
 /**
  * The supplier logins whose appointments this caller may read. Logins sharing a
@@ -147,7 +197,7 @@ export const appRouter = router({
         let user;
 
         if (existing) {
-          const profileAllowed = existing.role === input.profile || (existing.role === "admin" && input.profile === "operator");
+          const profileAllowed = existing.role === input.profile || (existing.role === "admin" && input.profile !== "supplier");
           if (!profileAllowed || !existing.passwordHash || !passwordMatches(input.password, existing.passwordHash)) {
             throw new TRPCError({ code: "UNAUTHORIZED", message: "E-mail, senha ou perfil não conferem." });
           }
@@ -162,11 +212,11 @@ export const appRouter = router({
           await touchUserSignIn(existing.id);
           user = existing;
         } else if (isDemoLogin && input.password === demoPassword) {
-          user = await createLocalUser({ ...demoAccount, role: input.profile === "operator" ? "admin" : "supplier", passwordHash: hashPassword(demoPassword) });
+          user = await createLocalUser({ ...demoAccount, role: demoRoleFor(input.profile), passwordHash: hashPassword(demoPassword) });
         } else if (isDemoLogin) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Login, senha ou perfil não conferem." });
         } else {
-          throw new TRPCError({ code: "NOT_FOUND", message: input.profile === "supplier" ? "Fornecedor não encontrado. Faça seu cadastro antes de entrar." : "Acesso de operador não encontrado." });
+          throw new TRPCError({ code: "NOT_FOUND", message: input.profile === "supplier" ? "Fornecedor não encontrado. Faça seu cadastro antes de entrar." : "Acesso interno não encontrado." });
         }
 
         await createRvdSession(ctx.res, user);
@@ -558,6 +608,76 @@ export const appRouter = router({
         const end = new Date(input.end);
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) throw new TRPCError({ code: "BAD_REQUEST", message: "Período inválido." });
         return listAppointmentsBetween(start, end);
+      }),
+  }),
+  attendances: router({
+    list: protectedProcedure
+      .input(z.object({ status: z.enum(attendanceStatuses).optional(), statuses: z.array(z.enum(attendanceStatuses)).optional(), serviceType: z.enum(attendanceServiceTypes).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        assertAttendanceViewer(ctx.user.role);
+        return listAttendances(input ?? {});
+      }),
+    overview: protectedProcedure.query(async ({ ctx }) => {
+      assertAttendanceViewer(ctx.user.role);
+      return buildAttendanceMetrics(await listAttendances());
+    }),
+    history: protectedProcedure
+      .input(z.object({ attendanceId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        assertAttendanceViewer(ctx.user.role);
+        await getExistingAttendance(input.attendanceId);
+        return listAttendanceEvents(input.attendanceId);
+      }),
+    create: protectedProcedure
+      .input(
+        z.object({
+          driverName: z.string().trim().min(3, "Informe o nome do motorista.").max(160),
+          licensePlate: z.string().trim().min(7, "Informe a placa completa.").max(12),
+          carrier: z.string().trim().min(2, "Informe a transportadora.").max(160),
+          serviceType: z.enum(attendanceServiceTypes),
+          classification: z.enum(attendanceClassifications),
+          classificationDetail: z.enum(attendanceClassificationDetails),
+          notes: z.string().trim().max(1000).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        assertPortaria(ctx.user.role);
+        if (!isValidClassificationDetail(input.classification, input.classificationDetail)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A categoria informada não corresponde à classificação selecionada." });
+        }
+        return createAttendance({ ...input, createdById: ctx.user.id });
+      }),
+    decideEntry: protectedProcedure
+      .input(z.object({ attendanceId: z.number().int().positive(), decision: z.enum(["aprovar", "recusar"]), refusalReason: z.string().trim().max(1000).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        assertPortaria(ctx.user.role);
+        const attendance = await getExistingAttendance(input.attendanceId);
+        const invalid = validateEntryDecision(attendance.status, input.decision, input.refusalReason);
+        if (invalid) throw new TRPCError({ code: "BAD_REQUEST", message: invalid });
+        return decideAttendanceEntry({ attendanceId: input.attendanceId, decision: input.decision, refusalReason: input.refusalReason, decisionById: ctx.user.id });
+      }),
+    executeAction: protectedProcedure
+      .input(z.object({ attendanceId: z.number().int().positive(), action: z.enum(["iniciar", "liberar", "concluir"]) }))
+      .mutation(async ({ ctx, input }) => {
+        assertOperacao(ctx.user.role);
+        const attendance = await getExistingAttendance(input.attendanceId);
+        const invalid = validateOperationalTransition(attendance.status, input.action);
+        if (invalid) throw new TRPCError({ code: "BAD_REQUEST", message: invalid });
+        return executeAttendanceAction({ attendanceId: input.attendanceId, action: input.action, operatedById: ctx.user.id });
+      }),
+  }),
+  staff: router({
+    list: adminProcedure.query(async () => listStaffUsers()),
+    setRole: adminProcedure
+      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["operator", "portaria", "operacao"]) }))
+      .mutation(async ({ ctx, input }) => {
+        // An administrator changing their own role would drop the only account
+        // that can hand the role back.
+        if (input.userId === ctx.user.id) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode alterar o seu próprio perfil." });
+        }
+        await setUserRole({ userId: input.userId, role: input.role });
+        return { success: true } as const;
       }),
   }),
   analytics: router({

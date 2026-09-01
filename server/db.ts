@@ -6,8 +6,15 @@ import {
   appointmentMessages,
   appointmentStatusHistory,
   appointmentSuggestions,
+  attendanceEvents,
+  attendances,
   passwordResetTokens,
   type AppointmentStatus,
+  type AttendanceClassification,
+  type AttendanceClassificationDetail,
+  type AttendanceEventType,
+  type AttendanceServiceType,
+  type AttendanceStatus,
   type InsertUser,
   type SuggestionStatus,
   type UserAccessStatus,
@@ -702,4 +709,209 @@ export async function setUserAccessStatus(input: { userId: number; accessStatus:
     .update(users)
     .set({ accessStatus: input.accessStatus })
     .where(eq(users.id, input.userId));
+}
+
+/* ------------------------------------------------------------------ *
+ * Portaria: chegada de caminhões, decisão de entrada e fluxo de pátio *
+ * ------------------------------------------------------------------ */
+
+type AttendanceFilters = {
+  status?: AttendanceStatus;
+  statuses?: AttendanceStatus[];
+  serviceType?: AttendanceServiceType;
+};
+
+export async function listAttendances(filters: AttendanceFilters = {}) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [
+    filters.status ? eq(attendances.status, filters.status) : undefined,
+    filters.statuses?.length ? inArray(attendances.status, filters.statuses) : undefined,
+    filters.serviceType ? eq(attendances.serviceType, filters.serviceType) : undefined,
+  ].filter(Boolean);
+
+  return db
+    .select()
+    .from(attendances)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(attendances.arrivalAt));
+}
+
+export async function getAttendanceById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(attendances).where(eq(attendances.id, id)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function listAttendanceEvents(attendanceId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: attendanceEvents.id,
+      eventType: attendanceEvents.eventType,
+      description: attendanceEvents.description,
+      createdAt: attendanceEvents.createdAt,
+      performedByName: users.name,
+      performedByRole: users.role,
+    })
+    .from(attendanceEvents)
+    .leftJoin(users, eq(users.id, attendanceEvents.performedById))
+    .where(eq(attendanceEvents.attendanceId, attendanceId))
+    .orderBy(desc(attendanceEvents.createdAt));
+}
+
+/**
+ * A protocol has to be readable over the radio and unique across gates, so it
+ * pairs the arrival date with a short random tail rather than the row id, which
+ * only exists after the insert.
+ */
+function createAttendanceProtocol() {
+  const now = new Date();
+  const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+    .map(part => String(part).padStart(2, "0"))
+    .join("")
+    .slice(2);
+  return `PRT-${day}-${nanoid(5).toUpperCase()}`;
+}
+
+async function recordAttendanceEvent(input: {
+  attendanceId: number;
+  eventType: AttendanceEventType;
+  description?: string;
+  performedById: number;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(attendanceEvents).values(input);
+}
+
+export async function createAttendance(input: {
+  driverName: string;
+  licensePlate: string;
+  carrier: string;
+  serviceType: AttendanceServiceType;
+  classification: AttendanceClassification;
+  classificationDetail: AttendanceClassificationDetail;
+  notes?: string;
+  createdById: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+
+  const [result] = await db.insert(attendances).values({
+    ...input,
+    licensePlate: input.licensePlate.toUpperCase().replace(/\s/g, ""),
+    notes: input.notes?.trim() || null,
+    protocol: createAttendanceProtocol(),
+  });
+  const attendanceId = Number((result as { insertId?: number }).insertId);
+  if (!attendanceId) throw new Error("Não foi possível registrar a chegada.");
+
+  await recordAttendanceEvent({
+    attendanceId,
+    eventType: "chegada_registrada",
+    description: `Chegada registrada na Portaria para ${input.serviceType}.`,
+    performedById: input.createdById,
+  });
+  return getAttendanceById(attendanceId);
+}
+
+export async function decideAttendanceEntry(input: {
+  attendanceId: number;
+  decision: "aprovar" | "recusar";
+  refusalReason?: string;
+  decisionById: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const approved = input.decision === "aprovar";
+
+  await db
+    .update(attendances)
+    .set({
+      status: approved ? "aprovado" : "recusado",
+      decisionAt: new Date(),
+      decisionById: input.decisionById,
+      refusalReason: approved ? null : input.refusalReason?.trim() ?? null,
+    })
+    .where(eq(attendances.id, input.attendanceId));
+
+  await recordAttendanceEvent({
+    attendanceId: input.attendanceId,
+    eventType: approved ? "entrada_aprovada" : "entrada_recusada",
+    description: approved
+      ? "Entrada aprovada pela Portaria."
+      : `Entrada recusada. Motivo: ${input.refusalReason?.trim()}`,
+    performedById: input.decisionById,
+  });
+  return getAttendanceById(input.attendanceId);
+}
+
+export async function executeAttendanceAction(input: {
+  attendanceId: number;
+  action: "iniciar" | "liberar" | "concluir";
+  operatedById: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const now = new Date();
+  const steps = {
+    iniciar: {
+      status: "em_atendimento" as const,
+      eventType: "atendimento_iniciado" as const,
+      description: "Atendimento iniciado pela Operação.",
+      patch: {},
+    },
+    liberar: {
+      status: "liberado" as const,
+      eventType: "liberacao_registrada" as const,
+      description: "Liberação registrada pela Operação.",
+      patch: { releasedAt: now },
+    },
+    concluir: {
+      status: "concluido" as const,
+      eventType: "atendimento_concluido" as const,
+      description: "Atendimento concluído pela Operação.",
+      patch: { concludedAt: now },
+    },
+  };
+  const step = steps[input.action];
+
+  await db
+    .update(attendances)
+    .set({ status: step.status, operatedById: input.operatedById, ...step.patch })
+    .where(eq(attendances.id, input.attendanceId));
+  await recordAttendanceEvent({
+    attendanceId: input.attendanceId,
+    eventType: step.eventType,
+    description: step.description,
+    performedById: input.operatedById,
+  });
+  return getAttendanceById(input.attendanceId);
+}
+
+/** Contas internas cujo perfil de pátio o administrador pode reatribuir. */
+export async function listStaffUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+      accessStatus: users.accessStatus,
+      lastSignedIn: users.lastSignedIn,
+    })
+    .from(users)
+    .where(ne(users.role, "supplier"))
+    .orderBy(desc(users.lastSignedIn));
+}
+
+export async function setUserRole(input: { userId: number; role: UserRole }) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId));
 }

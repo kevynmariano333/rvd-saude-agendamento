@@ -3,31 +3,76 @@
 @theme inline {
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Manrope", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* Marca RVD Saúde — reservada a acentos, cabeçalhos e ações primárias. */
   --color-rvd-plum: #782078;
   --color-rvd-plum-soft: #D8B8D8;
   --color-rvd-plum-pale: #E0C8E0;
   --color-rvd-blue: #88B8D0;
   --color-rvd-blue-pale: #A8C8D8;
   --color-rvd-lilac-blue: #C8A8D0;
+
+  /* Escala neutra de leitura. Texto corrido em tinta neutra e marca apenas
+     onde ela significa algo é o que separa um painel operacional de uma peça
+     promocional — e o que mantém o contraste em telas longas de tabela. */
+  --color-ink: #1E2432;
+  --color-ink-soft: #5A6275;
+  --color-ink-faint: #8B93A6;
+  --color-line: #E5E8EF;
+  --color-line-strong: #CFD5E1;
+  --color-surface: #FFFFFF;
+  --color-canvas: #F6F7FA;
+
+  /* Semântica de status compartilhada por agendamentos e pátio. */
+  --color-state-wait: #B4761A;
+  --color-state-wait-bg: #FDF5E7;
+  --color-state-go: #1E7A5A;
+  --color-state-go-bg: #E9F6F0;
+  --color-state-stop: #B03A34;
+  --color-state-stop-bg: #FBECEB;
+  --color-state-move: #2E6BB0;
+  --color-state-move-bg: #ECF3FB;
+  --color-state-done: #4F5769;
+  --color-state-done-bg: #EFF1F5;
+
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 @layer base {
-  * { border-color: #D8B8D8; }
-  html { background: #FFFFFF; }
+  * { border-color: #E5E8EF; }
+  html { background: #F6F7FA; }
   body {
     min-width: 320px;
-    background: #FFFFFF;
-    color: #782078;
+    background: #F6F7FA;
+    color: #1E2432;
     font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
   button, input, select, textarea { font: inherit; }
   button { cursor: pointer; }
-  :focus-visible { outline: 3px solid #88B8D0; outline-offset: 3px; }
+  :focus-visible { outline: 2px solid #782078; outline-offset: 2px; }
   main table th:not(:last-child), main table td:not(:last-child) { padding-right: 1.5rem; }
   main table th:first-child, main table td:first-child { min-width: 13rem; }
   main table th:nth-child(3), main table td:nth-child(3) { min-width: 8rem; }
   main table th:nth-child(4), main table td:nth-child(4) { min-width: 9rem; }
+}
+
+@layer components {
+  /* Rótulo curto acima de um título de bloco. */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+  }
+  /* Elevação única do sistema: painéis não competem entre si. */
+  .panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 1rem;
+    box-shadow: 0 1px 2px rgb(30 36 50 / 0.04);
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {

@@ -1,4 +1,4 @@
-export type PortalRole = "admin" | "operator" | "supplier";
+export type PortalRole = "admin" | "operator" | "supplier" | "portaria" | "operacao";
 export type PortalStatus = "pending" | "scheduled" | "received" | "completed" | "backlog" | "rejected";
 
 export const statusCopy: Record<PortalStatus, string> = {
@@ -10,12 +10,43 @@ export const statusCopy: Record<PortalStatus, string> = {
   rejected: "Rejeitado",
 };
 
+export const roleLabel: Record<PortalRole, string> = {
+  admin: "Administrador",
+  operator: "Operador",
+  supplier: "Fornecedor",
+  portaria: "Portaria",
+  operacao: "Operação",
+};
+
 export function isPortalOperator(role: PortalRole) {
   return role === "operator" || role === "admin";
 }
 
 export function isPortalAdmin(role: PortalRole) {
   return role === "admin";
+}
+
+/** Quem registra chegadas e decide a entrada no portão. */
+export function isPortalGate(role: PortalRole) {
+  return role === "portaria" || role === "admin";
+}
+
+/** Quem conduz o caminhão no pátio até a conclusão. */
+export function isPortalYard(role: PortalRole) {
+  return role === "operacao" || role === "admin";
+}
+
+/** O pátio é interno: o fornecedor nunca o enxerga. */
+export function canSeeAttendances(role: PortalRole) {
+  return role !== "supplier";
+}
+
+/** A tela em que cada perfil começa depois de entrar. */
+export function homePathFor(role: PortalRole) {
+  if (role === "supplier") return "/fornecedor";
+  if (role === "portaria") return "/portaria";
+  if (role === "operacao") return "/operacao";
+  return "/operador/dashboard";
 }
 
 export function formatAppointmentDate(value: Date | string) {
