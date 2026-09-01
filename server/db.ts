@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull, like, lte, ne, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { nanoid } from "nanoid";
+import { customAlphabet, nanoid } from "nanoid";
 import {
   appointments,
   appointmentMessages,
@@ -767,13 +767,18 @@ export async function listAttendanceEvents(attendanceId: number) {
  * pairs the arrival date with a short random tail rather than the row id, which
  * only exists after the insert.
  */
+const PROTOCOL_ALPHABET = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // sem I e O
+
 function createAttendanceProtocol() {
   const now = new Date();
   const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
     .map(part => String(part).padStart(2, "0"))
     .join("")
     .slice(2);
-  return `PRT-${day}-${nanoid(5).toUpperCase()}`;
+  // O sufixo sorteia direto do alfabeto: passar nanoid por toUpperCase
+  // juntaria "a" e "A" no mesmo símbolo e jogaria fora metade da entropia.
+  const suffix = customAlphabet(PROTOCOL_ALPHABET, 8)();
+  return `PRT-${day}-${suffix}`;
 }
 
 async function recordAttendanceEvent(input: {
@@ -812,7 +817,7 @@ export async function createAttendance(input: {
   await recordAttendanceEvent({
     attendanceId,
     eventType: "chegada_registrada",
-    description: `Chegada registrada na Portaria para ${input.serviceType}.`,
+    description: `Chegada registrada na Portaria e enviada para a Operação decidir o ${input.serviceType}.`,
     performedById: input.createdById,
   });
   return getAttendanceById(attendanceId);
@@ -842,8 +847,8 @@ export async function decideAttendanceEntry(input: {
     attendanceId: input.attendanceId,
     eventType: approved ? "entrada_aprovada" : "entrada_recusada",
     description: approved
-      ? "Entrada aprovada pela Portaria."
-      : `Entrada recusada. Motivo: ${input.refusalReason?.trim()}`,
+      ? "Recebimento aceito pela Operação."
+      : `Recebimento recusado pela Operação. Motivo: ${input.refusalReason?.trim()}`,
     performedById: input.decisionById,
   });
   return getAttendanceById(input.attendanceId);

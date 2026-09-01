@@ -88,34 +88,58 @@ describe("procedures da Portaria", () => {
     expect(mocks.createAttendance).not.toHaveBeenCalled();
   });
 
-  it("exige o motivo para concluir uma recusa", async () => {
+  it("não decide o recebimento: isso é da Operação", async () => {
     const caller = appRouter.createCaller(context("portaria"));
-    await expect(caller.attendances.decideEntry({ attendanceId: 1, decision: "recusar" })).rejects.toThrow(
+    await expect(caller.attendances.decideReceipt({ attendanceId: 1, decision: "aprovar" })).rejects.toThrow(
+      /Operação/
+    );
+    expect(mocks.decideAttendanceEntry).not.toHaveBeenCalled();
+  });
+});
+
+describe("decisão do recebimento pela Operação", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getAttendanceById.mockResolvedValue(attendance());
+    mocks.decideAttendanceEntry.mockResolvedValue(attendance({ status: "aprovado" }));
+  });
+
+  it("aceita o recebimento enviado pela Portaria", async () => {
+    const caller = appRouter.createCaller(context("operacao"));
+    await caller.attendances.decideReceipt({ attendanceId: 1, decision: "aprovar" });
+    expect(mocks.decideAttendanceEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ decision: "aprovar", decisionById: 7 })
+    );
+  });
+
+  it("exige o motivo para concluir uma recusa", async () => {
+    const caller = appRouter.createCaller(context("operacao"));
+    await expect(caller.attendances.decideReceipt({ attendanceId: 1, decision: "recusar" })).rejects.toThrow(
       /motivo da recusa é obrigatório/
     );
     expect(mocks.decideAttendanceEntry).not.toHaveBeenCalled();
   });
 
   it("registra a recusa quando o motivo é informado", async () => {
-    const caller = appRouter.createCaller(context("portaria"));
-    await caller.attendances.decideEntry({ attendanceId: 1, decision: "recusar", refusalReason: "Documento vencido" });
+    const caller = appRouter.createCaller(context("operacao"));
+    await caller.attendances.decideReceipt({ attendanceId: 1, decision: "recusar", refusalReason: "Sem espaço na doca" });
     expect(mocks.decideAttendanceEntry).toHaveBeenCalledWith(
-      expect.objectContaining({ decision: "recusar", refusalReason: "Documento vencido", decisionById: 7 })
+      expect.objectContaining({ decision: "recusar", refusalReason: "Sem espaço na doca", decisionById: 7 })
     );
   });
 
   it("não decide duas vezes o mesmo atendimento", async () => {
     mocks.getAttendanceById.mockResolvedValue(attendance({ status: "aprovado" }));
-    const caller = appRouter.createCaller(context("portaria"));
-    await expect(caller.attendances.decideEntry({ attendanceId: 1, decision: "aprovar" })).rejects.toThrow(
+    const caller = appRouter.createCaller(context("operacao"));
+    await expect(caller.attendances.decideReceipt({ attendanceId: 1, decision: "aprovar" })).rejects.toThrow(
       /aguardando/
     );
   });
 
   it("responde 404 para um protocolo inexistente", async () => {
     mocks.getAttendanceById.mockResolvedValue(null);
-    const caller = appRouter.createCaller(context("portaria"));
-    await expect(caller.attendances.decideEntry({ attendanceId: 99, decision: "aprovar" })).rejects.toThrow(
+    const caller = appRouter.createCaller(context("operacao"));
+    await expect(caller.attendances.decideReceipt({ attendanceId: 99, decision: "aprovar" })).rejects.toThrow(
       /não localizado/
     );
   });
@@ -153,7 +177,7 @@ describe("procedures da Operação", () => {
     const caller = appRouter.createCaller(context("admin"));
     await caller.attendances.executeAction({ attendanceId: 1, action: "iniciar" });
     mocks.getAttendanceById.mockResolvedValue(attendance({ status: "aguardando" }));
-    await caller.attendances.decideEntry({ attendanceId: 1, decision: "aprovar" });
+    await caller.attendances.decideReceipt({ attendanceId: 1, decision: "aprovar" });
     expect(mocks.executeAttendanceAction).toHaveBeenCalled();
     expect(mocks.decideAttendanceEntry).toHaveBeenCalled();
   });

@@ -647,10 +647,12 @@ export const appRouter = router({
         }
         return createAttendance({ ...input, createdById: ctx.user.id });
       }),
-    decideEntry: protectedProcedure
+    // Quem decide o recebimento é a Operação: a Portaria registra a chegada e
+    // envia o caminhão para a decisão de quem vai receber a carga.
+    decideReceipt: protectedProcedure
       .input(z.object({ attendanceId: z.number().int().positive(), decision: z.enum(["aprovar", "recusar"]), refusalReason: z.string().trim().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        assertPortaria(ctx.user.role);
+        assertOperacao(ctx.user.role);
         const attendance = await getExistingAttendance(input.attendanceId);
         const invalid = validateEntryDecision(attendance.status, input.decision, input.refusalReason);
         if (invalid) throw new TRPCError({ code: "BAD_REQUEST", message: invalid });
