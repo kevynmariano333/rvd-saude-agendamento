@@ -218,6 +218,9 @@ export const attendances = mysqlTable(
     concludedAt: datetime("concludedAt", { mode: "date" }),
     refusalReason: text("refusalReason"),
     notes: text("notes"),
+    // A doca para onde a Portaria mandou o caminhão. Opcional: nem toda entrada
+    // vai para doca, e o porteiro nem sempre sabe qual na hora de abrir.
+    dockNumber: int("dockNumber"),
     createdById: int("createdById")
       .notNull()
       .references(() => users.id),
@@ -250,25 +253,6 @@ export const attendanceEvents = mysqlTable(
   table => [index("attendance_events_attendance_idx").on(table.attendanceId, table.createdAt)]
 );
 
-/**
- * A unidade tem duas docas, e são elas: a lista é fechada porque uma doca não
- * aparece nem desaparece do prédio. Quem controla a disponibilidade é a
- * Portaria, que vê o pátio; a Operação só consulta para saber onde encostar.
- */
-export const dockStatuses = ["disponivel", "indisponivel"] as const;
-export type DockStatus = (typeof dockStatuses)[number];
-
-export const docks = mysqlTable("docks", {
-  id: int("id").autoincrement().primaryKey(),
-  number: int("number").notNull().unique(),
-  status: mysqlEnum("status", dockStatuses).default("disponivel").notNull(),
-  // O porteiro diz por que a doca está fechada — "em manutenção", "carreta
-  // parada" — porque é isso que a Operação precisa saber, não só o "não".
-  reason: varchar("reason", { length: 255 }),
-  updatedById: int("updatedById").references(() => users.id, { onDelete: "set null" }),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Appointment = typeof appointments.$inferSelect;
@@ -278,6 +262,5 @@ export type AppointmentSuggestion = typeof appointmentSuggestions.$inferSelect;
 export type AppointmentMessage = typeof appointmentMessages.$inferSelect;
 export type Attendance = typeof attendances.$inferSelect;
 export type InsertAttendance = typeof attendances.$inferInsert;
-export type Dock = typeof docks.$inferSelect;
 export type AttendanceEvent = typeof attendanceEvents.$inferSelect;
 export type InsertAttendanceEvent = typeof attendanceEvents.$inferInsert;

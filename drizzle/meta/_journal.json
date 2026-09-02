@@ -134,6 +134,13 @@
       "when": 1788353279766,
       "tag": "0018_regular_ego",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1788354610195,
+      "tag": "0019_rainy_mastermind",
+      "breakpoints": true
     }
   ]
 }

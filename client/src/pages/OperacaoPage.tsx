@@ -1,6 +1,5 @@
 import AttendanceHistoryDialog from "@/components/AttendanceHistoryDialog";
 import AttendanceStatusBadge from "@/components/AttendanceStatusBadge";
-import DockBoard from "@/components/DockBoard";
 import GateDayLogPanel from "@/components/GateDayLogPanel";
 import LoadingTruck from "@/components/LoadingTruck";
 import {
@@ -147,8 +146,6 @@ export default function OperacaoPage() {
         </section>
 
 
-        <DockBoard readOnly />
-
         <Panel>
           <PanelHeader
             eyebrow="Enviados pela Portaria"
@@ -283,6 +280,11 @@ export default function OperacaoPage() {
                     <p className="mt-0.5 text-xs text-ink-soft">
                       {classificationLabel(item.classification, item.classificationDetail)}
                     </p>
+                    {item.dockNumber && (
+                      <p className="mt-1 inline-flex rounded-md bg-state-move-bg px-2 py-0.5 text-[11px] font-bold text-state-move">
+                        Doca {item.dockNumber}
+                      </p>
+                    )}
                     {item.notes && <p className="mt-1 max-w-xs text-xs text-ink-faint">Da Portaria: {item.notes}</p>}
                   </td>
                   <td>

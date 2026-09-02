@@ -6,7 +6,6 @@ import {
   attendanceClassifications,
   attendanceServiceTypes,
   attendanceStatuses,
-  dockStatuses,
   type AppointmentStatus,
   type UserRole,
 } from "../drizzle/schema";
@@ -57,8 +56,6 @@ import {
   deleteAttendanceById,
   listAttendancesByDay,
   listStaffUsers,
-  listDocks,
-  setDockStatus,
   setUserRole,
 } from "./db";
 import { canApplySuggestion, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canTransitionAppointment, isOperator } from "./permissions";
@@ -730,7 +727,15 @@ export const appRouter = router({
       }),
 
     executeAction: protectedProcedure
-      .input(z.object({ attendanceId: z.number().int().positive(), action: z.enum(["iniciar", "liberar", "concluir"]) }))
+      .input(
+        z.object({
+          attendanceId: z.number().int().positive(),
+          action: z.enum(["iniciar", "liberar", "concluir"]),
+          // A unidade tem duas docas, e informar é opcional: nem toda entrada
+          // vai para doca, e o porteiro nem sempre sabe qual na hora de abrir.
+          dockNumber: z.union([z.literal(1), z.literal(2)]).optional(),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
         if (!canPerformAttendanceAction(ctx.user.role, input.action)) {
           throw new TRPCError({
@@ -741,33 +746,19 @@ export const appRouter = router({
         const attendance = await getExistingAttendance(input.attendanceId);
         const invalid = validateOperationalTransition(attendance.status, input.action);
         if (invalid) throw new TRPCError({ code: "BAD_REQUEST", message: invalid });
-        return executeAttendanceAction({ attendanceId: input.attendanceId, action: input.action, operatedById: ctx.user.id });
+        // A doca só faz sentido na abertura do portão: mandar uma doca junto
+        // com a saída gravaria um destino para um caminhão que está indo embora.
+        if (input.dockNumber && input.action !== "iniciar") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A doca é informada na liberação da entrada." });
+        }
+        return executeAttendanceAction({
+          attendanceId: input.attendanceId,
+          action: input.action,
+          operatedById: ctx.user.id,
+          dockNumber: input.dockNumber,
+        });
       }),
   }),
-  // A doca é do pátio: a Portaria abre e fecha porque é ela que vê o
-  // movimento, e a Operação consulta para saber onde encostar. Por isso ler é
-  // de toda a equipe interna e escrever é só da Portaria.
-  docks: router({
-    list: protectedProcedure.query(async ({ ctx }) => {
-      assertAttendanceViewer(ctx.user.role);
-      return listDocks();
-    }),
-    setStatus: protectedProcedure
-      .input(
-        z.object({
-          number: z.number().int().positive(),
-          status: z.enum(dockStatuses),
-          reason: z.string().trim().max(255).optional(),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        assertPortaria(ctx.user.role);
-        const dock = await setDockStatus({ ...input, updatedById: ctx.user.id });
-        if (!dock) throw new TRPCError({ code: "NOT_FOUND", message: "Doca não encontrada." });
-        return dock;
-      }),
-  }),
-
   staff: router({
     list: adminProcedure.query(async () => listStaffUsers()),
     setRole: adminProcedure

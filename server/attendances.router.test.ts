@@ -7,8 +7,6 @@ const mocks = vi.hoisted(() => ({
   executeAttendanceAction: vi.fn(),
   getAttendanceById: vi.fn(),
   deleteAttendanceById: vi.fn(),
-  listDocks: vi.fn(),
-  setDockStatus: vi.fn(),
   listAttendanceEvents: vi.fn(),
   listAttendances: vi.fn(),
   listAttendancesByDay: vi.fn(),
@@ -390,46 +388,57 @@ describe("perfis internos", () => {
   });
 });
 
-// A doca é do pátio: a Portaria fecha e abre porque é ela que vê o movimento, e
-// a Operação consulta para saber onde encostar.
-describe("docas", () => {
+// A doca é o destino do caminhão dentro da unidade, informado pela Portaria na
+// hora de abrir o portão — e informar é opcional.
+describe("doca de destino", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.listDocks.mockResolvedValue([
-      { number: 1, status: "disponivel", reason: null },
-      { number: 2, status: "indisponivel", reason: "carreta parada" },
-    ]);
-    mocks.setDockStatus.mockResolvedValue({ number: 1, status: "indisponivel", reason: "em manutenção" });
+    mocks.getAttendanceById.mockResolvedValue(attendance({ status: "aprovado" }));
+    mocks.executeAttendanceAction.mockResolvedValue(attendance({ status: "em_atendimento", dockNumber: 2 }));
   });
 
-  it("deixa a Portaria fechar e reabrir a doca", async () => {
-    const caller = appRouter.createCaller(context("portaria"));
-    await caller.docks.setStatus({ number: 1, status: "indisponivel", reason: "em manutenção" });
-    expect(mocks.setDockStatus).toHaveBeenCalledWith({
-      number: 1,
-      status: "indisponivel",
-      reason: "em manutenção",
-      updatedById: 7,
+  it("grava a doca escolhida ao liberar a entrada", async () => {
+    await appRouter
+      .createCaller(context("portaria"))
+      .attendances.executeAction({ attendanceId: 1, action: "iniciar", dockNumber: 2 });
+
+    expect(mocks.executeAttendanceAction).toHaveBeenCalledWith({
+      attendanceId: 1,
+      action: "iniciar",
+      operatedById: 7,
+      dockNumber: 2,
     });
   });
 
-  it("deixa a Operação apenas consultar", async () => {
-    const caller = appRouter.createCaller(context("operator"));
-    await expect(caller.docks.list()).resolves.toHaveLength(2);
-    await expect(caller.docks.setStatus({ number: 1, status: "indisponivel" })).rejects.toThrow(/Portaria/);
-    expect(mocks.setDockStatus).not.toHaveBeenCalled();
+  it("libera a entrada sem doca quando o porteiro não escolhe", async () => {
+    await appRouter.createCaller(context("portaria")).attendances.executeAction({ attendanceId: 1, action: "iniciar" });
+
+    expect(mocks.executeAttendanceAction).toHaveBeenCalledWith({
+      attendanceId: 1,
+      action: "iniciar",
+      operatedById: 7,
+      dockNumber: undefined,
+    });
   });
 
-  it("mantém o fornecedor fora do quadro das docas", async () => {
-    const caller = appRouter.createCaller(context("supplier", 12));
-    await expect(caller.docks.list()).rejects.toThrow(/equipes/);
-    await expect(caller.docks.setStatus({ number: 1, status: "indisponivel" })).rejects.toThrow();
-  });
-
-  it("recusa uma doca que não existe", async () => {
-    mocks.setDockStatus.mockResolvedValue(null);
+  // A unidade tem duas docas; uma terceira só entraria por engano ou por
+  // chamada forjada, e nos dois casos gravaria um destino que não existe.
+  it("aceita apenas as docas 1 e 2", async () => {
     await expect(
-      appRouter.createCaller(context("portaria")).docks.setStatus({ number: 9, status: "indisponivel" })
-    ).rejects.toThrow(/não encontrada/i);
+      appRouter
+        .createCaller(context("portaria"))
+        .attendances.executeAction({ attendanceId: 1, action: "iniciar", dockNumber: 3 as 1 })
+    ).rejects.toThrow();
+    expect(mocks.executeAttendanceAction).not.toHaveBeenCalled();
+  });
+
+  it("não aceita doca numa etapa que não é a da entrada", async () => {
+    mocks.getAttendanceById.mockResolvedValue(attendance({ status: "liberado" }));
+    await expect(
+      appRouter
+        .createCaller(context("portaria"))
+        .attendances.executeAction({ attendanceId: 1, action: "concluir", dockNumber: 1 })
+    ).rejects.toThrow(/liberação da entrada/);
+    expect(mocks.executeAttendanceAction).not.toHaveBeenCalled();
   });
 });

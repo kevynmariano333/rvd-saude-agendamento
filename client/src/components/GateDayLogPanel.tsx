@@ -62,6 +62,7 @@ export default function GateDayLogPanel({ isAdmin }: { isAdmin: boolean }) {
                 <th>Caminhão</th>
                 <th>Atendimento</th>
                 <th>Notas</th>
+                <th>Doca</th>
                 <th>Chegada</th>
                 <th>Saída</th>
                 <th>Permanência</th>
@@ -91,6 +92,13 @@ export default function GateDayLogPanel({ isAdmin }: { isAdmin: boolean }) {
                   <td>
                     {invoices.length ? (
                       <p className="font-mono text-xs text-ink">{invoices.join(", ")}</p>
+                    ) : (
+                      <span className="text-xs text-ink-faint">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {item.dockNumber ? (
+                      <p className="text-sm font-bold text-ink">{item.dockNumber}</p>
                     ) : (
                       <span className="text-xs text-ink-faint">—</span>
                     )}
