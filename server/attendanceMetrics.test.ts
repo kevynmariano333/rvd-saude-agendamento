@@ -52,6 +52,24 @@ describe("indicadores da Portaria", () => {
     expect(metrics.averageReleaseWaitMinutes).toBe(60);
   });
 
+  // Rodando em UTC, um corte pelo relógio do servidor zeraria a movimentação às
+  // 21h no Brasil — com o porteiro ainda no turno.
+  it("conta o dia de São Paulo, não o do relógio do servidor", () => {
+    // 22h de 01/09 em São Paulo; o servidor em UTC já está em 02/09.
+    const referenceTime = new Date("2026-09-02T01:00:00.000Z");
+    const metrics = buildAttendanceMetrics(
+      [
+        // Chegou às 20h do mesmo turno.
+        { status: "concluido", serviceType: "recebimento", arrivalAt: new Date("2026-09-01T23:00:00.000Z") },
+        // Chegou às 20h da véspera.
+        { status: "concluido", serviceType: "recebimento", arrivalAt: new Date("2026-08-31T23:00:00.000Z") },
+      ],
+      referenceTime
+    );
+
+    expect(metrics.receiptsToday).toBe(1);
+  });
+
   it("conta como movimentação do dia apenas o que chegou depois da virada", () => {
     const referenceTime = new Date("2026-09-01T15:00:00.000Z");
     const metrics = buildAttendanceMetrics(
