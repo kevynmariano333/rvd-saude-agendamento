@@ -31,9 +31,13 @@ export function isPortalGate(role: PortalRole) {
   return role === "portaria" || role === "admin";
 }
 
-/** Quem conduz o caminhão no pátio até a conclusão. */
+/**
+ * Quem autoriza o recebimento e conduz a carga na doca. É a mesma pessoa que
+ * cuida da agenda: quem combina a entrega é quem a recebe. O perfil "operacao"
+ * continua valendo para as contas que já existem com ele.
+ */
 export function isPortalYard(role: PortalRole) {
-  return role === "operacao" || role === "admin";
+  return role === "operacao" || role === "operator" || role === "admin";
 }
 
 /**
@@ -42,7 +46,7 @@ export function isPortalYard(role: PortalRole) {
  * O administrador responde pelo sistema todo e é o único que vê tudo.
  */
 export function canSeeAttendances(role: PortalRole) {
-  return role === "portaria" || role === "operacao" || role === "admin";
+  return role !== "supplier";
 }
 
 /** A tela em que cada perfil começa depois de entrar. */

@@ -22,6 +22,7 @@ import {
   formatWaitMinutes,
   parseInvoiceNumbers,
   serviceTypeCopy,
+  stayDuration,
   type AttendanceClassification,
   type AttendanceClassificationDetail,
   type AttendanceServiceType,
@@ -443,6 +444,8 @@ export default function PortariaPage() {
                   <th>Atendimento</th>
                   <th>Notas</th>
                   <th>Chegada</th>
+                  <th>Saída</th>
+                  <th>Permanência</th>
                   <th>Status</th>
                   <th className="text-right">Registro</th>
                 </>
@@ -475,9 +478,25 @@ export default function PortariaPage() {
                     </td>
                     <td>
                       <p className="text-xs text-ink-soft">{formatArrival(item.arrivalAt)}</p>
-                      {item.concludedAt && (
-                        <p className="mt-0.5 text-xs text-ink-faint">Saída {formatArrival(item.concludedAt)}</p>
+                    </td>
+                    <td>
+                      {item.concludedAt ? (
+                        <p className="text-xs text-ink-soft">{formatArrival(item.concludedAt)}</p>
+                      ) : (
+                        <span className="text-xs text-ink-faint">—</span>
                       )}
+                    </td>
+                    <td>
+                      {(() => {
+                        const stay = stayDuration(item);
+                        if (!stay) return <span className="text-xs text-ink-faint">—</span>;
+                        return (
+                          <>
+                            <p className="text-sm font-bold text-ink">{stay.text}</p>
+                            {stay.ongoing && <p className="mt-0.5 text-xs text-ink-faint">em curso</p>}
+                          </>
+                        );
+                      })()}
                     </td>
                     <td>
                       <AttendanceStatusBadge status={item.status} />

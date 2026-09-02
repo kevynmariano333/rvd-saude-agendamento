@@ -2,7 +2,7 @@ import { homePathFor, isPortalOperator, type PortalRole } from "@/lib/portal";
 import LoadingTruck from "@/components/LoadingTruck";
 import { trpc } from "@/lib/trpc";
 import AttendanceStatusBadge from "@/components/AttendanceStatusBadge";
-import { classificationLabel, formatArrival, parseInvoiceNumbers, serviceTypeCopy } from "@/lib/attendance";
+import { classificationLabel, formatArrival, parseInvoiceNumbers, serviceTypeCopy, stayDuration } from "@/lib/attendance";
 import { CalendarDays, Clock3, DoorOpen, PackageCheck, Trophy, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -59,12 +59,14 @@ function GateEntriesPanel() {
                 <th>Atendimento</th>
                 <th>Notas</th>
                 <th>Entrada</th>
+                <th>Permanência</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {entries.map(item => {
                 const invoices = parseInvoiceNumbers(item.invoiceNumbersJson);
+                const stay = stayDuration(item);
                 return (
                   <tr key={item.id} className="align-top [&>td]:px-5 [&>td]:py-4 sm:[&>td]:px-7">
                     <td className="text-sm font-bold text-ink">{item.carrier}</td>
@@ -80,6 +82,16 @@ function GateEntriesPanel() {
                     </td>
                     <td className="font-mono text-xs text-ink">{invoices.length ? invoices.join(", ") : "—"}</td>
                     <td className="text-xs text-ink-soft">{formatArrival(item.arrivalAt)}</td>
+                    <td>
+                      {stay ? (
+                        <>
+                          <span className="text-sm font-bold text-ink">{stay.text}</span>
+                          {stay.ongoing && <span className="ml-1 text-xs text-ink-faint">em curso</span>}
+                        </>
+                      ) : (
+                        <span className="text-xs text-ink-faint">—</span>
+                      )}
+                    </td>
                     <td><AttendanceStatusBadge status={item.status} /></td>
                   </tr>
                 );

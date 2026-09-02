@@ -18,19 +18,21 @@ describe("perfis operacionais", () => {
     expect(canManagePortaria("admin")).toBe(true);
   });
 
-  it("limita a Operação às ações de atendimento", () => {
+  // Quem cuida da agenda é quem recebe a carga: o operador autoriza o
+  // recebimento e libera a doca. A portaria continua só no portão.
+  it("dá a autorização do recebimento a quem cuida da agenda", () => {
+    expect(canManageOperation("operator")).toBe(true);
     expect(canManageOperation("operacao")).toBe(true);
-    expect(canManageOperation("portaria")).toBe(false);
     expect(canManageOperation("admin")).toBe(true);
+    expect(canManageOperation("portaria")).toBe(false);
+    expect(canManageOperation("supplier")).toBe(false);
   });
 
-  it("mantém o pátio com quem trabalha nele", () => {
-    expect(canViewAttendances("portaria")).toBe(true);
-    expect(canViewAttendances("operacao")).toBe(true);
-    expect(canViewAttendances("admin")).toBe(true);
-    // Fornecedor e operador de agendamentos têm os seus próprios postos.
+  it("mantém o pátio interno e invisível ao fornecedor", () => {
+    for (const role of ["portaria", "operacao", "operator", "admin"] as const) {
+      expect(canViewAttendances(role)).toBe(true);
+    }
     expect(canViewAttendances("supplier")).toBe(false);
-    expect(canViewAttendances("operator")).toBe(false);
   });
 });
 
@@ -108,12 +110,14 @@ describe("fluxo operacional", () => {
     expect(canPerformAttendanceAction("portaria", "iniciar")).toBe(true);
     expect(canPerformAttendanceAction("portaria", "concluir")).toBe(true);
     expect(canPerformAttendanceAction("portaria", "liberar")).toBe(false);
-    expect(canPerformAttendanceAction("operacao", "liberar")).toBe(true);
-    expect(canPerformAttendanceAction("operacao", "iniciar")).toBe(false);
-    expect(canPerformAttendanceAction("operacao", "concluir")).toBe(false);
+    for (const role of ["operacao", "operator"] as const) {
+      expect(canPerformAttendanceAction(role, "liberar")).toBe(true);
+      expect(canPerformAttendanceAction(role, "iniciar")).toBe(false);
+      expect(canPerformAttendanceAction(role, "concluir")).toBe(false);
+    }
     for (const action of ["iniciar", "liberar", "concluir"] as const) {
       expect(canPerformAttendanceAction("admin", action)).toBe(true);
-      expect(canPerformAttendanceAction("operator", action)).toBe(false);
+      expect(canPerformAttendanceAction("supplier", action)).toBe(false);
     }
   });
 

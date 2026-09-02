@@ -134,7 +134,7 @@ function assertOperacao(role: UserRole) {
 }
 
 function assertAttendanceViewer(role: UserRole) {
-  if (!canViewAttendances(role)) throw new TRPCError({ code: "FORBIDDEN", message: "O pátio é restrito às equipes da Portaria e da Operação." });
+  if (!canViewAttendances(role)) throw new TRPCError({ code: "FORBIDDEN", message: "O pátio é restrito às equipes internas." });
 }
 
 async function getExistingAttendance(attendanceId: number) {
@@ -201,7 +201,10 @@ export const appRouter = router({
         let user;
 
         if (existing) {
-          const profileAllowed = existing.role === input.profile || (existing.role === "admin" && input.profile !== "supplier");
+          const profileAllowed =
+            existing.role === input.profile ||
+            (existing.role === "admin" && input.profile !== "supplier") ||
+            (existing.role === "operacao" && input.profile === "operator");
           if (!profileAllowed || !existing.passwordHash || !passwordMatches(input.password, existing.passwordHash)) {
             throw new TRPCError({ code: "UNAUTHORIZED", message: "E-mail, senha ou perfil não conferem." });
           }

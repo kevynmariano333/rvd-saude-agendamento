@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classificationDetailsFor, classificationLabel, formatElapsed, parseInvoiceNumbers } from "./attendance";
+import { classificationDetailsFor, classificationLabel, formatElapsed, parseInvoiceNumbers, stayDuration } from "./attendance";
 
 describe("rótulos de classificação", () => {
   it("omite o subtipo quando ele não se aplica", () => {
@@ -62,5 +62,33 @@ describe("notas do protocolo", () => {
 
   it("descarta entradas que não são texto", () => {
     expect(parseInvoiceNumbers('["123",7,null,"456"]')).toEqual(["123", "456"]);
+  });
+});
+
+describe("permanência na unidade", () => {
+  const arrivalAt = new Date("2026-09-01T12:00:00.000Z");
+  const agora = new Date("2026-09-01T14:30:00.000Z");
+
+  it("fecha na saída quando o caminhão já foi embora", () => {
+    expect(
+      stayDuration(
+        { status: "concluido", arrivalAt, concludedAt: new Date("2026-09-01T13:10:00.000Z") },
+        agora
+      )
+    ).toEqual({ text: "1h 10min", ongoing: false });
+  });
+
+  it("segue correndo enquanto o caminhão está dentro", () => {
+    expect(stayDuration({ status: "em_atendimento", arrivalAt, concludedAt: null }, agora)).toEqual({
+      text: "2h 30min",
+      ongoing: true,
+    });
+  });
+
+  // O caminhão recusado não entrou, e o que espera no acesso ainda não entrou:
+  // nenhum dos dois tem permanência.
+  it("não atribui permanência a quem não entrou", () => {
+    expect(stayDuration({ status: "recusado", arrivalAt, concludedAt: null }, agora)).toBeNull();
+    expect(stayDuration({ status: "aguardando", arrivalAt, concludedAt: null }, agora)).toBeNull();
   });
 });
