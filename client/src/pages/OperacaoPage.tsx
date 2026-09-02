@@ -1,5 +1,6 @@
 import AttendanceHistoryDialog from "@/components/AttendanceHistoryDialog";
 import AttendanceStatusBadge from "@/components/AttendanceStatusBadge";
+import GateDayLogPanel from "@/components/GateDayLogPanel";
 import LoadingTruck from "@/components/LoadingTruck";
 import {
   DataTable,
@@ -330,6 +331,8 @@ export default function OperacaoPage() {
             />
           )}
         </Panel>
+
+        <GateDayLogPanel isAdmin={auth.data.role === "admin"} />
       </div>
 
       <Dialog open={Boolean(refusal)} onOpenChange={open => !open && setRefusal(null)}>
