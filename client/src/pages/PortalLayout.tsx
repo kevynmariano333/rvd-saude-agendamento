@@ -15,16 +15,22 @@ import {
   MessageCircle,
   PackageCheck,
   ShieldCheck,
+  Truck,
+  type LucideIcon,
   UserCheck,
   UserRound,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import ChangeNameDialog from "../components/ChangeNameDialog";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import { useLocation } from "wouter";
 
 type PortalUser = { id: number; name: string | null; email: string | null; role: string };
+
+/** Item da barra de navegação. O badge é a contagem que pede atenção agora. */
+type NavItem = { label: string; path: string; icon: LucideIcon; badge?: number };
 
 export default function PortalLayout({
   user,
@@ -55,20 +61,32 @@ export default function PortalLayout({
   const logoutMutation = trpc.auth.logout.useMutation();
   const unreadCount = notifications.data?.length ?? 0;
 
+  // Um caminhão parado no portão espera a Operação aceitar o recebimento, e
+  // quem decide não fica com a tela do pátio aberta o dia inteiro. Por isso a
+  // solicitação de liberação avisa em todas as telas do portal, e não só lá.
+  const canApproveEntries = isPortalYard(role);
+  const releaseRequests = trpc.attendances.list.useQuery(
+    { status: "aguardando" },
+    { enabled: canApproveEntries, refetchInterval: 15_000 }
+  );
+  const pendingReleases = canApproveEntries ? (releaseRequests.data ?? []) : [];
+  const releaseCount = pendingReleases.length;
+  const alertCount = unreadCount + releaseCount;
+
   // Cada perfil vê só o seu posto de trabalho: quem cuida de agendamentos não
   // tem o pátio no menu, e quem trabalha no portão não tem a agenda. O
   // administrador é o único que enxerga tudo. Itens de administração ficam no
   // menu da conta, sem competir com a operação do dia na barra principal.
-  const schedulingNav = [
+  const schedulingNav: NavItem[] = [
     { label: "Dashboard", path: "/operador/dashboard", icon: LayoutDashboard },
     { label: "Agendamentos", path: "/operador", icon: ClipboardList },
     { label: "Calendário", path: "/operador/calendario", icon: CalendarDays },
     { label: "Relatórios", path: "/operador/relatorios", icon: BarChart3 },
   ];
-  const gateNav = [{ label: "Portaria", path: "/portaria", icon: DoorOpen }];
-  const yardNav = [{ label: "Operação", path: "/operacao", icon: PackageCheck }];
+  const gateNav: NavItem[] = [{ label: "Portaria", path: "/portaria", icon: DoorOpen }];
+  const yardNav: NavItem[] = [{ label: "Operação", path: "/operacao", icon: PackageCheck, badge: releaseCount }];
 
-  const nav = isAdmin
+  const nav: NavItem[] = isAdmin
     ? [...schedulingNav, ...gateNav, ...yardNav]
     : isOperator
       ? [...schedulingNav, ...yardNav]
@@ -78,12 +96,26 @@ export default function PortalLayout({
           ? yardNav
           : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }];
 
-  const adminNav = isAdmin
+  const adminNav: NavItem[] = isAdmin
     ? [
         { label: "Acessos", path: "/operador/acessos", icon: UserCheck },
         { label: "Administrar notas", path: "/operador/notas", icon: ShieldCheck },
       ]
     : [];
+
+  // Só avisa o que chegou depois de a tela abrir: sem isso, entrar no portal
+  // com a fila cheia dispararia um aviso de "novidade" que não é novidade.
+  const seenReleases = useRef<number | null>(null);
+  useEffect(() => {
+    if (!canApproveEntries || !releaseRequests.data) return;
+    const previous = seenReleases.current;
+    seenReleases.current = releaseCount;
+    if (previous === null || releaseCount <= previous) return;
+    toast.info("Nova solicitação de liberação", {
+      description: `${releaseCount} caminhão(ões) no portão esperando o aceite da Operação.`,
+      action: { label: "Ver", onClick: () => setLocation("/operacao") },
+    });
+  }, [canApproveEntries, releaseRequests.data, releaseCount, setLocation]);
 
   const homePath = nav[0]?.path ?? "/";
   const go = (path: string) => {
@@ -137,6 +169,11 @@ export default function PortalLayout({
                   >
                     <Icon className="size-4" />
                     {item.label}
+                    {item.badge ? (
+                      <span className="flex min-w-[18px] items-center justify-center rounded-full bg-state-stop px-1.5 py-0.5 text-[10px] font-extrabold text-white">
+                        {item.badge > 9 ? "9+" : item.badge}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -156,13 +193,17 @@ export default function PortalLayout({
                 setNotificationsOpen(value => !value);
                 setProfileOpen(false);
               }}
-              title="Mensagens novas"
+              title={releaseCount > 0 ? "Solicitações de liberação e mensagens" : "Mensagens novas"}
               className="relative hidden rounded-lg p-2.5 text-ink-soft hover:bg-canvas hover:text-ink sm:block"
             >
               <Bell className="size-5" />
-              {unreadCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex size-4.5 min-w-[18px] items-center justify-center rounded-full bg-rvd-plum px-1 text-[10px] font-extrabold text-white">
-                  {unreadCount > 9 ? "9+" : unreadCount}
+              {alertCount > 0 && (
+                <span
+                  className={`absolute -right-0.5 -top-0.5 flex size-4.5 min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-extrabold text-white ${
+                    releaseCount > 0 ? "bg-state-stop" : "bg-rvd-plum"
+                  }`}
+                >
+                  {alertCount > 9 ? "9+" : alertCount}
                 </span>
               )}
             </button>
@@ -203,6 +244,11 @@ export default function PortalLayout({
                   >
                     <Icon className="size-4" />
                     {item.label}
+                    {item.badge ? (
+                      <span className="flex min-w-[18px] items-center justify-center rounded-full bg-state-stop px-1.5 py-0.5 text-[10px] font-extrabold text-white">
+                        {item.badge > 9 ? "9+" : item.badge}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -214,11 +260,51 @@ export default function PortalLayout({
           <div className="absolute right-5 top-[4.25rem] z-50 w-[min(24rem,calc(100vw-2.5rem))] overflow-hidden rounded-2xl border border-line bg-surface shadow-lg sm:right-8">
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <div>
-                <p className="font-display text-sm font-extrabold text-ink">Mensagens novas</p>
-                <p className="text-xs text-ink-soft">Conversas vinculadas às notas</p>
+                <p className="font-display text-sm font-extrabold text-ink">Avisos</p>
+                <p className="text-xs text-ink-soft">
+                  {releaseCount > 0 ? "Liberações no portão e conversas das notas" : "Conversas vinculadas às notas"}
+                </p>
               </div>
               <Bell className="size-4 text-ink-faint" />
             </div>
+            {releaseCount > 0 && (
+              <div className="border-b border-line bg-state-stop-bg/50 p-2">
+                <p className="px-2 pb-1 pt-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-state-stop">
+                  Solicitações de liberação · {releaseCount}
+                </p>
+                <div className="max-h-56 overflow-y-auto">
+                  {pendingReleases.map(request => (
+                    <button
+                      key={request.id}
+                      onClick={() => {
+                        setNotificationsOpen(false);
+                        go("/operacao");
+                      }}
+                      className="w-full rounded-xl p-3 text-left hover:bg-surface"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 rounded-lg bg-state-stop-bg p-2 text-state-stop">
+                          <Truck className="size-4" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-mono text-xs font-bold text-ink">{request.licensePlate}</span>
+                          <span className="mt-0.5 block truncate text-sm text-ink-soft">
+                            {request.carrier} · aguardando aceite
+                          </span>
+                          <span className="mt-1 block text-[10px] text-ink-faint">
+                            Chegou{" "}
+                            {new Date(request.arrivalAt).toLocaleString("pt-BR", {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })}
+                          </span>
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {notifications.data?.length ? (
               <div className="max-h-80 overflow-y-auto p-2">
                 {notifications.data.map(message => (
@@ -250,10 +336,12 @@ export default function PortalLayout({
                 ))}
               </div>
             ) : (
-              <div className="px-5 py-10 text-center">
-                <Bell className="mx-auto size-6 text-ink-faint" />
-                <p className="mt-3 text-sm font-bold text-ink">Nenhuma mensagem nova</p>
-              </div>
+              releaseCount === 0 && (
+                <div className="px-5 py-10 text-center">
+                  <Bell className="mx-auto size-6 text-ink-faint" />
+                  <p className="mt-3 text-sm font-bold text-ink">Nenhum aviso novo</p>
+                </div>
+              )
             )}
           </div>
         )}

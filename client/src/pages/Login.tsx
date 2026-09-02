@@ -1,38 +1,95 @@
 import { Button } from "@/components/ui/button";
 import { fieldClass } from "@/components/PortalKit";
+import {
+  accessProfileLabel,
+  accessProfiles,
+  parseAccessProfile,
+  type AccessProfile,
+} from "@/lib/accessProfiles";
 import { homePathFor, type PortalRole } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
-import {
-  ArrowLeft,
-  Building2,
-  ChevronRight,
-  DoorOpen,
-  LockKeyhole,
-  Mail,
-  Stethoscope,
-  UserPlus,
-} from "lucide-react";
+import { ArrowLeft, ChevronRight, Home as HomeIcon, LockKeyhole, Mail, UserPlus } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
 
-type Profile = "operator" | "supplier" | "portaria";
+/**
+ * Vindo da home o acesso já está escolhido, e repetir os três cartões só
+ * convidaria a errar o perfil. Quem chega direto em /entrar ainda precisa
+ * escolher, então aí os cartões aparecem.
+ */
+function ChosenAccess({
+  profile,
+  fromRoute,
+  onSelect,
+}: {
+  profile: AccessProfile;
+  fromRoute: boolean;
+  onSelect: (profile: AccessProfile) => void;
+}) {
+  const [, setLocation] = useLocation();
+  const chosen = accessProfiles.find(option => option.value === profile);
 
-const profiles: { value: Profile; label: string; description: string; icon: typeof Building2 }[] = [
-  { value: "supplier", label: "Fornecedor", description: "Envia notas e acompanha cada etapa", icon: Building2 },
-  { value: "operator", label: "Operador", description: "Gerencia agendas e autoriza recebimentos", icon: Stethoscope },
-  { value: "portaria", label: "Portaria", description: "Registra chegadas e libera o portão", icon: DoorOpen },
-];
+  if (fromRoute && chosen) {
+    const Icon = chosen.icon;
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-rvd-plum/30 bg-rvd-plum-pale/30 p-3.5">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-rvd-plum text-white">
+          <Icon className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-ink">{chosen.headline}</p>
+          <p className="mt-0.5 truncate text-xs text-ink-soft">{chosen.description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setLocation("/")}
+          className="shrink-0 text-xs font-bold text-rvd-plum hover:underline"
+        >
+          Trocar
+        </button>
+      </div>
+    );
+  }
 
-const profileLabel: Record<Profile, string> = {
-  operator: "operador",
-  supplier: "fornecedor",
-  portaria: "portaria",
-};
+  return (
+    <fieldset>
+      <legend className="text-xs font-bold uppercase tracking-[0.08em] text-ink-soft">Perfil de acesso</legend>
+      <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+        {accessProfiles.map((option, index) => {
+          const Icon = option.icon;
+          const active = profile === option.value;
+          const fillsRow = accessProfiles.length % 2 === 1 && index === accessProfiles.length - 1;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onSelect(option.value)}
+              aria-pressed={active}
+              className={`rounded-xl border p-3.5 text-left transition ${fillsRow ? "col-span-2" : ""} ${
+                active
+                  ? "border-rvd-plum bg-rvd-plum-pale/40 text-rvd-plum"
+                  : "border-line bg-surface text-ink-soft hover:border-line-strong hover:bg-canvas"
+              }`}
+            >
+              <Icon className="size-5" />
+              <span className="mt-3 block text-sm font-bold text-ink">{option.label}</span>
+              <span className="mt-0.5 block text-xs leading-4">{option.description}</span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const [profile, setProfile] = useState<Profile>("supplier");
+  // O acesso vem escolhido da home, então a tela já abre no perfil certo em vez
+  // de pedir a escolha no meio dos campos de senha.
+  const params = useParams<{ profile?: string }>();
+  const routeProfile = parseAccessProfile(params.profile);
+  const [profile, setProfile] = useState<AccessProfile>(routeProfile ?? "supplier");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [companyName, setCompanyName] = useState("");
   const [companyCnpj, setCompanyCnpj] = useState("");
@@ -58,7 +115,17 @@ export default function Login() {
     if (auth.data) setLocation(homePathFor(auth.data.role as PortalRole));
   }, [auth.data, setLocation]);
 
-  function selectProfile(nextProfile: Profile) {
+  // Um endereço digitado errado não escolhe acesso por conta própria: volta para
+  // a home, onde a escolha é explícita.
+  useEffect(() => {
+    if (params.profile && !routeProfile) setLocation("/");
+  }, [params.profile, routeProfile, setLocation]);
+
+  useEffect(() => {
+    if (routeProfile) setProfile(routeProfile);
+  }, [routeProfile]);
+
+  function selectProfile(nextProfile: AccessProfile) {
     setProfile(nextProfile);
     setCompanyCnpj("");
   }
@@ -81,7 +148,7 @@ export default function Login() {
 
   const registering = mode === "register";
   const pending = login.isPending || register.isPending;
-  const selectedProfileLabel = profileLabel[profile];
+  const selectedProfileLabel = accessProfileLabel[profile];
 
   return (
     <main className="min-h-screen bg-canvas p-4 sm:p-6 lg:p-8">
@@ -125,14 +192,14 @@ export default function Login() {
 
         <section className="flex items-center bg-surface px-6 py-10 sm:px-12 lg:px-14">
           <div className="rvd-reveal mx-auto w-full max-w-md">
-            <p className="eyebrow">{registering ? `Cadastro de ${selectedProfileLabel}` : "Acesse sua conta"}</p>
+            <p className="eyebrow">{registering ? `Cadastro de ${selectedProfileLabel}` : `Acesso ${selectedProfileLabel}`}</p>
             <h2 className="mt-2 font-display text-2xl font-extrabold tracking-tight text-ink">
               {registering ? "Crie seu acesso" : "Bem-vindo à RVD Saúde"}
             </h2>
             <p className="mt-2 text-sm leading-6 text-ink-soft">
               {registering
                 ? `Cadastre seus dados e defina uma senha para acessar o portal como ${selectedProfileLabel}.`
-                : "Escolha seu perfil e entre para gerenciar ou acompanhar a operação."}
+                : `Entre com a sua conta de ${selectedProfileLabel} para continuar.`}
             </p>
 
             <form onSubmit={submit} className="mt-7 space-y-5">
@@ -169,35 +236,7 @@ export default function Login() {
                   )}
                 </>
               ) : (
-                <fieldset>
-                  <legend className="text-xs font-bold uppercase tracking-[0.08em] text-ink-soft">
-                    Perfil de acesso
-                  </legend>
-                  <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-                    {profiles.map((option, index) => {
-                      const Icon = option.icon;
-                      const active = profile === option.value;
-                      const fillsRow = profiles.length % 2 === 1 && index === profiles.length - 1;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => selectProfile(option.value)}
-                          aria-pressed={active}
-                          className={`rounded-xl border p-3.5 text-left transition ${fillsRow ? "col-span-2" : ""} ${
-                            active
-                              ? "border-rvd-plum bg-rvd-plum-pale/40 text-rvd-plum"
-                              : "border-line bg-surface text-ink-soft hover:border-line-strong hover:bg-canvas"
-                          }`}
-                        >
-                          <Icon className="size-5" />
-                          <span className="mt-3 block text-sm font-bold text-ink">{option.label}</span>
-                          <span className="mt-0.5 block text-xs leading-4">{option.description}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </fieldset>
+                <ChosenAccess profile={profile} fromRoute={Boolean(routeProfile)} onSelect={selectProfile} />
               )}
 
               <div className="grid gap-1.5">
@@ -296,6 +335,16 @@ export default function Login() {
                   Novo cadastro de {selectedProfileLabel}
                 </button>
               )}
+            </div>
+            <div className="mt-3 text-center">
+              <button
+                type="button"
+                onClick={() => setLocation("/")}
+                className="inline-flex items-center gap-2 text-xs font-bold text-ink-faint hover:text-ink"
+              >
+                <HomeIcon className="size-3.5" />
+                Voltar para a escolha de acesso
+              </button>
             </div>
             <p className="mt-6 border-t border-line pt-4 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-ink-faint">
               Mariano System

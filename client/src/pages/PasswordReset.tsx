@@ -50,7 +50,7 @@ export default function PasswordReset() {
               Este endereço não traz um código de redefinição. Peça um novo e-mail pela tela de acesso.
             </p>
             <Button
-              onClick={() => setLocation("/")}
+              onClick={() => setLocation("/entrar")}
               className="mt-6 h-12 w-full rounded-xl bg-rvd-plum font-bold text-white hover:bg-rvd-plum"
             >
               Voltar para o login
@@ -64,7 +64,7 @@ export default function PasswordReset() {
               Sua nova senha já está valendo. Entre no portal com ela.
             </p>
             <Button
-              onClick={() => setLocation("/")}
+              onClick={() => setLocation("/entrar")}
               className="mt-6 h-12 w-full rounded-xl bg-rvd-plum font-bold text-white hover:bg-rvd-plum"
             >
               Ir para o login
