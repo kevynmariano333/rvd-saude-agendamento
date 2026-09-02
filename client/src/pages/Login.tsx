@@ -9,7 +9,6 @@ import {
   DoorOpen,
   LockKeyhole,
   Mail,
-  PackageCheck,
   Stethoscope,
   UserPlus,
 } from "lucide-react";
@@ -17,20 +16,18 @@ import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
-type Profile = "operator" | "supplier" | "portaria" | "operacao";
+type Profile = "operator" | "supplier" | "portaria";
 
 const profiles: { value: Profile; label: string; description: string; icon: typeof Building2 }[] = [
   { value: "supplier", label: "Fornecedor", description: "Envia notas e acompanha cada etapa", icon: Building2 },
-  { value: "operator", label: "Operador", description: "Gerencia agendas e recebimentos", icon: Stethoscope },
-  { value: "portaria", label: "Portaria", description: "Registra chegadas e decide a entrada", icon: DoorOpen },
-  { value: "operacao", label: "Operação", description: "Conduz coletas e recebimentos no pátio", icon: PackageCheck },
+  { value: "operator", label: "Operador", description: "Gerencia agendas e autoriza recebimentos", icon: Stethoscope },
+  { value: "portaria", label: "Portaria", description: "Registra chegadas e libera o portão", icon: DoorOpen },
 ];
 
 const profileLabel: Record<Profile, string> = {
   operator: "operador",
   supplier: "fornecedor",
   portaria: "portaria",
-  operacao: "operação",
 };
 
 export default function Login() {
@@ -177,16 +174,17 @@ export default function Login() {
                     Perfil de acesso
                   </legend>
                   <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-                    {profiles.map(option => {
+                    {profiles.map((option, index) => {
                       const Icon = option.icon;
                       const active = profile === option.value;
+                      const fillsRow = profiles.length % 2 === 1 && index === profiles.length - 1;
                       return (
                         <button
                           key={option.value}
                           type="button"
                           onClick={() => selectProfile(option.value)}
                           aria-pressed={active}
-                          className={`rounded-xl border p-3.5 text-left transition ${
+                          className={`rounded-xl border p-3.5 text-left transition ${fillsRow ? "col-span-2" : ""} ${
                             active
                               ? "border-rvd-plum bg-rvd-plum-pale/40 text-rvd-plum"
                               : "border-line bg-surface text-ink-soft hover:border-line-strong hover:bg-canvas"

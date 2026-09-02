@@ -69,12 +69,10 @@ describe("separação de responsabilidades entre os perfis", () => {
     }
   });
 
-  it("deixa o pátio visível só a quem trabalha nele", () => {
-    for (const role of ["admin", "portaria", "operacao"] as const) {
+  it("mantém o pátio interno e invisível ao fornecedor", () => {
+    for (const role of ["admin", "portaria", "operacao", "operator"] as const) {
       expect(canSeeAttendances(role)).toBe(true);
     }
-    for (const role of ["supplier", "operator"] as const) {
-      expect(canSeeAttendances(role)).toBe(false);
-    }
+    expect(canSeeAttendances("supplier")).toBe(false);
   });
 });

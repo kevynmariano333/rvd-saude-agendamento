@@ -14,16 +14,18 @@ export function canManagePortaria(role: UserRole) {
   return role === "portaria" || role === "admin";
 }
 
+/**
+ * Quem autoriza o recebimento e libera a doca. É a mesma pessoa que cuida da
+ * agenda — quem combina a entrega é quem a recebe. O perfil "operacao" segue
+ * valendo para as contas que já existem com ele.
+ */
 export function canManageOperation(role: UserRole) {
-  return role === "operacao" || role === "admin";
+  return role === "operacao" || role === "operator" || role === "admin";
 }
 
-/**
- * O pátio é da Portaria e da Operação. Quem cuida de agendamentos tem o seu
- * próprio posto e não entra aqui; o administrador responde por tudo.
- */
+/** O pátio é interno: o fornecedor nunca o enxerga. */
 export function canViewAttendances(role: UserRole) {
-  return role === "portaria" || role === "operacao" || role === "admin";
+  return role !== "supplier";
 }
 
 /** Cada classificação carrega os seus subtipos; a LLT não tem nenhum. */

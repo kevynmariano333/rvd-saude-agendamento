@@ -123,6 +123,24 @@ export function parseInvoiceNumbers(raw: string | null | undefined): string[] {
   }
 }
 
+/**
+ * Quanto tempo o caminhão ficou na unidade. Fecha na saída; enquanto ele está
+ * dentro, segue correndo — é o número que a Portaria olha para saber se algum
+ * atendimento está demorando demais.
+ *
+ * Uma recusa não tem permanência: o caminhão nunca entrou.
+ */
+export function stayDuration(
+  input: { status: AttendanceStatus; arrivalAt: Date | string; concludedAt?: Date | string | null },
+  reference = new Date()
+): { text: string; ongoing: boolean } | null {
+  if (input.status === "recusado" || input.status === "aguardando") return null;
+  if (input.concludedAt) {
+    return { text: formatElapsed(input.arrivalAt, new Date(input.concludedAt)), ongoing: false };
+  }
+  return { text: formatElapsed(input.arrivalAt, reference), ongoing: true };
+}
+
 export function formatWaitMinutes(totalMinutes: number) {
   if (totalMinutes < 60) return `${totalMinutes} min`;
   const hours = Math.floor(totalMinutes / 60);

@@ -219,23 +219,25 @@ describe("visibilidade do pátio", () => {
 
   it("mantém o fornecedor fora da fila e do histórico", async () => {
     const caller = appRouter.createCaller(context("supplier", 12));
-    await expect(caller.attendances.list({})).rejects.toThrow(/Portaria e da Operação/);
-    await expect(caller.attendances.history({ attendanceId: 1 })).rejects.toThrow(/Portaria e da Operação/);
-    await expect(caller.attendances.overview()).rejects.toThrow(/Portaria e da Operação/);
+    await expect(caller.attendances.list({})).rejects.toThrow(/equipes/);
+    await expect(caller.attendances.history({ attendanceId: 1 })).rejects.toThrow(/equipes/);
+    await expect(caller.attendances.overview()).rejects.toThrow(/equipes/);
   });
 
-  // Cada perfil no seu posto: quem cuida de agendamentos tem a própria agenda e
-  // não enxerga o pátio.
-  it("mantém o operador de agendamentos fora do pátio", async () => {
+  // Quem cuida da agenda recebe a carga: autoriza e libera a doca, mas o portão
+  // continua sendo da Portaria.
+  it("deixa o operador autorizar o recebimento, e não abrir o portão", async () => {
     const caller = appRouter.createCaller(context("operator"));
-    await expect(caller.attendances.list({})).rejects.toThrow(/Portaria e da Operação/);
-    await expect(caller.attendances.overview()).rejects.toThrow(/Portaria e da Operação/);
+    await expect(caller.attendances.list({})).resolves.toHaveLength(2);
+    await caller.attendances.decideReceipt({ attendanceId: 1, decision: "aprovar" });
+    expect(mocks.decideAttendanceEntry).toHaveBeenCalled();
+
     await expect(caller.attendances.create(arrival)).rejects.toThrow(/Portaria/);
     await expect(caller.attendances.executeAction({ attendanceId: 1, action: "iniciar" })).rejects.toThrow(/Portaria/);
   });
 
-  it("deixa Portaria, Operação e administrador lerem a fila", async () => {
-    for (const role of ["portaria", "operacao", "admin"] as const) {
+  it("deixa toda a equipe interna ler a fila", async () => {
+    for (const role of ["portaria", "operacao", "operator", "admin"] as const) {
       await expect(appRouter.createCaller(context(role)).attendances.list({})).resolves.toHaveLength(2);
     }
   });

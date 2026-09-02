@@ -69,7 +69,7 @@ export default function PortalLayout({
   const nav = isAdmin
     ? [...schedulingNav, ...gateNav, ...yardNav]
     : isOperator
-      ? schedulingNav
+      ? [...schedulingNav, ...yardNav]
       : isPortalGate(role)
         ? gateNav
         : isPortalYard(role)
