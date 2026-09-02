@@ -127,6 +127,13 @@
       "when": 1788304375331,
       "tag": "0017_certain_misty_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1788353279766,
+      "tag": "0018_regular_ego",
+      "breakpoints": true
     }
   ]
 }

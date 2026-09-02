@@ -8,6 +8,7 @@ import {
   appointmentSuggestions,
   attendanceEvents,
   attendances,
+  docks,
   passwordResetTokens,
   type AppointmentStatus,
   type AttendanceClassification,
@@ -15,6 +16,7 @@ import {
   type AttendanceEventType,
   type AttendanceServiceType,
   type AttendanceStatus,
+  type DockStatus,
   type InsertUser,
   type SuggestionStatus,
   type UserAccessStatus,
@@ -978,4 +980,38 @@ export async function deleteAttendanceById(id: number) {
   const db = await getDb();
   if (!db) return;
   await db.delete(attendances).where(eq(attendances.id, id));
+}
+
+/**
+ * As duas docas da unidade, sempre na mesma ordem, para a tela não trocar de
+ * lugar entre um refresh e outro.
+ */
+export async function listDocks() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(docks).orderBy(docks.number);
+}
+
+/**
+ * A doca é fechada e reaberta pela Portaria, que vê o pátio. Reabrir limpa o
+ * motivo: um "em manutenção" que sobrevive à liberação mente para a Operação.
+ */
+export async function setDockStatus(input: {
+  number: number;
+  status: DockStatus;
+  reason?: string | null;
+  updatedById: number;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  await db
+    .update(docks)
+    .set({
+      status: input.status,
+      reason: input.status === "indisponivel" ? (input.reason?.trim() || null) : null,
+      updatedById: input.updatedById,
+    })
+    .where(eq(docks.number, input.number));
+  const [updated] = await db.select().from(docks).where(eq(docks.number, input.number)).limit(1);
+  return updated ?? null;
 }

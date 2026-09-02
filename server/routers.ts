@@ -6,6 +6,7 @@ import {
   attendanceClassifications,
   attendanceServiceTypes,
   attendanceStatuses,
+  dockStatuses,
   type AppointmentStatus,
   type UserRole,
 } from "../drizzle/schema";
@@ -56,6 +57,8 @@ import {
   deleteAttendanceById,
   listAttendancesByDay,
   listStaffUsers,
+  listDocks,
+  setDockStatus,
   setUserRole,
 } from "./db";
 import { canApplySuggestion, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canTransitionAppointment, isOperator } from "./permissions";
@@ -741,6 +744,30 @@ export const appRouter = router({
         return executeAttendanceAction({ attendanceId: input.attendanceId, action: input.action, operatedById: ctx.user.id });
       }),
   }),
+  // A doca é do pátio: a Portaria abre e fecha porque é ela que vê o
+  // movimento, e a Operação consulta para saber onde encostar. Por isso ler é
+  // de toda a equipe interna e escrever é só da Portaria.
+  docks: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      assertAttendanceViewer(ctx.user.role);
+      return listDocks();
+    }),
+    setStatus: protectedProcedure
+      .input(
+        z.object({
+          number: z.number().int().positive(),
+          status: z.enum(dockStatuses),
+          reason: z.string().trim().max(255).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        assertPortaria(ctx.user.role);
+        const dock = await setDockStatus({ ...input, updatedById: ctx.user.id });
+        if (!dock) throw new TRPCError({ code: "NOT_FOUND", message: "Doca não encontrada." });
+        return dock;
+      }),
+  }),
+
   staff: router({
     list: adminProcedure.query(async () => listStaffUsers()),
     setRole: adminProcedure
