@@ -1,3 +1,4 @@
+import { homePathFor, type PortalRole } from "@/lib/portal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -61,7 +62,7 @@ export default function AdminInvoiceManagement() {
 
   useEffect(() => {
     if (auth.data === null) setLocation("/");
-    else if (auth.data && auth.data.role !== "admin") setLocation("/operador");
+    else if (auth.data && auth.data.role !== "admin") setLocation(homePathFor(auth.data.role as PortalRole));
   }, [auth.data, setLocation]);
 
   if (auth.isLoading) return <LoadingTruck label="Preparando a administração de notas" />;
