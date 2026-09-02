@@ -17,6 +17,7 @@ export type AttendanceClassificationDetail =
   | "rodonaves"
   | "br4"
   | "jamef"
+  | "cliente_retira"
   | "nao_aplicavel";
 export type AttendanceEventType =
   | "chegada_registrada"
@@ -66,6 +67,7 @@ export const classificationDetailCopy: Record<AttendanceClassificationDetail, st
   rodonaves: "Rodonaves",
   br4: "BR4",
   jamef: "Jamef",
+  cliente_retira: "Cliente retira",
   nao_aplicavel: "Não aplicável",
 };
 
@@ -84,7 +86,7 @@ export function classificationDetailsFor(
 ): AttendanceClassificationDetail[] {
   if (classification === "amil") return ["maternidade", "hospital"];
   if (classification === "rvd") {
-    return ["correios", "braspress", "excargo", "rodonaves", "br4", "jamef", "mercado_livre"];
+    return ["correios", "braspress", "excargo", "rodonaves", "br4", "jamef", "mercado_livre", "cliente_retira"];
   }
   return ["nao_aplicavel"];
 }

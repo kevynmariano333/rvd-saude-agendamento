@@ -34,6 +34,7 @@ export const attendanceClassificationDetails = [
   "rodonaves",
   "br4",
   "jamef",
+  "cliente_retira",
   "nao_aplicavel",
 ] as const;
 export const attendanceStatuses = [
@@ -205,7 +206,10 @@ export const attendances = mysqlTable(
     // Um caminhão costuma trazer várias notas do mesmo motorista, então os
     // números ficam em uma lista JSON no próprio protocolo.
     invoiceNumbersJson: text("invoiceNumbersJson"),
-    carrier: varchar("carrier", { length: 160 }).notNull(),
+    // Quem entrega ou de quem se coleta. Na coleta da RVD fica vazio: a
+    // categoria específica já nomeia a transportadora, e repetir o nome num
+    // campo obrigatório só faria o porteiro digitar o que já está na tela.
+    supplierName: varchar("supplierName", { length: 160 }),
     serviceType: mysqlEnum("serviceType", attendanceServiceTypes).notNull(),
     classification: mysqlEnum("classification", attendanceClassifications).notNull(),
     classificationDetail: mysqlEnum("classificationDetail", attendanceClassificationDetails)

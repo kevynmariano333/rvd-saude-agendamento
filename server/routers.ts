@@ -58,6 +58,7 @@ import {
   listStaffUsers,
   setUserRole,
 } from "./db";
+import { supplierNameRule } from "../shared/attendanceFields";
 import { canApplySuggestion, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canTransitionAppointment, isOperator } from "./permissions";
 import { clearRvdSession, createRvdSession } from "./session";
 import { systemRouter } from "./_core/systemRouter";
@@ -690,7 +691,7 @@ export const appRouter = router({
           driverDocument: z.string().trim().max(32).optional(),
           invoiceNumbers: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
           licensePlate: z.string().trim().min(7, "Informe a placa completa.").max(12),
-          carrier: z.string().trim().min(2, "Informe a transportadora.").max(160),
+          supplierName: z.string().trim().max(160).optional(),
           serviceType: z.enum(attendanceServiceTypes),
           classification: z.enum(attendanceClassifications),
           classificationDetail: z.enum(attendanceClassificationDetails),
@@ -702,7 +703,14 @@ export const appRouter = router({
         if (!isValidClassificationDetail(input.classification, input.classificationDetail)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "A categoria informada não corresponde à classificação selecionada." });
         }
-        return createAttendance({ ...input, createdById: ctx.user.id });
+        const supplierRule = supplierNameRule(input.serviceType);
+        if (supplierRule === "obrigatorio" && !input.supplierName) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o fornecedor." });
+        }
+        // Onde o campo não aparece na tela, um valor só chegaria por chamada
+        // forjada — e gravaria um fornecedor que a Portaria nunca digitou.
+        const supplierName = supplierRule === "oculto" ? null : (input.supplierName ?? null);
+        return createAttendance({ ...input, supplierName, createdById: ctx.user.id });
       }),
     // Quem decide o recebimento é a Operação: a Portaria registra a chegada e
     // envia o caminhão para a decisão de quem vai receber a carga.

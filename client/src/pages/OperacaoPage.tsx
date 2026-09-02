@@ -177,7 +177,8 @@ export default function OperacaoPage() {
                     {item.driverName}
                   </p>
                   <p className="mt-0.5 text-sm text-ink-soft">
-                    {item.carrier} — {serviceTypeCopy[item.serviceType]} ·{" "}
+                    {item.supplierName ? `${item.supplierName} — ` : ""}
+                    {serviceTypeCopy[item.serviceType]} ·{" "}
                     {classificationLabel(item.classification, item.classificationDetail)}
                   </p>
                   <p className="mt-0.5 text-xs text-ink-faint">Chegada em {formatArrival(item.arrivalAt)}</p>
@@ -271,7 +272,8 @@ export default function OperacaoPage() {
                   <td>
                     <p className="font-mono text-sm font-bold text-ink">{item.licensePlate}</p>
                     <p className="mt-0.5 text-xs text-ink-soft">
-                      {item.driverName} · {item.carrier}
+                      {item.driverName}
+                      {item.supplierName ? ` · ${item.supplierName}` : ""}
                     </p>
                     <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{item.protocol}</p>
                   </td>

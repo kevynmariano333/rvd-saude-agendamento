@@ -81,7 +81,9 @@ export default function GateDayLogPanel({ isAdmin }: { isAdmin: boolean }) {
                       {item.driverName}
                       {item.driverDocument ? ` · RG ${item.driverDocument}` : ""}
                     </p>
-                    <p className="mt-0.5 text-xs text-ink-faint">{item.carrier}</p>
+                    {item.supplierName && (
+                      <p className="mt-0.5 text-xs text-ink-faint">{item.supplierName}</p>
+                    )}
                   </td>
                   <td>
                     <p className="text-sm font-bold text-ink">{serviceTypeCopy[item.serviceType]}</p>

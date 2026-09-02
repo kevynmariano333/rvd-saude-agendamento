@@ -41,7 +41,7 @@ function GateEntriesPanel() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-faint">Portaria</p>
           <h2 className="mt-1 font-display text-xl font-extrabold text-ink">Entradas de hoje</h2>
-          <p className="mt-1 text-sm text-ink-soft">Fornecedores e transportadoras que deram entrada no portão.</p>
+          <p className="mt-1 text-sm text-ink-soft">Quem deu entrada no portão hoje, por fornecedor ou pela categoria da coleta.</p>
         </div>
         <span className="w-fit rounded-lg bg-canvas px-3 py-1.5 font-display text-lg font-extrabold tabular-nums text-ink">
           {entries.length}
@@ -54,7 +54,7 @@ function GateEntriesPanel() {
           <table className="w-full text-left">
             <thead className="bg-canvas">
               <tr className="[&>th]:px-5 [&>th]:py-3 [&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase [&>th]:tracking-[0.1em] [&>th]:text-ink-faint sm:[&>th]:px-7">
-                <th>Transportadora</th>
+                <th>Fornecedor</th>
                 <th>Caminhão</th>
                 <th>Atendimento</th>
                 <th>Notas</th>
@@ -69,7 +69,9 @@ function GateEntriesPanel() {
                 const stay = stayDuration(item);
                 return (
                   <tr key={item.id} className="align-top [&>td]:px-5 [&>td]:py-4 sm:[&>td]:px-7">
-                    <td className="text-sm font-bold text-ink">{item.carrier}</td>
+                    <td className="text-sm font-bold text-ink">
+                      {item.supplierName ?? classificationLabel(item.classification, item.classificationDetail)}
+                    </td>
                     <td>
                       <p className="font-mono text-sm font-bold text-ink">{item.licensePlate}</p>
                       <p className="mt-0.5 text-xs text-ink-soft">{item.driverName}</p>
