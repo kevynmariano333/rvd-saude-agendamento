@@ -44,12 +44,14 @@ import {
   setUserAccessStatus,
   createPasswordResetToken,
   getPasswordResetToken,
+  getUserById,
   createAttendance,
   decideAttendanceEntry,
   executeAttendanceAction,
   getAttendanceById,
   listAttendanceEvents,
   listAttendances,
+  countActiveAdmins,
   listAttendancesByDay,
   listStaffUsers,
   setUserRole,
@@ -135,6 +137,23 @@ function assertOperacao(role: UserRole) {
 
 function assertAttendanceViewer(role: UserRole) {
   if (!canViewAttendances(role)) throw new TRPCError({ code: "FORBIDDEN", message: "O pátio é restrito às equipes internas." });
+}
+
+/**
+ * Recusa a mudança que deixaria o sistema sem nenhum administrador ativo. Sem
+ * essa checagem, um clique bloqueia o último dono e a única forma de voltar é
+ * abrir o banco na mão.
+ */
+async function assertAnotherAdminRemains(userId: number, removesAdmin: boolean) {
+  if (!removesAdmin) return;
+  const target = await getUserById(userId);
+  if (target?.role !== "admin" || target.accessStatus !== "approved") return;
+  if ((await countActiveAdmins(userId)) === 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Este é o último administrador ativo. Promova outra conta a Administrador antes de bloquear esta.",
+    });
+  }
 }
 
 async function getExistingAttendance(attendanceId: number) {
@@ -703,14 +722,28 @@ export const appRouter = router({
   staff: router({
     list: adminProcedure.query(async () => listStaffUsers()),
     setRole: adminProcedure
-      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["operator", "portaria", "operacao"]) }))
+      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["admin", "operator", "portaria", "operacao"]) }))
       .mutation(async ({ ctx, input }) => {
         // An administrator changing their own role would drop the only account
         // that can hand the role back.
         if (input.userId === ctx.user.id) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode alterar o seu próprio perfil." });
         }
+        await assertAnotherAdminRemains(input.userId, input.role !== "admin");
         await setUserRole({ userId: input.userId, role: input.role });
+        return { success: true } as const;
+      }),
+
+    // Bloquear devolve a conta ao estado de quem não passou pela aprovação: ela
+    // continua no sistema, com o histórico intacto e atribuível, mas não entra.
+    setAccess: adminProcedure
+      .input(z.object({ userId: z.number().int().positive(), allowed: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        await assertAnotherAdminRemains(input.userId, !input.allowed);
+        await setUserAccessStatus({
+          userId: input.userId,
+          accessStatus: input.allowed ? "approved" : "rejected",
+        });
         return { success: true } as const;
       }),
   }),
