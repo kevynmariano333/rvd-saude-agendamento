@@ -1,6 +1,5 @@
 import AttendanceHistoryDialog from "@/components/AttendanceHistoryDialog";
 import AttendanceStatusBadge from "@/components/AttendanceStatusBadge";
-import DockBoard from "@/components/DockBoard";
 import GateDayLogPanel from "@/components/GateDayLogPanel";
 import LoadingTruck from "@/components/LoadingTruck";
 import {
@@ -50,6 +49,13 @@ import PortalLayout from "./PortalLayout";
 /** O que a Portaria ainda tem para fazer no pátio, do aceite até a saída. */
 const yardStatuses: AttendanceStatus[] = ["aprovado", "em_atendimento", "liberado"];
 
+/** A unidade tem duas docas. "Sem doca" existe porque informar é opcional. */
+const dockOptions = [
+  { value: 1 as const, label: "1" },
+  { value: 2 as const, label: "2" },
+  { value: null, label: "Sem doca" },
+];
+
 const emptyForm = {
   driverName: "",
   driverDocument: "",
@@ -74,6 +80,9 @@ export default function PortariaPage() {
   // Um caminhão costuma trazer várias notas do mesmo motorista.
   const [invoiceNumbers, setInvoiceNumbers] = useState<string[]>([""]);
   const [historyFor, setHistoryFor] = useState<{ id: number; protocol: string } | null>(null);
+  // A doca de destino é escolhida por caminhão, porque dois podem estar no
+  // portão ao mesmo tempo. Sem escolha, a entrada é liberada sem doca.
+  const [dockChoice, setDockChoice] = useState<Record<number, 1 | 2 | null>>({});
 
   // A resposta da Operação chega enquanto o caminhão está parado no acesso,
   // então as listas se atualizam sozinhas em vez de depender de recarregar.
@@ -339,8 +348,6 @@ export default function PortariaPage() {
           </form>
         </Panel>
 
-        <DockBoard />
-
         <Panel>
           <PanelHeader
             eyebrow="No portão agora"
@@ -377,18 +384,45 @@ export default function PortariaPage() {
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {item.status === "aprovado" && (
-                      <Button
-                        onClick={() => execute.mutate({ attendanceId: item.id, action: "iniciar" })}
-                        disabled={execute.isPending}
-                        className="h-9 rounded-lg bg-state-go px-3.5 text-xs font-bold text-white hover:bg-state-go/90"
-                      >
-                        <DoorOpen className="size-4" />
-                        Liberar entrada
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold text-ink-soft">Doca:</span>
+                        <div className="flex gap-1 rounded-lg bg-canvas p-1">
+                          {dockOptions.map(option => {
+                            const active = (dockChoice[item.id] ?? null) === option.value;
+                            return (
+                              <button
+                                key={option.label}
+                                type="button"
+                                onClick={() => setDockChoice(current => ({ ...current, [item.id]: option.value }))}
+                                aria-pressed={active}
+                                className={`rounded-md px-2.5 py-1 text-xs font-bold transition ${
+                                  active ? "bg-surface text-rvd-plum shadow-sm" : "text-ink-soft hover:text-ink"
+                                }`}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <Button
+                          onClick={() =>
+                            execute.mutate({
+                              attendanceId: item.id,
+                              action: "iniciar",
+                              dockNumber: dockChoice[item.id] ?? undefined,
+                            })
+                          }
+                          disabled={execute.isPending}
+                          className="h-9 rounded-lg bg-state-go px-3.5 text-xs font-bold text-white hover:bg-state-go/90"
+                        >
+                          <DoorOpen className="size-4" />
+                          Liberar entrada
+                        </Button>
+                      </div>
                     )}
                     {item.status === "em_atendimento" && (
                       <span className="rounded-lg bg-canvas px-3 py-2 text-xs font-bold text-ink-soft">
-                        Na doca com a Operação
+                        {item.dockNumber ? `Na doca ${item.dockNumber} com a Operação` : "Na doca com a Operação"}
                       </span>
                     )}
                     {item.status === "liberado" && (
