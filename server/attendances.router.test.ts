@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   decideAttendanceEntry: vi.fn(),
   executeAttendanceAction: vi.fn(),
   getAttendanceById: vi.fn(),
+  deleteAttendanceById: vi.fn(),
   listAttendanceEvents: vi.fn(),
   listAttendances: vi.fn(),
   listAttendancesByDay: vi.fn(),
@@ -197,6 +198,30 @@ describe("procedures da Operação", () => {
     await expect(
       appRouter.createCaller(context("operacao")).attendances.executeAction({ attendanceId: 1, action: "liberar" })
     ).rejects.toThrow(/não está disponível para o status atual/);
+  });
+
+  // Apagar um protocolo é a saída para um registro de teste ou um lançamento
+  // errado — e é só do administrador, porque leva o histórico junto.
+  it("deixa só o administrador excluir um registro do portão", async () => {
+    mocks.getAttendanceById.mockResolvedValue(attendance({ status: "concluido" }));
+
+    await expect(appRouter.createCaller(context("admin")).attendances.remove({ attendanceId: 1 })).resolves.toEqual({
+      protocol: "PRT-260901-AB12X",
+    });
+    expect(mocks.deleteAttendanceById).toHaveBeenCalledWith(1);
+
+    for (const role of ["portaria", "operacao", "operator", "supplier"] as const) {
+      await expect(appRouter.createCaller(context(role)).attendances.remove({ attendanceId: 1 })).rejects.toThrow();
+    }
+    expect(mocks.deleteAttendanceById).toHaveBeenCalledTimes(1);
+  });
+
+  it("não apaga um protocolo que não existe", async () => {
+    mocks.getAttendanceById.mockResolvedValue(null);
+    await expect(appRouter.createCaller(context("admin")).attendances.remove({ attendanceId: 99 })).rejects.toThrow(
+      /não localizado/i
+    );
+    expect(mocks.deleteAttendanceById).not.toHaveBeenCalled();
   });
 
   it("deixa o administrador atuar nos dois lados", async () => {

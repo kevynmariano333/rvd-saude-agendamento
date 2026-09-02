@@ -963,3 +963,19 @@ export async function countActiveAdmins(exceptUserId?: number) {
     .where(and(eq(users.role, "admin"), eq(users.accessStatus, "approved")));
   return rows.filter(row => row.id !== exceptUserId).length;
 }
+
+export async function updateUserName(input: { userId: number; name: string }) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ name: input.name }).where(eq(users.id, input.userId));
+}
+
+/**
+ * Remove um protocolo do portão. Os eventos do histórico saem junto, por
+ * cascade — o registro não sobrevive ao atendimento que o originou.
+ */
+export async function deleteAttendanceById(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(attendances).where(eq(attendances.id, id));
+}
