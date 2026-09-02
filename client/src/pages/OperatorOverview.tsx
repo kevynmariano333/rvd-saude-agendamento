@@ -1,3 +1,4 @@
+import { homePathFor, isPortalOperator, type PortalRole } from "@/lib/portal";
 import LoadingTruck from "@/components/LoadingTruck";
 import { trpc } from "@/lib/trpc";
 import { CalendarDays, Clock3, PackageCheck, Trophy, UsersRound } from "lucide-react";
@@ -14,9 +15,9 @@ export default function OperatorOverview() {
   const [year, setYear] = useState(() => today.getFullYear());
   const analytics = trpc.analytics.dashboard.useQuery({ month, year });
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
-  useEffect(() => { if (auth.data?.role === "supplier") setLocation("/fornecedor"); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
+  useEffect(() => { if (auth.data && !isPortalOperator(auth.data.role as PortalRole)) setLocation(homePathFor(auth.data.role as PortalRole)); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
   if (auth.isLoading) return <LoadingTruck label="Preparando o dashboard" />;
-  if (!auth.data || auth.data.role === "supplier") return <div className="min-h-screen bg-canvas" />;
+  if (!auth.data || !isPortalOperator(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
   const data = analytics.data;
   const monthName = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(year, month - 1, 1));
   const yearOptions = Array.from({ length: 5 }, (_, index) => today.getFullYear() - 2 + index);

@@ -27,6 +27,14 @@ const mocks = vi.hoisted(() => ({
   listApprovedCompanyUserIds: vi.fn(),
   listPendingAccessRequests: vi.fn(),
   setUserAccessStatus: vi.fn(),
+  createAttendance: vi.fn(),
+  decideAttendanceEntry: vi.fn(),
+  executeAttendanceAction: vi.fn(),
+  getAttendanceById: vi.fn(),
+  listAttendanceEvents: vi.fn(),
+  listAttendances: vi.fn(),
+  listStaffUsers: vi.fn(),
+  setUserRole: vi.fn(),
 }));
 
 vi.mock("./db", () => mocks);
@@ -319,5 +327,70 @@ describe("procedures de agendamento", () => {
     await caller.messages.notifications();
     expect(mocks.markAppointmentMessagesRead).toHaveBeenCalledWith({ appointmentId: 1, userId: 24, isOperator: true });
     expect(mocks.listUnreadAppointmentMessages).toHaveBeenCalledWith({ userId: 24, isOperator: true });
+  });
+});
+
+describe("comprovante de entrega e os perfis de pátio", () => {
+  const scheduledFor = new Date("2030-09-01T13:37:00.000Z");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listApprovedCompanyUserIds.mockResolvedValue([]);
+    mocks.listAppointmentHistory.mockResolvedValue([]);
+    mocks.getAppointmentById.mockResolvedValue({
+      id: 77,
+      supplierId: 12,
+      status: "scheduled",
+      scheduledFor,
+      updatedAt: scheduledFor,
+      invoiceNumber: "NF-5676",
+      invoiceAccessKey: "35200000000000000000000000000000000000000000",
+      recipientCnpj: "12345678000199",
+      invoiceTotalCents: 3977800,
+    });
+  });
+
+  // O comprovante carrega os dados fiscais da nota e um token de validação
+  // assinado. Portaria e Operação não participam do fluxo de agendamento e não
+  // podem emiti-lo para a nota de um fornecedor qualquer.
+  it("recusa a emissão pelos perfis de Portaria e Operação", async () => {
+    for (const role of ["portaria", "operacao"] as const) {
+      await expect(
+        appRouter.createCaller(context(role)).appointments.receiptCertificate({ appointmentId: 77 })
+      ).rejects.toThrow(/não pode emitir este comprovante/);
+    }
+  });
+
+  it("permite a emissão pelo operador de agendamentos", async () => {
+    const result = await appRouter.createCaller(context("operator")).appointments.receiptCertificate({ appointmentId: 77 });
+    expect(result.appointment.invoiceNumber).toBe("NF-5676");
+    expect(typeof result.validationToken).toBe("string");
+  });
+
+  it("permite a emissão pelo fornecedor dono da nota e recusa a de outro", async () => {
+    const owner = { ...user("supplier"), id: 12 };
+    const ownerContext = { ...context("supplier"), user: owner };
+    await expect(appRouter.createCaller(ownerContext).appointments.receiptCertificate({ appointmentId: 77 })).resolves.toMatchObject({
+      appointment: { invoiceNumber: "NF-5676" },
+    });
+
+    const stranger = { ...user("supplier"), id: 999 };
+    const strangerContext = { ...context("supplier"), user: stranger };
+    await expect(
+      appRouter.createCaller(strangerContext).appointments.receiptCertificate({ appointmentId: 77 })
+    ).rejects.toThrow(/não pode emitir este comprovante/);
+  });
+
+  it("mantém os perfis de pátio fora da agenda, do histórico e das mensagens", async () => {
+    mocks.listAppointments.mockResolvedValue([]);
+    const caller = appRouter.createCaller(context("portaria"));
+
+    // A listagem cai no ramo escopado: o filtro leva o próprio id, que nunca é
+    // o supplierId de uma nota.
+    await caller.appointments.list();
+    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ supplierIds: [24] }));
+
+    await expect(caller.appointments.history({ appointmentId: 77 })).rejects.toThrow(/não pode consultar o histórico/);
+    await expect(caller.messages.list({ appointmentId: 77 })).rejects.toThrow(/não pode acessar as mensagens/);
   });
 });

@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { generateReceiptCertificatePdf } from "@/lib/receiptCertificatePdf";
-import { getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, type PortalStatus, formatAppointmentDate, statusCopy } from "@/lib/portal";
+import { getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, type PortalStatus, formatAppointmentDate, statusCopy, homePathFor, type PortalRole } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
 import { CalendarClock, CheckCircle2, ClipboardList, Download, FileText, Lightbulb, MessageSquare, Send, Upload } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -49,7 +49,7 @@ export default function SupplierDashboard() {
   const createManual = trpc.appointments.createManualXml.useMutation({ onSuccess: () => { toast.success("Agendamento enviado para análise."); setXmlFile(null); setXmlInputKey(key => key + 1); setSuggestionDate(""); setSuggestionTime(""); setSuggestionNotes(""); utils.appointments.list.invalidate(); utils.suggestions.list.invalidate(); }, onError: error => toast.error(error.message) });
   const visibleAgenda = useMemo(() => agenda.data?.filter(item => item.status !== "backlog") ?? [], [agenda.data]);
   const summary = useMemo(() => ({ pending: visibleAgenda.filter(item => item.status === "pending").length, scheduled: visibleAgenda.filter(item => item.status === "scheduled").length, received: visibleAgenda.filter(item => item.status === "received").length }), [visibleAgenda]);
-  useEffect(() => { if (auth.data && auth.data.role !== "supplier") setLocation("/operador"); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
+  useEffect(() => { if (auth.data && auth.data.role !== "supplier") setLocation(homePathFor(auth.data.role as PortalRole)); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
   useEffect(() => { const id = Number(new URLSearchParams(window.location.search).get("chat")); const appointment = agenda.data?.find(item => item.id === id); if (appointment) setChatTarget(appointment); }, [agenda.data, location]);
   if (!auth.data || auth.data.role !== "supplier") return <div className="min-h-screen bg-canvas" />;
   async function submit(event: FormEvent) { event.preventDefault(); if (!xmlFile) return toast.error("Selecione o XML da nota fiscal."); if (!xmlFile.name.toLowerCase().endsWith(".xml")) return toast.error("Envie apenas arquivo XML."); if ((suggestionDate && !suggestionTime) || (!suggestionDate && suggestionTime)) return toast.error("Preencha data e hora juntas ou deixe a sugestão em branco."); try { createManual.mutate({ fileName: xmlFile.name, xmlBase64: await readAsBase64(xmlFile), suggestedFor: suggestionDate && suggestionTime ? new Date(`${suggestionDate}T${suggestionTime}:00`).toISOString() : undefined, suggestionNotes: suggestionNotes.trim() || undefined }); } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível preparar o XML."); } }

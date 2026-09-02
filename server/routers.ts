@@ -376,7 +376,12 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
-        if (ctx.user.role === "supplier" && !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
+        // O comprovante entrega os dados fiscais da nota e um token de validação
+        // assinado. Escrito como "quem não é fornecedor pode", o teste liberava
+        // qualquer perfil interno novo — Portaria e Operação não participam
+        // deste fluxo. A regra é a mesma do histórico: a operação de
+        // agendamentos, ou o próprio fornecedor da nota.
+        if (!isOperator(ctx.user.role) && !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode emitir este comprovante." });
         }
         if (appointment.status !== "scheduled") {

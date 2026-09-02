@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, type PortalStatus, formatAppointmentDate, statusCopy } from "@/lib/portal";
+import { getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, type PortalStatus, formatAppointmentDate, statusCopy, homePathFor, isPortalOperator, type PortalRole } from "@/lib/portal";
 import { isScheduledForDate, toggleTodayFilter } from "@/lib/agendaFilters";
 import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardCheck, FileText, Filter, Grid2X2, MessageSquare, RefreshCw, RotateCcw, Search, X } from "lucide-react";
@@ -62,7 +62,7 @@ export default function OperatorDashboard() {
   const schedule = trpc.appointments.schedule.useMutation({ onSuccess: () => { toast.success("Agendamento confirmado."); setSelected(null); setAcceptedSuggestionId(undefined); utils.appointments.list.invalidate(); utils.calendar.list.invalidate(); utils.suggestions.list.invalidate(); }, onError: error => toast.error(error.message) });
   const confirmPreNote = trpc.appointments.confirmPreNote.useMutation({ onSuccess: () => { toast.success("Pré-nota confirmada com sucesso."); setPreNoteTarget(null); utils.appointments.list.invalidate(); }, onError: error => toast.error(error.message) });
 
-  useEffect(() => { if (auth.data?.role === "supplier") setLocation("/fornecedor"); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
+  useEffect(() => { if (auth.data && !isPortalOperator(auth.data.role as PortalRole)) setLocation(homePathFor(auth.data.role as PortalRole)); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
   useEffect(() => {
     const requestedId = Number(new URLSearchParams(window.location.search).get("chat"));
     if (!requestedId) return;
@@ -75,7 +75,7 @@ export default function OperatorDashboard() {
   const isTodayFilterApplied = Boolean(dailyFilterDate);
   const isTomorrowFilterApplied = Boolean(tomorrowFilterDate);
   if (auth.isLoading) return <LoadingTruck label="Preparando a central do operador" />;
-  if (!auth.data || auth.data.role === "supplier") return <div className="min-h-screen bg-canvas" />;
+  if (!auth.data || !isPortalOperator(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
 
   const clearFilters = () => { setDate(""); setDailyFilterDate(null); setTomorrowFilterDate(null); setInvoiceNumber(""); setSupplierName(""); setRecipientCnpj(""); setActiveStatus("all"); };
   const openSchedule = (item: Appointment) => { setSelected(item); setScheduleDate(""); setScheduleTime(""); setAcceptedSuggestionId(undefined); };
