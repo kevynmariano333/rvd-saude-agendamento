@@ -51,7 +51,7 @@ function context(role: User["role"], id = 7): TrpcContext {
 const arrival = {
   driverName: "João da Silva",
   licensePlate: "ABC1D23",
-  carrier: "Transportes Exemplo",
+  supplierName: "Fornecedor Exemplo",
   serviceType: "recebimento" as const,
   classification: "amil" as const,
   classificationDetail: "maternidade" as const,
@@ -440,5 +440,69 @@ describe("doca de destino", () => {
         .attendances.executeAction({ attendanceId: 1, action: "concluir", dockNumber: 1 })
     ).rejects.toThrow(/liberação da entrada/);
     expect(mocks.executeAttendanceAction).not.toHaveBeenCalled();
+  });
+});
+
+// No recebimento alguém entrega e esse nome precisa ficar registrado; na coleta
+// é a RVD que busca, e a classificação já diz de onde.
+describe("fornecedor na chegada", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createAttendance.mockResolvedValue(attendance());
+  });
+
+  it("exige o fornecedor no recebimento", async () => {
+    const caller = appRouter.createCaller(context("portaria"));
+    await expect(caller.attendances.create({ ...arrival, supplierName: undefined })).rejects.toThrow(
+      /Informe o fornecedor/
+    );
+    expect(mocks.createAttendance).not.toHaveBeenCalled();
+
+    await caller.attendances.create(arrival);
+    expect(mocks.createAttendance).toHaveBeenCalledWith(
+      expect.objectContaining({ supplierName: "Fornecedor Exemplo" })
+    );
+  });
+
+  it("dispensa o fornecedor na coleta, em qualquer classificação", async () => {
+    const caller = appRouter.createCaller(context("portaria"));
+    for (const [classification, classificationDetail] of [
+      ["amil", "maternidade"],
+      ["rvd", "braspress"],
+      ["llt", "nao_aplicavel"],
+    ] as const) {
+      await caller.attendances.create({
+        ...arrival,
+        serviceType: "coleta",
+        classification,
+        classificationDetail,
+        supplierName: undefined,
+      });
+    }
+    expect(mocks.createAttendance).toHaveBeenCalledTimes(3);
+  });
+
+  // O campo não existe na tela da coleta, então um nome aqui só chegaria por
+  // chamada forjada — e gravaria um fornecedor que a Portaria nunca digitou.
+  it("descarta o fornecedor enviado numa coleta", async () => {
+    await appRouter.createCaller(context("portaria")).attendances.create({
+      ...arrival,
+      serviceType: "coleta",
+      supplierName: "Enviado à revelia",
+    });
+
+    expect(mocks.createAttendance).toHaveBeenCalledWith(expect.objectContaining({ supplierName: null }));
+  });
+
+  it("aceita a categoria Cliente retira na RVD", async () => {
+    await appRouter.createCaller(context("portaria")).attendances.create({
+      ...arrival,
+      classification: "rvd",
+      classificationDetail: "cliente_retira",
+    });
+
+    expect(mocks.createAttendance).toHaveBeenCalledWith(
+      expect.objectContaining({ classificationDetail: "cliente_retira" })
+    );
   });
 });

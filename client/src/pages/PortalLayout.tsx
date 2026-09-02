@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { isPortalAdmin, isPortalGate, isPortalOperator, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
+import { serviceTypeCopy } from "@/lib/attendance";
 import { trpc } from "@/lib/trpc";
 import {
   BarChart3,
@@ -289,7 +290,7 @@ export default function PortalLayout({
                         <span className="min-w-0">
                           <span className="block font-mono text-xs font-bold text-ink">{request.licensePlate}</span>
                           <span className="mt-0.5 block truncate text-sm text-ink-soft">
-                            {request.carrier} · aguardando aceite
+                            {request.supplierName ?? serviceTypeCopy[request.serviceType]} · aguardando aceite
                           </span>
                           <span className="mt-1 block text-[10px] text-ink-faint">
                             Chegou{" "}

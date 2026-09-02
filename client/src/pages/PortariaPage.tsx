@@ -27,6 +27,7 @@ import {
   type AttendanceStatus,
 } from "@/lib/attendance";
 import { homePathFor, isPortalGate, type PortalRole } from "@/lib/portal";
+import { supplierNameRule } from "@shared/attendanceFields";
 import { trpc } from "@/lib/trpc";
 import {
   ClipboardPlus,
@@ -60,7 +61,7 @@ const emptyForm = {
   driverName: "",
   driverDocument: "",
   licensePlate: "",
-  carrier: "",
+  supplierName: "",
   serviceType: "recebimento" as AttendanceServiceType,
   classification: "amil" as AttendanceClassification,
   classificationDetail: "maternidade" as AttendanceClassificationDetail,
@@ -152,6 +153,7 @@ export default function PortariaPage() {
     const notes = form.notes.trim();
     create.mutate({
       ...form,
+      supplierName: showSupplier ? form.supplierName.trim() : undefined,
       driverDocument: form.driverDocument.trim() || undefined,
       notes: notes || undefined,
       invoiceNumbers: invoiceNumbers.map(item => item.trim()).filter(Boolean),
@@ -159,6 +161,9 @@ export default function PortariaPage() {
   }
 
   const isAdmin = auth.data.role === "admin";
+  // Na coleta é a RVD que busca, e a classificação já diz de onde: o campo do
+  // fornecedor sai da tela em vez de pedir o que já está nela.
+  const showSupplier = supplierNameRule(form.serviceType) === "obrigatorio";
   const metrics = overview.data;
   const pending = waiting.data ?? [];
   const inYard = yard.data ?? [];
@@ -226,17 +231,19 @@ export default function PortariaPage() {
                   className={`${fieldClass} font-mono uppercase tracking-wide`}
                 />
               </FieldShell>
-              <FieldShell label="Transportadora" htmlFor="carrier">
-                <input
-                  id="carrier"
-                  value={form.carrier}
-                  onChange={event => update("carrier", event.target.value)}
-                  placeholder="Empresa do transporte"
-                  required
-                  minLength={2}
-                  className={fieldClass}
-                />
-              </FieldShell>
+              {showSupplier && (
+                <FieldShell label="Fornecedor" htmlFor="supplierName">
+                  <input
+                    id="supplierName"
+                    value={form.supplierName}
+                    onChange={event => update("supplierName", event.target.value)}
+                    placeholder="Quem está entregando"
+                    required
+                    minLength={2}
+                    className={fieldClass}
+                  />
+                </FieldShell>
+              )}
               <FieldShell label="Tipo de atendimento" htmlFor="serviceType">
                 <select
                   id="serviceType"
@@ -379,7 +386,8 @@ export default function PortariaPage() {
                     {item.driverName}
                   </p>
                   <p className="mt-0.5 text-sm text-ink-soft">
-                    {item.carrier} — {serviceTypeCopy[item.serviceType]} ·{" "}
+                    {item.supplierName ? `${item.supplierName} — ` : ""}
+                    {serviceTypeCopy[item.serviceType]} ·{" "}
                     {classificationLabel(item.classification, item.classificationDetail)}
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">

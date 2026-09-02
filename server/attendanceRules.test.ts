@@ -58,6 +58,7 @@ describe("classificações", () => {
       "br4",
       "jamef",
       "mercado_livre",
+      "cliente_retira",
     ]);
     expect(classificationDetailsFor("llt")).toEqual(["nao_aplicavel"]);
   });

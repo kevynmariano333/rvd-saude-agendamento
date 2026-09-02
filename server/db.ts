@@ -819,7 +819,7 @@ export async function createAttendance(input: {
   driverDocument?: string;
   invoiceNumbers?: string[];
   licensePlate: string;
-  carrier: string;
+  supplierName?: string | null;
   serviceType: AttendanceServiceType;
   classification: AttendanceClassification;
   classificationDetail: AttendanceClassificationDetail;
