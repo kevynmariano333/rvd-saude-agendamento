@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import ChangeNameDialog from "../components/ChangeNameDialog";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import { useLocation } from "wouter";
 
@@ -43,6 +44,7 @@ export default function PortalLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [nameOpen, setNameOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [location, setLocation] = useLocation();
   const role = user.role as PortalRole;
@@ -286,10 +288,21 @@ export default function PortalLayout({
               <Button
                 onClick={() => {
                   setProfileOpen(false);
-                  setPasswordOpen(true);
+                  setNameOpen(true);
                 }}
                 variant="ghost"
                 className="w-full justify-start text-ink-soft hover:bg-canvas hover:text-ink"
+              >
+                <UserRound className="size-4" />
+                Alterar nome
+              </Button>
+              <Button
+                onClick={() => {
+                  setProfileOpen(false);
+                  setPasswordOpen(true);
+                }}
+                variant="ghost"
+                className="mt-1 w-full justify-start text-ink-soft hover:bg-canvas hover:text-ink"
               >
                 <KeyRound className="size-4" />
                 Alterar senha
@@ -320,6 +333,7 @@ export default function PortalLayout({
           <div>{children}</div>
         </div>
       </main>
+      <ChangeNameDialog open={nameOpen} onOpenChange={setNameOpen} currentName={user.name ?? ""} />
       <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
     </div>
   );

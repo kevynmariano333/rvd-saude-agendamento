@@ -38,6 +38,7 @@ import {
   touchUserSignIn,
   updateAppointmentStatus,
   consumePasswordResetToken,
+  updateUserName,
   updateUserPassword,
   listApprovedCompanyUserIds,
   listPendingAccessRequests,
@@ -52,6 +53,7 @@ import {
   listAttendanceEvents,
   listAttendances,
   countActiveAdmins,
+  deleteAttendanceById,
   listAttendancesByDay,
   listStaffUsers,
   setUserRole,
@@ -342,6 +344,15 @@ export const appRouter = router({
         // login screen, so possession of the link alone never grants access.
         return { success: true } as const;
       }),
+    // O nome é o que aparece no topo da tela e assina cada evento do histórico,
+    // então quem usa a conta precisa poder corrigi-lo sem depender do admin.
+    updateName: protectedProcedure
+      .input(z.object({ name: z.string().trim().min(2, "Informe o nome.").max(255) }))
+      .mutation(async ({ ctx, input }) => {
+        await updateUserName({ userId: ctx.user.id, name: input.name });
+        return { name: input.name } as const;
+      }),
+
     changePassword: protectedProcedure
       .input(
         z.object({
@@ -704,6 +715,17 @@ export const appRouter = router({
         if (invalid) throw new TRPCError({ code: "BAD_REQUEST", message: invalid });
         return decideAttendanceEntry({ attendanceId: input.attendanceId, decision: input.decision, refusalReason: input.refusalReason, decisionById: ctx.user.id });
       }),
+    // Só o administrador apaga, e o que ele apaga é um registro de teste ou um
+    // lançamento errado — por isso a exclusão é definitiva e leva o histórico
+    // do protocolo junto, em vez de deixar um evento órfão apontando para nada.
+    remove: adminProcedure
+      .input(z.object({ attendanceId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        const attendance = await getExistingAttendance(input.attendanceId);
+        await deleteAttendanceById(attendance.id);
+        return { protocol: attendance.protocol } as const;
+      }),
+
     executeAction: protectedProcedure
       .input(z.object({ attendanceId: z.number().int().positive(), action: z.enum(["iniciar", "liberar", "concluir"]) }))
       .mutation(async ({ ctx, input }) => {

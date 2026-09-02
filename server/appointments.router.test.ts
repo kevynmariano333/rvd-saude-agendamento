@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   listApprovedCompanyUserIds: vi.fn(),
   listPendingAccessRequests: vi.fn(),
   setUserAccessStatus: vi.fn(),
+  updateUserName: vi.fn(),
   createAttendance: vi.fn(),
   decideAttendanceEntry: vi.fn(),
   executeAttendanceAction: vi.fn(),
@@ -392,5 +393,27 @@ describe("comprovante de entrega e os perfis de pátio", () => {
 
     await expect(caller.appointments.history({ appointmentId: 77 })).rejects.toThrow(/não pode consultar o histórico/);
     await expect(caller.messages.list({ appointmentId: 77 })).rejects.toThrow(/não pode acessar as mensagens/);
+  });
+});
+
+describe("nome da conta", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("deixa a pessoa corrigir o próprio nome", async () => {
+    await appRouter.createCaller(context("operator")).auth.updateName({ name: "  Kevyn Mariano  " });
+    expect(mocks.updateUserName).toHaveBeenCalledWith({ userId: 24, name: "Kevyn Mariano" });
+  });
+
+  it("recusa um nome vazio", async () => {
+    await expect(
+      appRouter.createCaller(context("operator")).auth.updateName({ name: " " })
+    ).rejects.toThrow();
+    expect(mocks.updateUserName).not.toHaveBeenCalled();
+  });
+
+  // O nome é do dono da sessão: não há como alterar o de outra conta por aqui.
+  it("altera apenas a conta autenticada", async () => {
+    await appRouter.createCaller(context("supplier")).auth.updateName({ name: "Outro Nome" });
+    expect(mocks.updateUserName).toHaveBeenCalledWith({ userId: 12, name: "Outro Nome" });
   });
 });

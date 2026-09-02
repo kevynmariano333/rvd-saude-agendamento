@@ -1,5 +1,6 @@
 import AttendanceHistoryDialog from "@/components/AttendanceHistoryDialog";
 import AttendanceStatusBadge from "@/components/AttendanceStatusBadge";
+import DeleteAttendanceDialog from "@/components/DeleteAttendanceDialog";
 import LoadingTruck from "@/components/LoadingTruck";
 import {
   DataTable,
@@ -40,6 +41,7 @@ import {
   SendHorizontal,
   ShieldCheck,
   Timer,
+  Trash2,
   Truck,
   X,
   XCircle,
@@ -76,6 +78,11 @@ export default function PortariaPage() {
   // Um caminhão costuma trazer várias notas do mesmo motorista.
   const [invoiceNumbers, setInvoiceNumbers] = useState<string[]>([""]);
   const [historyFor, setHistoryFor] = useState<{ id: number; protocol: string } | null>(null);
+  // Só o administrador apaga, e apaga um registro de teste ou um lançamento
+  // errado — por isso passa por uma confirmação antes.
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; protocol: string; licensePlate: string } | null>(
+    null
+  );
 
   // A resposta da Operação chega enquanto o caminhão está parado no acesso,
   // então as listas se atualizam sozinhas em vez de depender de recarregar.
@@ -151,6 +158,7 @@ export default function PortariaPage() {
     });
   }
 
+  const isAdmin = auth.data.role === "admin";
   const metrics = overview.data;
   const pending = waiting.data ?? [];
   const inYard = yard.data ?? [];
@@ -505,13 +513,27 @@ export default function PortariaPage() {
                       )}
                     </td>
                     <td className="text-right">
-                      <Button
-                        onClick={() => setHistoryFor({ id: item.id, protocol: item.protocol })}
-                        variant="ghost"
-                        className="h-8 rounded-lg px-2.5 text-xs font-bold text-ink-soft hover:text-ink"
-                      >
-                        Histórico
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          onClick={() => setHistoryFor({ id: item.id, protocol: item.protocol })}
+                          variant="ghost"
+                          className="h-8 rounded-lg px-2.5 text-xs font-bold text-ink-soft hover:text-ink"
+                        >
+                          Histórico
+                        </Button>
+                        {isAdmin && (
+                          <Button
+                            onClick={() =>
+                              setDeleteTarget({ id: item.id, protocol: item.protocol, licensePlate: item.licensePlate })
+                            }
+                            variant="ghost"
+                            aria-label={`Excluir registro ${item.protocol}`}
+                            className="h-8 rounded-lg px-2 text-xs font-bold text-ink-faint hover:bg-state-stop-bg hover:text-state-stop"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -535,6 +557,12 @@ export default function PortariaPage() {
           onOpenChange={open => !open && setHistoryFor(null)}
         />
       )}
+
+      <DeleteAttendanceDialog
+        attendance={deleteTarget}
+        onOpenChange={open => !open && setDeleteTarget(null)}
+        onDeleted={refreshBoard}
+      />
     </PortalLayout>
   );
 }
