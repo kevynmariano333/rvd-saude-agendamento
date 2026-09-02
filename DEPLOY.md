@@ -6,10 +6,6 @@ diretamente a partir deste repositório do GitHub. Nenhuma conta ou
 credencial de terceiros pode ser criada por mim — os passos abaixo são para
 você seguir (leva uns 15-20 minutos).
 
-> Para publicar na **Vercel**, siga o `DEPLOY-VERCEL.md`: o repositório já traz
-> `vercel.json` e a função serverless da API. O roteiro abaixo é para um servidor
-> Node sempre ligado, que não tem cold start nem limite de 4,5 MB por requisição.
-
 Stack recomendada (gratuita para começar):
 - **Railway** — hospeda o servidor Node.js e o banco de dados MySQL.
 - **Cloudflare R2** — guarda os arquivos XML das notas fiscais enviados no app.

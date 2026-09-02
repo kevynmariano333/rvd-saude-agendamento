@@ -50,6 +50,7 @@ import {
   getAttendanceById,
   listAttendanceEvents,
   listAttendances,
+  listAttendancesByDay,
   listStaffUsers,
   setUserRole,
 } from "./db";
@@ -69,10 +70,13 @@ import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, re
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { buildDashboardMetrics } from "./dashboardMetrics";
+import { formatSaoPauloDateKey } from "../shared/dateFilters";
 import { buildAttendanceMetrics } from "./attendanceMetrics";
 import {
+  attendanceActionOwner,
   canManageOperation,
   canManagePortaria,
+  canPerformAttendanceAction,
   canViewAttendances,
   isValidClassificationDetail,
   validateEntryDecision,
@@ -130,7 +134,7 @@ function assertOperacao(role: UserRole) {
 }
 
 function assertAttendanceViewer(role: UserRole) {
-  if (!canViewAttendances(role)) throw new TRPCError({ code: "FORBIDDEN", message: "O pátio é restrito às equipes internas." });
+  if (!canViewAttendances(role)) throw new TRPCError({ code: "FORBIDDEN", message: "O pátio é restrito às equipes da Portaria e da Operação." });
 }
 
 async function getExistingAttendance(attendanceId: number) {
@@ -622,6 +626,19 @@ export const appRouter = router({
         assertAttendanceViewer(ctx.user.role);
         return listAttendances(input ?? {});
       }),
+    // O registro do dia é o que a operação de agendamentos consulta para saber
+    // quais fornecedores e transportadoras entraram — por isso é o único ponto
+    // do pátio aberto a ela.
+    dayLog: protectedProcedure
+      .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD.").optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (!canViewAttendances(ctx.user.role) && !isOperator(ctx.user.role)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Registro restrito às equipes internas." });
+        }
+        // O dia corrente é o de São Paulo, e não o do relógio do servidor.
+        return listAttendancesByDay(input?.date ?? formatSaoPauloDateKey());
+      }),
+
     overview: protectedProcedure.query(async ({ ctx }) => {
       assertAttendanceViewer(ctx.user.role);
       return buildAttendanceMetrics(await listAttendances());
@@ -637,6 +654,8 @@ export const appRouter = router({
       .input(
         z.object({
           driverName: z.string().trim().min(3, "Informe o nome do motorista.").max(160),
+          driverDocument: z.string().trim().max(32).optional(),
+          invoiceNumbers: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
           licensePlate: z.string().trim().min(7, "Informe a placa completa.").max(12),
           carrier: z.string().trim().min(2, "Informe a transportadora.").max(160),
           serviceType: z.enum(attendanceServiceTypes),
@@ -652,10 +671,12 @@ export const appRouter = router({
         }
         return createAttendance({ ...input, createdById: ctx.user.id });
       }),
-    decideEntry: protectedProcedure
+    // Quem decide o recebimento é a Operação: a Portaria registra a chegada e
+    // envia o caminhão para a decisão de quem vai receber a carga.
+    decideReceipt: protectedProcedure
       .input(z.object({ attendanceId: z.number().int().positive(), decision: z.enum(["aprovar", "recusar"]), refusalReason: z.string().trim().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        assertPortaria(ctx.user.role);
+        assertOperacao(ctx.user.role);
         const attendance = await getExistingAttendance(input.attendanceId);
         const invalid = validateEntryDecision(attendance.status, input.decision, input.refusalReason);
         if (invalid) throw new TRPCError({ code: "BAD_REQUEST", message: invalid });
@@ -664,7 +685,12 @@ export const appRouter = router({
     executeAction: protectedProcedure
       .input(z.object({ attendanceId: z.number().int().positive(), action: z.enum(["iniciar", "liberar", "concluir"]) }))
       .mutation(async ({ ctx, input }) => {
-        assertOperacao(ctx.user.role);
+        if (!canPerformAttendanceAction(ctx.user.role, input.action)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Esta etapa é da ${attendanceActionOwner[input.action]}.`,
+          });
+        }
         const attendance = await getExistingAttendance(input.attendanceId);
         const invalid = validateOperationalTransition(attendance.status, input.action);
         if (invalid) throw new TRPCError({ code: "BAD_REQUEST", message: invalid });

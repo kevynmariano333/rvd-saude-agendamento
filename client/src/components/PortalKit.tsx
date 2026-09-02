@@ -74,7 +74,9 @@ export function StatCard({
   return (
     <article className="panel p-5">
       <div className="flex items-start justify-between gap-3">
-        <p className="eyebrow max-w-[11rem] leading-4">{label}</p>
+        {/* Duas linhas reservadas sempre: com rótulos de tamanhos diferentes,
+            os números de uma fileira de cartões precisam cair na mesma altura. */}
+        <p className="eyebrow min-h-8 max-w-[13rem] leading-4">{label}</p>
         <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-xl", tones[tone])}>
           <Icon className="size-[18px]" />
         </span>

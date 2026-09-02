@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canManageOperation,
   canManagePortaria,
+  canPerformAttendanceAction,
   canViewAttendances,
   classificationDetailsFor,
   isValidClassificationDetail,
@@ -23,10 +24,13 @@ describe("perfis operacionais", () => {
     expect(canManageOperation("admin")).toBe(true);
   });
 
-  it("mantém o pátio fora do alcance do fornecedor", () => {
-    expect(canViewAttendances("supplier")).toBe(false);
-    expect(canViewAttendances("operator")).toBe(true);
+  it("mantém o pátio com quem trabalha nele", () => {
     expect(canViewAttendances("portaria")).toBe(true);
+    expect(canViewAttendances("operacao")).toBe(true);
+    expect(canViewAttendances("admin")).toBe(true);
+    // Fornecedor e operador de agendamentos têm os seus próprios postos.
+    expect(canViewAttendances("supplier")).toBe(false);
+    expect(canViewAttendances("operator")).toBe(false);
   });
 });
 
@@ -34,16 +38,25 @@ describe("classificações", () => {
   it("aceita somente os subtipos coerentes com cada classificação", () => {
     expect(isValidClassificationDetail("amil", "maternidade")).toBe(true);
     expect(isValidClassificationDetail("amil", "hospital")).toBe(true);
-    expect(isValidClassificationDetail("rvd", "sedex")).toBe(true);
+    expect(isValidClassificationDetail("rvd", "correios")).toBe(true);
+    expect(isValidClassificationDetail("rvd", "jamef")).toBe(true);
     expect(isValidClassificationDetail("rvd", "mercado_livre")).toBe(true);
     expect(isValidClassificationDetail("llt", "nao_aplicavel")).toBe(true);
-    expect(isValidClassificationDetail("amil", "sedex")).toBe(false);
+    expect(isValidClassificationDetail("amil", "correios")).toBe(false);
     expect(isValidClassificationDetail("llt", "hospital")).toBe(false);
   });
 
   it("oferece apenas os subtipos válidos de cada classificação", () => {
     expect(classificationDetailsFor("amil")).toEqual(["maternidade", "hospital"]);
-    expect(classificationDetailsFor("rvd")).toEqual(["sedex", "mercado_livre"]);
+    expect(classificationDetailsFor("rvd")).toEqual([
+      "correios",
+      "braspress",
+      "excargo",
+      "rodonaves",
+      "br4",
+      "jamef",
+      "mercado_livre",
+    ]);
     expect(classificationDetailsFor("llt")).toEqual(["nao_aplicavel"]);
   });
 
@@ -81,8 +94,27 @@ describe("fluxo operacional", () => {
   it("permite somente a sequência iniciar, liberar e concluir", () => {
     expect(validateOperationalTransition("aprovado", "iniciar")).toBeNull();
     expect(validateOperationalTransition("em_atendimento", "liberar")).toBeNull();
-    expect(validateOperationalTransition("em_atendimento", "concluir")).toBeNull();
     expect(validateOperationalTransition("liberado", "concluir")).toBeNull();
+  });
+
+  it("não deixa registrar a saída antes da liberação da doca", () => {
+    expect(validateOperationalTransition("em_atendimento", "concluir")).toBe(
+      "Esta ação não está disponível para o status atual do atendimento."
+    );
+  });
+
+  it("dá cada etapa a quem trabalha nela", () => {
+    // O portão abre a entrada e fecha a saída; a doca fica no meio.
+    expect(canPerformAttendanceAction("portaria", "iniciar")).toBe(true);
+    expect(canPerformAttendanceAction("portaria", "concluir")).toBe(true);
+    expect(canPerformAttendanceAction("portaria", "liberar")).toBe(false);
+    expect(canPerformAttendanceAction("operacao", "liberar")).toBe(true);
+    expect(canPerformAttendanceAction("operacao", "iniciar")).toBe(false);
+    expect(canPerformAttendanceAction("operacao", "concluir")).toBe(false);
+    for (const action of ["iniciar", "liberar", "concluir"] as const) {
+      expect(canPerformAttendanceAction("admin", action)).toBe(true);
+      expect(canPerformAttendanceAction("operator", action)).toBe(false);
+    }
   });
 
   it("bloqueia ações fora da ordem do pátio", () => {

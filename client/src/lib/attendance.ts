@@ -10,8 +10,13 @@ export type AttendanceClassification = "amil" | "llt" | "rvd";
 export type AttendanceClassificationDetail =
   | "maternidade"
   | "hospital"
-  | "sedex"
   | "mercado_livre"
+  | "correios"
+  | "braspress"
+  | "excargo"
+  | "rodonaves"
+  | "br4"
+  | "jamef"
   | "nao_aplicavel";
 export type AttendanceEventType =
   | "chegada_registrada"
@@ -54,8 +59,13 @@ export const classificationCopy: Record<AttendanceClassification, string> = {
 export const classificationDetailCopy: Record<AttendanceClassificationDetail, string> = {
   maternidade: "Maternidade",
   hospital: "Hospital",
-  sedex: "Sedex",
   mercado_livre: "Mercado Livre",
+  correios: "Correios",
+  braspress: "Braspress",
+  excargo: "Excargo",
+  rodonaves: "Rodonaves",
+  br4: "BR4",
+  jamef: "Jamef",
   nao_aplicavel: "Não aplicável",
 };
 
@@ -73,7 +83,9 @@ export function classificationDetailsFor(
   classification: AttendanceClassification
 ): AttendanceClassificationDetail[] {
   if (classification === "amil") return ["maternidade", "hospital"];
-  if (classification === "rvd") return ["sedex", "mercado_livre"];
+  if (classification === "rvd") {
+    return ["correios", "braspress", "excargo", "rodonaves", "br4", "jamef", "mercado_livre"];
+  }
   return ["nao_aplicavel"];
 }
 
@@ -98,6 +110,17 @@ export function formatElapsed(from: Date | string, reference = new Date()) {
   if (hours < 24) return rest ? `${hours}h ${rest}min` : `${hours}h`;
   const days = Math.floor(hours / 24);
   return `${days}d ${hours % 24}h`;
+}
+
+/** As notas do protocolo, guardadas como lista JSON no registro. */
+export function parseInvoiceNumbers(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 export function formatWaitMinutes(totalMinutes: number) {

@@ -1,8 +1,19 @@
 import AttendanceHistoryDialog from "@/components/AttendanceHistoryDialog";
 import AttendanceStatusBadge from "@/components/AttendanceStatusBadge";
 import LoadingTruck from "@/components/LoadingTruck";
-import { DataTable, EmptyState, Panel, PanelBody, PanelHeader, SegmentedControl, StatCard } from "@/components/PortalKit";
+import {
+  DataTable,
+  EmptyState,
+  FieldShell,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  SegmentedControl,
+  StatCard,
+  fieldClass,
+} from "@/components/PortalKit";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   classificationLabel,
   formatArrival,
@@ -11,9 +22,17 @@ import {
   type AttendanceServiceType,
   type AttendanceStatus,
 } from "@/lib/attendance";
-import { isPortalYard, type PortalRole } from "@/lib/portal";
+import { homePathFor, isPortalYard, type PortalRole } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
-import { CircleAlert, PackageCheck, Play, RadioTower, Send, Truck } from "lucide-react";
+import {
+  Inbox,
+  PackageCheck,
+  RadioTower,
+  Send,
+  ShieldCheck,
+  Truck,
+  XCircle,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -21,38 +40,60 @@ import PortalLayout from "./PortalLayout";
 
 type ServiceFilter = "todos" | AttendanceServiceType;
 
-/** O pátio trata o que a Portaria já aprovou e ainda não encerrou. */
+/** O pátio conduz o que já foi aceito e ainda não encerrou. */
 const activeStatuses: AttendanceStatus[] = ["aprovado", "em_atendimento", "liberado"];
 
-const actionCopy = {
-  iniciar: "Atendimento iniciado.",
-  liberar: "Liberação registrada.",
-  concluir: "Atendimento concluído.",
-} as const;
+/** Da doca, a Operação só registra a liberação: o portão é da Portaria. */
+const actionCopy = { liberar: "Liberação registrada. A Portaria pode encerrar a saída." } as const;
 
+/**
+ * Tela da Operação. É aqui que se aceita ou recusa o recebimento enviado pela
+ * Portaria e, uma vez aceito, o caminhão é conduzido até a conclusão.
+ */
 export default function OperacaoPage() {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
   const utils = trpc.useUtils();
   const [filter, setFilter] = useState<ServiceFilter>("todos");
   const [historyFor, setHistoryFor] = useState<{ id: number; protocol: string } | null>(null);
+  const [refusal, setRefusal] = useState<{ id: number; protocol: string; plate: string } | null>(null);
+  const [refusalReason, setRefusalReason] = useState("");
 
+  const incoming = trpc.attendances.list.useQuery({ status: "aguardando" }, { refetchInterval: 15_000 });
   const records = trpc.attendances.list.useQuery({ statuses: activeStatuses }, { refetchInterval: 20_000 });
-  const role = (auth.data?.role ?? "supplier") as PortalRole;
-  const canManage = isPortalYard(role);
+  const overview = trpc.attendances.overview.useQuery(undefined, { refetchInterval: 20_000 });
+
+  const refreshBoard = () => {
+    utils.attendances.list.invalidate();
+    utils.attendances.overview.invalidate();
+  };
+
+  const decide = trpc.attendances.decideReceipt.useMutation({
+    onSuccess: (_, variables) => {
+      toast.success(
+        variables.decision === "aprovar"
+          ? "Recebimento aceito. O caminhão pode entrar."
+          : "Recebimento recusado com o motivo registrado."
+      );
+      setRefusal(null);
+      setRefusalReason("");
+      refreshBoard();
+    },
+    onError: error => toast.error(error.message),
+  });
 
   const execute = trpc.attendances.executeAction.useMutation({
-    onSuccess: (_, variables) => {
-      toast.success(actionCopy[variables.action]);
-      utils.attendances.list.invalidate();
-      utils.attendances.overview.invalidate();
+    onSuccess: () => {
+      toast.success(actionCopy.liberar);
+      refreshBoard();
     },
     onError: error => toast.error(error.message),
   });
 
   useEffect(() => {
     if (auth.data === null) setLocation("/");
-    if (auth.data?.role === "supplier") setLocation("/fornecedor");
+    const current = auth.data?.role as PortalRole | undefined;
+    if (current && !isPortalYard(current)) setLocation(homePathFor(current));
   }, [auth.data, setLocation]);
 
   const all = useMemo(() => records.data ?? [], [records.data]);
@@ -62,40 +103,135 @@ export default function OperacaoPage() {
   );
 
   if (auth.isLoading) return <LoadingTruck label="Abrindo o pátio" />;
-  if (!auth.data || auth.data.role === "supplier") return <div className="min-h-screen bg-canvas" />;
+  if (!auth.data || !isPortalYard(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
 
-  const approved = all.filter(item => item.status === "aprovado").length;
-  const inProgress = all.filter(item => item.status === "em_atendimento").length;
-  const released = all.filter(item => item.status === "liberado").length;
+  const queue = incoming.data ?? [];
+  const metrics = overview.data;
 
   return (
     <PortalLayout
       user={auth.data}
       title="Operação"
-      subtitle="Conduza coletas e recebimentos aprovados até a liberação e a conclusão."
+      subtitle="Aceite ou recuse os recebimentos enviados pela Portaria e libere a doca quando o atendimento terminar."
     >
       <div className="space-y-6">
-        <section className="grid gap-4 sm:grid-cols-3">
-          <StatCard label="Aguardando início" value={approved} hint="Aprovados pela Portaria" icon={Truck} tone="go" />
-          <StatCard label="Em atendimento" value={inProgress} hint="Na doca neste momento" icon={RadioTower} tone="brand" />
-          <StatCard label="Liberados" value={released} hint="Aguardando conclusão" icon={Send} tone="neutral" />
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Aguardando sua decisão" value={queue.length} hint="Enviados pela Portaria" icon={Inbox} tone="wait" />
+          <StatCard
+            label="Aguardando a Portaria"
+            value={all.filter(item => item.status === "aprovado").length}
+            hint="Aceitos, esperando a entrada"
+            icon={Truck}
+            tone="go"
+          />
+          <StatCard
+            label="Em atendimento"
+            value={all.filter(item => item.status === "em_atendimento").length}
+            hint="Na doca neste momento"
+            icon={RadioTower}
+            tone="brand"
+          />
+          <StatCard
+            label="Movimentação de hoje"
+            value={metrics ? metrics.collectionsToday + metrics.receiptsToday : "—"}
+            hint={
+              metrics
+                ? `${metrics.collectionsToday} coleta(s) · ${metrics.receiptsToday} recebimento(s)`
+                : "Chegadas registradas hoje"
+            }
+            icon={PackageCheck}
+            tone="neutral"
+          />
         </section>
 
-        {!canManage && (
-          <div className="flex items-start gap-3 rounded-xl border border-state-wait/30 bg-state-wait-bg px-4 py-3 text-sm text-state-wait">
-            <CircleAlert className="mt-0.5 size-4 shrink-0" />
-            <p>
-              Seu perfil acompanha o pátio, mas não pode iniciar, liberar ou concluir atendimentos. Fale com o
-              administrador para receber o perfil de Operação.
-            </p>
-          </div>
-        )}
+
+        <Panel>
+          <PanelHeader
+            eyebrow="Enviados pela Portaria"
+            title="Aceitar o recebimento"
+            description="Aceitar libera a entrada do caminhão; recusar exige o motivo, que volta para a Portaria."
+            icon={Inbox}
+            actions={
+              <span className="rounded-lg bg-canvas px-3 py-1.5 font-display text-lg font-extrabold tabular-nums text-ink">
+                {queue.length}
+              </span>
+            }
+          />
+          {incoming.isLoading ? (
+            <PanelBody>
+              <p className="text-sm text-ink-soft">Consultando o que a Portaria enviou...</p>
+            </PanelBody>
+          ) : queue.length ? (
+            <ul className="divide-y divide-line">
+              {queue.map(item => (
+                <li key={item.id} className="px-5 py-4 sm:px-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-ink-faint">{item.protocol}</span>
+                    <AttendanceStatusBadge status={item.status} />
+                    <span className="ml-auto text-xs font-bold text-ink-soft">esperando há {formatElapsed(item.arrivalAt)}</span>
+                  </div>
+                  <p className="mt-2 font-display text-lg font-extrabold tracking-tight text-ink">
+                    <span className="font-mono">{item.licensePlate}</span>
+                    <span className="mx-2 text-ink-faint">·</span>
+                    {item.driverName}
+                  </p>
+                  <p className="mt-0.5 text-sm text-ink-soft">
+                    {item.carrier} — {serviceTypeCopy[item.serviceType]} ·{" "}
+                    {classificationLabel(item.classification, item.classificationDetail)}
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-faint">Chegada em {formatArrival(item.arrivalAt)}</p>
+                  {item.notes && (
+                    <p className="mt-2 rounded-lg bg-canvas px-3 py-2 text-sm text-ink-soft">
+                      <span className="font-bold">Da Portaria: </span>
+                      {item.notes}
+                    </p>
+                  )}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button
+                      onClick={() => decide.mutate({ attendanceId: item.id, decision: "aprovar" })}
+                      disabled={decide.isPending}
+                      className="h-9 rounded-lg bg-state-go px-3.5 text-xs font-bold text-white hover:bg-state-go/90"
+                    >
+                      <ShieldCheck className="size-4" />
+                      Aceitar recebimento
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setRefusalReason("");
+                        setRefusal({ id: item.id, protocol: item.protocol, plate: item.licensePlate });
+                      }}
+                      disabled={decide.isPending}
+                      variant="outline"
+                      className="h-9 rounded-lg border-line bg-surface px-3.5 text-xs font-bold text-state-stop hover:bg-state-stop-bg"
+                    >
+                      <XCircle className="size-4" />
+                      Recusar
+                    </Button>
+                    <Button
+                      onClick={() => setHistoryFor({ id: item.id, protocol: item.protocol })}
+                      variant="ghost"
+                      className="h-9 rounded-lg px-3 text-xs font-bold text-ink-soft hover:text-ink"
+                    >
+                      Histórico
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState
+              icon={Inbox}
+              title="Nada aguardando decisão"
+              description="Quando a Portaria registrar uma chegada, ela aparece aqui para você aceitar ou recusar."
+            />
+          )}
+        </Panel>
 
         <Panel>
           <PanelHeader
             eyebrow="Fluxo do pátio"
-            title="Atendimentos ativos"
-            description="Cada caminhão avança na ordem: iniciar, liberar e concluir."
+            title="Atendimentos aceitos"
+            description="A Portaria abre a entrada, a Operação libera a doca e a Portaria fecha a saída."
             icon={PackageCheck}
             actions={
               <SegmentedControl
@@ -104,14 +240,18 @@ export default function OperacaoPage() {
                 options={[
                   { value: "todos", label: "Todos", count: all.length },
                   { value: "coleta", label: "Coletas", count: all.filter(item => item.serviceType === "coleta").length },
-                  { value: "recebimento", label: "Recebimentos", count: all.filter(item => item.serviceType === "recebimento").length },
+                  {
+                    value: "recebimento",
+                    label: "Recebimentos",
+                    count: all.filter(item => item.serviceType === "recebimento").length,
+                  },
                 ]}
               />
             }
           />
           {records.isLoading ? (
             <PanelBody>
-              <p className="text-sm text-ink-soft">Consultando atendimentos aprovados...</p>
+              <p className="text-sm text-ink-soft">Consultando atendimentos aceitos...</p>
             </PanelBody>
           ) : items.length ? (
             <DataTable
@@ -139,6 +279,7 @@ export default function OperacaoPage() {
                     <p className="mt-0.5 text-xs text-ink-soft">
                       {classificationLabel(item.classification, item.classificationDetail)}
                     </p>
+                    {item.notes && <p className="mt-1 max-w-xs text-xs text-ink-faint">Da Portaria: {item.notes}</p>}
                   </td>
                   <td>
                     <p className="text-sm font-bold text-ink">há {formatElapsed(item.arrivalAt)}</p>
@@ -150,35 +291,24 @@ export default function OperacaoPage() {
                   <td>
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       {item.status === "aprovado" && (
-                        <Button
-                          onClick={() => execute.mutate({ attendanceId: item.id, action: "iniciar" })}
-                          disabled={!canManage || execute.isPending}
-                          className="h-9 rounded-lg bg-rvd-plum px-3.5 text-xs font-bold text-white hover:bg-rvd-plum/90"
-                        >
-                          <Play className="size-4" />
-                          Iniciar
-                        </Button>
+                        <span className="rounded-lg bg-canvas px-3 py-2 text-xs font-bold text-ink-soft">
+                          Aguardando a Portaria liberar a entrada
+                        </span>
                       )}
                       {item.status === "em_atendimento" && (
                         <Button
                           onClick={() => execute.mutate({ attendanceId: item.id, action: "liberar" })}
-                          disabled={!canManage || execute.isPending}
+                          disabled={execute.isPending}
                           className="h-9 rounded-lg bg-state-move px-3.5 text-xs font-bold text-white hover:bg-state-move/90"
                         >
                           <Send className="size-4" />
                           Liberar
                         </Button>
                       )}
-                      {(item.status === "liberado" || item.status === "em_atendimento") && (
-                        <Button
-                          onClick={() => execute.mutate({ attendanceId: item.id, action: "concluir" })}
-                          disabled={!canManage || execute.isPending}
-                          variant="outline"
-                          className="h-9 rounded-lg border-line bg-surface px-3.5 text-xs font-bold text-state-go hover:bg-state-go-bg"
-                        >
-                          <PackageCheck className="size-4" />
-                          Concluir
-                        </Button>
+                      {item.status === "liberado" && (
+                        <span className="rounded-lg bg-canvas px-3 py-2 text-xs font-bold text-ink-soft">
+                          Na Portaria para registrar a saída
+                        </span>
                       )}
                       <Button
                         onClick={() => setHistoryFor({ id: item.id, protocol: item.protocol })}
@@ -195,12 +325,56 @@ export default function OperacaoPage() {
           ) : (
             <EmptyState
               icon={PackageCheck}
-              title={filter === "todos" ? "Nenhum atendimento ativo" : "Nenhum atendimento neste filtro"}
-              description="Assim que a Portaria aprovar uma entrada, o caminhão aparece nesta fila para ser conduzido."
+              title={filter === "todos" ? "Nenhum atendimento em curso" : "Nenhum atendimento neste filtro"}
+              description="Assim que você aceitar um recebimento, o caminhão aparece nesta fila para ser conduzido."
             />
           )}
         </Panel>
       </div>
+
+      <Dialog open={Boolean(refusal)} onOpenChange={open => !open && setRefusal(null)}>
+        <DialogContent className="max-w-md rounded-2xl border-line bg-surface">
+          <DialogHeader className="text-left">
+            <p className="eyebrow">Decisão do recebimento</p>
+            <DialogTitle className="font-display text-xl font-extrabold text-ink">Recusar recebimento</DialogTitle>
+            <DialogDescription className="text-sm text-ink-soft">
+              Protocolo {refusal?.protocol} · placa {refusal?.plate}. O motivo volta para a Portaria informar ao
+              motorista e fica no histórico.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={event => {
+              event.preventDefault();
+              if (!refusal) return;
+              decide.mutate({ attendanceId: refusal.id, decision: "recusar", refusalReason });
+            }}
+          >
+            <FieldShell label="Motivo da recusa" htmlFor="refusalReason">
+              <textarea
+                id="refusalReason"
+                value={refusalReason}
+                onChange={event => setRefusalReason(event.target.value)}
+                placeholder="Descreva por que o recebimento não pode ser feito"
+                required
+                maxLength={1000}
+                className={`${fieldClass} min-h-28 resize-y py-2.5`}
+              />
+            </FieldShell>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setRefusal(null)} className="h-10 rounded-xl border-line">
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={decide.isPending || !refusalReason.trim()}
+                className="h-10 rounded-xl bg-state-stop px-4 text-sm font-bold text-white hover:bg-state-stop/90"
+              >
+                {decide.isPending ? "Registrando..." : "Confirmar recusa"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {historyFor && (
         <AttendanceHistoryDialog

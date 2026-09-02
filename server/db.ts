@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull, like, lte, ne, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { nanoid } from "nanoid";
+import { customAlphabet, nanoid } from "nanoid";
 import {
   appointments,
   appointmentMessages,
@@ -737,6 +737,28 @@ export async function listAttendances(filters: AttendanceFilters = {}) {
     .orderBy(desc(attendances.arrivalAt));
 }
 
+/**
+ * Tudo que chegou ao portão em um dia, do que ainda espera ao que já saiu.
+ * É o registro que a Portaria e a operação de agendamentos consultam depois —
+ * a fila de trabalho esvazia, este histórico não.
+ *
+ * O dia é o de São Paulo, não o do relógio do servidor: hospedado em UTC, o
+ * "hoje" viraria às 21h no Brasil e o turno da noite desapareceria do registro
+ * bem quando o porteiro ainda está trabalhando.
+ */
+export async function listAttendancesByDay(dateKey: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const range = getSaoPauloDayRange(dateKey);
+  if (!range) return [];
+
+  return db
+    .select()
+    .from(attendances)
+    .where(and(gte(attendances.arrivalAt, range.start), lte(attendances.arrivalAt, range.end)))
+    .orderBy(desc(attendances.arrivalAt));
+}
+
 export async function getAttendanceById(id: number) {
   const db = await getDb();
   if (!db) return null;
@@ -767,13 +789,18 @@ export async function listAttendanceEvents(attendanceId: number) {
  * pairs the arrival date with a short random tail rather than the row id, which
  * only exists after the insert.
  */
+const PROTOCOL_ALPHABET = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // sem I e O
+
 function createAttendanceProtocol() {
   const now = new Date();
   const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
     .map(part => String(part).padStart(2, "0"))
     .join("")
     .slice(2);
-  return `PRT-${day}-${nanoid(5).toUpperCase()}`;
+  // O sufixo sorteia direto do alfabeto: passar nanoid por toUpperCase
+  // juntaria "a" e "A" no mesmo símbolo e jogaria fora metade da entropia.
+  const suffix = customAlphabet(PROTOCOL_ALPHABET, 8)();
+  return `PRT-${day}-${suffix}`;
 }
 
 async function recordAttendanceEvent(input: {
@@ -789,6 +816,8 @@ async function recordAttendanceEvent(input: {
 
 export async function createAttendance(input: {
   driverName: string;
+  driverDocument?: string;
+  invoiceNumbers?: string[];
   licensePlate: string;
   carrier: string;
   serviceType: AttendanceServiceType;
@@ -800,19 +829,23 @@ export async function createAttendance(input: {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
 
+  const { invoiceNumbers, ...columns } = input;
   const [result] = await db.insert(attendances).values({
-    ...input,
+    ...columns,
     licensePlate: input.licensePlate.toUpperCase().replace(/\s/g, ""),
+    driverDocument: input.driverDocument?.trim() || null,
     notes: input.notes?.trim() || null,
+    invoiceNumbersJson: invoiceNumbers?.length ? JSON.stringify(invoiceNumbers) : null,
     protocol: createAttendanceProtocol(),
   });
   const attendanceId = Number((result as { insertId?: number }).insertId);
   if (!attendanceId) throw new Error("Não foi possível registrar a chegada.");
 
+  const invoiceSummary = invoiceNumbers?.length ? ` Nota(s): ${invoiceNumbers.join(", ")}.` : "";
   await recordAttendanceEvent({
     attendanceId,
     eventType: "chegada_registrada",
-    description: `Chegada registrada na Portaria para ${input.serviceType}.`,
+    description: `Chegada registrada na Portaria e enviada para a Operação decidir o ${input.serviceType}.${invoiceSummary}`,
     performedById: input.createdById,
   });
   return getAttendanceById(attendanceId);
@@ -842,8 +875,8 @@ export async function decideAttendanceEntry(input: {
     attendanceId: input.attendanceId,
     eventType: approved ? "entrada_aprovada" : "entrada_recusada",
     description: approved
-      ? "Entrada aprovada pela Portaria."
-      : `Entrada recusada. Motivo: ${input.refusalReason?.trim()}`,
+      ? "Recebimento aceito pela Operação."
+      : `Recebimento recusado pela Operação. Motivo: ${input.refusalReason?.trim()}`,
     performedById: input.decisionById,
   });
   return getAttendanceById(input.attendanceId);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classificationDetailsFor, classificationLabel, formatElapsed } from "./attendance";
+import { classificationDetailsFor, classificationLabel, formatElapsed, parseInvoiceNumbers } from "./attendance";
 
 describe("rótulos de classificação", () => {
   it("omite o subtipo quando ele não se aplica", () => {
@@ -9,11 +9,20 @@ describe("rótulos de classificação", () => {
   it("combina classificação e subtipo quando existe um", () => {
     expect(classificationLabel("amil", "maternidade")).toBe("AMIL · Maternidade");
     expect(classificationLabel("rvd", "mercado_livre")).toBe("RVD · Mercado Livre");
+    expect(classificationLabel("rvd", "jamef")).toBe("RVD · Jamef");
   });
 
   it("oferece os mesmos subtipos aceitos pelo servidor", () => {
     expect(classificationDetailsFor("amil")).toEqual(["maternidade", "hospital"]);
-    expect(classificationDetailsFor("rvd")).toEqual(["sedex", "mercado_livre"]);
+    expect(classificationDetailsFor("rvd")).toEqual([
+      "correios",
+      "braspress",
+      "excargo",
+      "rodonaves",
+      "br4",
+      "jamef",
+      "mercado_livre",
+    ]);
     expect(classificationDetailsFor("llt")).toEqual(["nao_aplicavel"]);
   });
 });
@@ -36,5 +45,22 @@ describe("tempo na unidade", () => {
 
   it("nunca reporta tempo negativo para uma chegada futura", () => {
     expect(formatElapsed(new Date("2026-09-01T12:30:00.000Z"), reference)).toBe("0 min");
+  });
+});
+
+describe("notas do protocolo", () => {
+  it("lê a lista gravada no registro", () => {
+    expect(parseInvoiceNumbers('["123","456"]')).toEqual(["123", "456"]);
+  });
+
+  it("devolve lista vazia quando não há nota ou o conteúdo está corrompido", () => {
+    expect(parseInvoiceNumbers(null)).toEqual([]);
+    expect(parseInvoiceNumbers("")).toEqual([]);
+    expect(parseInvoiceNumbers("nao-e-json")).toEqual([]);
+    expect(parseInvoiceNumbers('{"a":1}')).toEqual([]);
+  });
+
+  it("descarta entradas que não são texto", () => {
+    expect(parseInvoiceNumbers('["123",7,null,"456"]')).toEqual(["123", "456"]);
   });
 });

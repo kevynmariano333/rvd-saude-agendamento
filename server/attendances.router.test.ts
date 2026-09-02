@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getAttendanceById: vi.fn(),
   listAttendanceEvents: vi.fn(),
   listAttendances: vi.fn(),
+  listAttendancesByDay: vi.fn(),
   listStaffUsers: vi.fn(),
   setUserRole: vi.fn(),
 }));
@@ -17,6 +18,7 @@ vi.mock("./session", () => ({ clearRvdSession: vi.fn(), createRvdSession: vi.fn(
 vi.mock("./storage", () => ({ storagePut: vi.fn() }));
 
 import { appRouter } from "./routers";
+import { formatSaoPauloDateKey } from "../shared/dateFilters";
 import type { TrpcContext } from "./_core/context";
 
 function context(role: User["role"], id = 7): TrpcContext {
@@ -83,39 +85,63 @@ describe("procedures da Portaria", () => {
 
   it("recusa uma categoria que não pertence à classificação", async () => {
     await expect(
-      appRouter.createCaller(context("portaria")).attendances.create({ ...arrival, classificationDetail: "sedex" })
+      appRouter.createCaller(context("portaria")).attendances.create({ ...arrival, classificationDetail: "correios" })
     ).rejects.toThrow(/não corresponde à classificação/);
     expect(mocks.createAttendance).not.toHaveBeenCalled();
   });
 
-  it("exige o motivo para concluir uma recusa", async () => {
+  it("não decide o recebimento: isso é da Operação", async () => {
     const caller = appRouter.createCaller(context("portaria"));
-    await expect(caller.attendances.decideEntry({ attendanceId: 1, decision: "recusar" })).rejects.toThrow(
+    await expect(caller.attendances.decideReceipt({ attendanceId: 1, decision: "aprovar" })).rejects.toThrow(
+      /Operação/
+    );
+    expect(mocks.decideAttendanceEntry).not.toHaveBeenCalled();
+  });
+});
+
+describe("decisão do recebimento pela Operação", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getAttendanceById.mockResolvedValue(attendance());
+    mocks.decideAttendanceEntry.mockResolvedValue(attendance({ status: "aprovado" }));
+  });
+
+  it("aceita o recebimento enviado pela Portaria", async () => {
+    const caller = appRouter.createCaller(context("operacao"));
+    await caller.attendances.decideReceipt({ attendanceId: 1, decision: "aprovar" });
+    expect(mocks.decideAttendanceEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ decision: "aprovar", decisionById: 7 })
+    );
+  });
+
+  it("exige o motivo para concluir uma recusa", async () => {
+    const caller = appRouter.createCaller(context("operacao"));
+    await expect(caller.attendances.decideReceipt({ attendanceId: 1, decision: "recusar" })).rejects.toThrow(
       /motivo da recusa é obrigatório/
     );
     expect(mocks.decideAttendanceEntry).not.toHaveBeenCalled();
   });
 
   it("registra a recusa quando o motivo é informado", async () => {
-    const caller = appRouter.createCaller(context("portaria"));
-    await caller.attendances.decideEntry({ attendanceId: 1, decision: "recusar", refusalReason: "Documento vencido" });
+    const caller = appRouter.createCaller(context("operacao"));
+    await caller.attendances.decideReceipt({ attendanceId: 1, decision: "recusar", refusalReason: "Sem espaço na doca" });
     expect(mocks.decideAttendanceEntry).toHaveBeenCalledWith(
-      expect.objectContaining({ decision: "recusar", refusalReason: "Documento vencido", decisionById: 7 })
+      expect.objectContaining({ decision: "recusar", refusalReason: "Sem espaço na doca", decisionById: 7 })
     );
   });
 
   it("não decide duas vezes o mesmo atendimento", async () => {
     mocks.getAttendanceById.mockResolvedValue(attendance({ status: "aprovado" }));
-    const caller = appRouter.createCaller(context("portaria"));
-    await expect(caller.attendances.decideEntry({ attendanceId: 1, decision: "aprovar" })).rejects.toThrow(
+    const caller = appRouter.createCaller(context("operacao"));
+    await expect(caller.attendances.decideReceipt({ attendanceId: 1, decision: "aprovar" })).rejects.toThrow(
       /aguardando/
     );
   });
 
   it("responde 404 para um protocolo inexistente", async () => {
     mocks.getAttendanceById.mockResolvedValue(null);
-    const caller = appRouter.createCaller(context("portaria"));
-    await expect(caller.attendances.decideEntry({ attendanceId: 99, decision: "aprovar" })).rejects.toThrow(
+    const caller = appRouter.createCaller(context("operacao"));
+    await expect(caller.attendances.decideReceipt({ attendanceId: 99, decision: "aprovar" })).rejects.toThrow(
       /não localizado/
     );
   });
@@ -129,18 +155,39 @@ describe("procedures da Operação", () => {
     mocks.executeAttendanceAction.mockResolvedValue(attendance({ status: "em_atendimento" }));
   });
 
-  it("inicia um atendimento aprovado", async () => {
-    await appRouter.createCaller(context("operacao")).attendances.executeAction({ attendanceId: 1, action: "iniciar" });
+  it("deixa a Portaria abrir a entrada de um recebimento aceito", async () => {
+    await appRouter.createCaller(context("portaria")).attendances.executeAction({ attendanceId: 1, action: "iniciar" });
     expect(mocks.executeAttendanceAction).toHaveBeenCalledWith(
       expect.objectContaining({ action: "iniciar", operatedById: 7 })
     );
   });
 
-  it("impede que a Portaria conduza o pátio", async () => {
+  it("impede a Operação de abrir a entrada — o portão é da Portaria", async () => {
     await expect(
-      appRouter.createCaller(context("portaria")).attendances.executeAction({ attendanceId: 1, action: "iniciar" })
-    ).rejects.toThrow(/Operação/);
+      appRouter.createCaller(context("operacao")).attendances.executeAction({ attendanceId: 1, action: "iniciar" })
+    ).rejects.toThrow(/Portaria/);
     expect(mocks.executeAttendanceAction).not.toHaveBeenCalled();
+  });
+
+  it("deixa a liberação da doca com a Operação", async () => {
+    mocks.getAttendanceById.mockResolvedValue(attendance({ status: "em_atendimento" }));
+    await appRouter.createCaller(context("operacao")).attendances.executeAction({ attendanceId: 1, action: "liberar" });
+    expect(mocks.executeAttendanceAction).toHaveBeenCalledWith(expect.objectContaining({ action: "liberar" }));
+
+    await expect(
+      appRouter.createCaller(context("portaria")).attendances.executeAction({ attendanceId: 1, action: "liberar" })
+    ).rejects.toThrow(/Operação/);
+  });
+
+  it("deixa a saída com a Portaria, e só depois da liberação", async () => {
+    mocks.getAttendanceById.mockResolvedValue(attendance({ status: "liberado" }));
+    await appRouter.createCaller(context("portaria")).attendances.executeAction({ attendanceId: 1, action: "concluir" });
+    expect(mocks.executeAttendanceAction).toHaveBeenCalledWith(expect.objectContaining({ action: "concluir" }));
+
+    mocks.getAttendanceById.mockResolvedValue(attendance({ status: "em_atendimento" }));
+    await expect(
+      appRouter.createCaller(context("portaria")).attendances.executeAction({ attendanceId: 1, action: "concluir" })
+    ).rejects.toThrow(/não está disponível para o status atual/);
   });
 
   it("bloqueia uma ação fora da ordem do fluxo", async () => {
@@ -153,7 +200,7 @@ describe("procedures da Operação", () => {
     const caller = appRouter.createCaller(context("admin"));
     await caller.attendances.executeAction({ attendanceId: 1, action: "iniciar" });
     mocks.getAttendanceById.mockResolvedValue(attendance({ status: "aguardando" }));
-    await caller.attendances.decideEntry({ attendanceId: 1, decision: "aprovar" });
+    await caller.attendances.decideReceipt({ attendanceId: 1, decision: "aprovar" });
     expect(mocks.executeAttendanceAction).toHaveBeenCalled();
     expect(mocks.decideAttendanceEntry).toHaveBeenCalled();
   });
@@ -172,21 +219,67 @@ describe("visibilidade do pátio", () => {
 
   it("mantém o fornecedor fora da fila e do histórico", async () => {
     const caller = appRouter.createCaller(context("supplier", 12));
-    await expect(caller.attendances.list({})).rejects.toThrow(/equipes internas/);
-    await expect(caller.attendances.history({ attendanceId: 1 })).rejects.toThrow(/equipes internas/);
-    await expect(caller.attendances.overview()).rejects.toThrow(/equipes internas/);
+    await expect(caller.attendances.list({})).rejects.toThrow(/Portaria e da Operação/);
+    await expect(caller.attendances.history({ attendanceId: 1 })).rejects.toThrow(/Portaria e da Operação/);
+    await expect(caller.attendances.overview()).rejects.toThrow(/Portaria e da Operação/);
   });
 
-  it("deixa o operador de agendamentos acompanhar sem agir", async () => {
+  // Cada perfil no seu posto: quem cuida de agendamentos tem a própria agenda e
+  // não enxerga o pátio.
+  it("mantém o operador de agendamentos fora do pátio", async () => {
     const caller = appRouter.createCaller(context("operator"));
-    await expect(caller.attendances.list({})).resolves.toHaveLength(2);
+    await expect(caller.attendances.list({})).rejects.toThrow(/Portaria e da Operação/);
+    await expect(caller.attendances.overview()).rejects.toThrow(/Portaria e da Operação/);
     await expect(caller.attendances.create(arrival)).rejects.toThrow(/Portaria/);
-    await expect(caller.attendances.executeAction({ attendanceId: 1, action: "iniciar" })).rejects.toThrow(/Operação/);
+    await expect(caller.attendances.executeAction({ attendanceId: 1, action: "iniciar" })).rejects.toThrow(/Portaria/);
+  });
+
+  it("deixa Portaria, Operação e administrador lerem a fila", async () => {
+    for (const role of ["portaria", "operacao", "admin"] as const) {
+      await expect(appRouter.createCaller(context(role)).attendances.list({})).resolves.toHaveLength(2);
+    }
   });
 
   it("resume a fila em indicadores", async () => {
     const overview = await appRouter.createCaller(context("portaria")).attendances.overview();
     expect(overview).toMatchObject({ awaiting: 1, approved: 1, collections: 1, receipts: 1 });
+  });
+});
+
+describe("registro do dia", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listAttendancesByDay.mockResolvedValue([]);
+  });
+
+  // Hospedado em UTC, um corte pelo relógio do servidor viraria o dia às 21h no
+  // Brasil e o turno da noite sumiria do registro com o porteiro trabalhando.
+  it("usa o dia de São Paulo quando nenhuma data é informada", async () => {
+    await appRouter.createCaller(context("portaria")).attendances.dayLog();
+    const [dateKey] = mocks.listAttendancesByDay.mock.calls[0];
+    expect(dateKey).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(dateKey).toBe(formatSaoPauloDateKey());
+  });
+
+  it("aceita uma data específica no formato do dia", async () => {
+    await appRouter.createCaller(context("portaria")).attendances.dayLog({ date: "2026-08-20" });
+    expect(mocks.listAttendancesByDay).toHaveBeenCalledWith("2026-08-20");
+  });
+
+  it("recusa uma data fora do formato", async () => {
+    await expect(
+      appRouter.createCaller(context("portaria")).attendances.dayLog({ date: "20/08/2026" })
+    ).rejects.toThrow(/AAAA-MM-DD/);
+    expect(mocks.listAttendancesByDay).not.toHaveBeenCalled();
+  });
+
+  // O operador de agendamentos não entra no pátio, mas precisa saber quem
+  // chegou: este é o único ponto do módulo aberto a ele.
+  it("abre o registro para o operador de agendamentos e fecha para o fornecedor", async () => {
+    await expect(appRouter.createCaller(context("operator")).attendances.dayLog()).resolves.toEqual([]);
+    await expect(appRouter.createCaller(context("supplier", 12)).attendances.dayLog()).rejects.toThrow(
+      /equipes internas/
+    );
   });
 });
 

@@ -18,25 +18,29 @@ export function canManageOperation(role: UserRole) {
   return role === "operacao" || role === "admin";
 }
 
+/**
+ * O pátio é da Portaria e da Operação. Quem cuida de agendamentos tem o seu
+ * próprio posto e não entra aqui; o administrador responde por tudo.
+ */
 export function canViewAttendances(role: UserRole) {
-  return role !== "supplier";
+  return role === "portaria" || role === "operacao" || role === "admin";
 }
 
-/** Each classification carries its own subtypes; LLT has none. */
+/** Cada classificação carrega os seus subtipos; a LLT não tem nenhum. */
 export function isValidClassificationDetail(
   classification: AttendanceClassification,
   detail: AttendanceClassificationDetail
 ) {
-  if (classification === "amil") return detail === "maternidade" || detail === "hospital";
-  if (classification === "rvd") return detail === "sedex" || detail === "mercado_livre";
-  return detail === "nao_aplicavel";
+  return classificationDetailsFor(classification).includes(detail);
 }
 
 export function classificationDetailsFor(
   classification: AttendanceClassification
 ): AttendanceClassificationDetail[] {
   if (classification === "amil") return ["maternidade", "hospital"];
-  if (classification === "rvd") return ["sedex", "mercado_livre"];
+  if (classification === "rvd") {
+    return ["correios", "braspress", "excargo", "rodonaves", "br4", "jamef", "mercado_livre"];
+  }
   return ["nao_aplicavel"];
 }
 
@@ -59,14 +63,30 @@ export function validateEntryDecision(
   return null;
 }
 
-export function validateOperationalTransition(
-  currentStatus: AttendanceStatus,
-  action: "iniciar" | "liberar" | "concluir"
-) {
+/**
+ * O caminhão passa pelo portão duas vezes, e as duas são da Portaria: ela abre
+ * a entrada depois que a Operação aceita o recebimento, e fecha o protocolo
+ * quando o caminhão sai. Entre uma coisa e outra, a doca é da Operação.
+ */
+export function canPerformAttendanceAction(role: UserRole, action: AttendanceAction) {
+  return action === "liberar" ? canManageOperation(role) : canManagePortaria(role);
+}
+
+export const attendanceActionOwner: Record<AttendanceAction, "Portaria" | "Operação"> = {
+  iniciar: "Portaria",
+  liberar: "Operação",
+  concluir: "Portaria",
+};
+
+export type AttendanceAction = "iniciar" | "liberar" | "concluir";
+
+export function validateOperationalTransition(currentStatus: AttendanceStatus, action: AttendanceAction) {
+  // A saída só se registra depois que a doca liberou: concluir direto de
+  // "em atendimento" deixaria o protocolo sem a hora da liberação.
   const valid =
     (action === "iniciar" && currentStatus === "aprovado") ||
     (action === "liberar" && currentStatus === "em_atendimento") ||
-    (action === "concluir" && (currentStatus === "em_atendimento" || currentStatus === "liberado"));
+    (action === "concluir" && currentStatus === "liberado");
 
   return valid ? null : "Esta ação não está disponível para o status atual do atendimento.";
 }
