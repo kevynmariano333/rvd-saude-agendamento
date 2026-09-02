@@ -18,6 +18,7 @@ vi.mock("./session", () => ({ clearRvdSession: vi.fn(), createRvdSession: vi.fn(
 vi.mock("./storage", () => ({ storagePut: vi.fn() }));
 
 import { appRouter } from "./routers";
+import { formatSaoPauloDateKey } from "../shared/dateFilters";
 import type { TrpcContext } from "./_core/context";
 
 function context(role: User["role"], id = 7): TrpcContext {
@@ -242,6 +243,43 @@ describe("visibilidade do pátio", () => {
   it("resume a fila em indicadores", async () => {
     const overview = await appRouter.createCaller(context("portaria")).attendances.overview();
     expect(overview).toMatchObject({ awaiting: 1, approved: 1, collections: 1, receipts: 1 });
+  });
+});
+
+describe("registro do dia", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listAttendancesByDay.mockResolvedValue([]);
+  });
+
+  // Hospedado em UTC, um corte pelo relógio do servidor viraria o dia às 21h no
+  // Brasil e o turno da noite sumiria do registro com o porteiro trabalhando.
+  it("usa o dia de São Paulo quando nenhuma data é informada", async () => {
+    await appRouter.createCaller(context("portaria")).attendances.dayLog();
+    const [dateKey] = mocks.listAttendancesByDay.mock.calls[0];
+    expect(dateKey).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(dateKey).toBe(formatSaoPauloDateKey());
+  });
+
+  it("aceita uma data específica no formato do dia", async () => {
+    await appRouter.createCaller(context("portaria")).attendances.dayLog({ date: "2026-08-20" });
+    expect(mocks.listAttendancesByDay).toHaveBeenCalledWith("2026-08-20");
+  });
+
+  it("recusa uma data fora do formato", async () => {
+    await expect(
+      appRouter.createCaller(context("portaria")).attendances.dayLog({ date: "20/08/2026" })
+    ).rejects.toThrow(/AAAA-MM-DD/);
+    expect(mocks.listAttendancesByDay).not.toHaveBeenCalled();
+  });
+
+  // O operador de agendamentos não entra no pátio, mas precisa saber quem
+  // chegou: este é o único ponto do módulo aberto a ele.
+  it("abre o registro para o operador de agendamentos e fecha para o fornecedor", async () => {
+    await expect(appRouter.createCaller(context("operator")).attendances.dayLog()).resolves.toEqual([]);
+    await expect(appRouter.createCaller(context("supplier", 12)).attendances.dayLog()).rejects.toThrow(
+      /equipes internas/
+    );
   });
 });
 

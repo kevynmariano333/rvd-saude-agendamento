@@ -741,19 +741,21 @@ export async function listAttendances(filters: AttendanceFilters = {}) {
  * Tudo que chegou ao portão em um dia, do que ainda espera ao que já saiu.
  * É o registro que a Portaria e a operação de agendamentos consultam depois —
  * a fila de trabalho esvazia, este histórico não.
+ *
+ * O dia é o de São Paulo, não o do relógio do servidor: hospedado em UTC, o
+ * "hoje" viraria às 21h no Brasil e o turno da noite desapareceria do registro
+ * bem quando o porteiro ainda está trabalhando.
  */
-export async function listAttendancesByDay(reference: Date) {
+export async function listAttendancesByDay(dateKey: string) {
   const db = await getDb();
   if (!db) return [];
-  const start = new Date(reference);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+  const range = getSaoPauloDayRange(dateKey);
+  if (!range) return [];
 
   return db
     .select()
     .from(attendances)
-    .where(and(gte(attendances.arrivalAt, start), lte(attendances.arrivalAt, end)))
+    .where(and(gte(attendances.arrivalAt, range.start), lte(attendances.arrivalAt, range.end)))
     .orderBy(desc(attendances.arrivalAt));
 }
 

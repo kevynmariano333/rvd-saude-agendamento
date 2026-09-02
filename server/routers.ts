@@ -70,6 +70,7 @@ import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, re
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { buildDashboardMetrics } from "./dashboardMetrics";
+import { formatSaoPauloDateKey } from "../shared/dateFilters";
 import { buildAttendanceMetrics } from "./attendanceMetrics";
 import {
   attendanceActionOwner,
@@ -624,16 +625,13 @@ export const appRouter = router({
     // quais fornecedores e transportadoras entraram — por isso é o único ponto
     // do pátio aberto a ela.
     dayLog: protectedProcedure
-      .input(z.object({ date: z.string().datetime().optional() }).optional())
+      .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD.").optional() }).optional())
       .query(async ({ ctx, input }) => {
         if (!canViewAttendances(ctx.user.role) && !isOperator(ctx.user.role)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Registro restrito às equipes internas." });
         }
-        const reference = input?.date ? new Date(input.date) : new Date();
-        if (Number.isNaN(reference.getTime())) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Data inválida." });
-        }
-        return listAttendancesByDay(reference);
+        // O dia corrente é o de São Paulo, e não o do relógio do servidor.
+        return listAttendancesByDay(input?.date ?? formatSaoPauloDateKey());
       }),
 
     overview: protectedProcedure.query(async ({ ctx }) => {
