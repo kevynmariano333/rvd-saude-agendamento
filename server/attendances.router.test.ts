@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   executeAttendanceAction: vi.fn(),
   getAttendanceById: vi.fn(),
   deleteAttendanceById: vi.fn(),
+  listDocks: vi.fn(),
+  setDockStatus: vi.fn(),
   listAttendanceEvents: vi.fn(),
   listAttendances: vi.fn(),
   listAttendancesByDay: vi.fn(),
@@ -385,5 +387,49 @@ describe("perfis internos", () => {
       appRouter.createCaller(context("portaria")).staff.setRole({ userId: 31, role: "operacao" })
     ).rejects.toThrow();
     expect(mocks.setUserRole).not.toHaveBeenCalled();
+  });
+});
+
+// A doca é do pátio: a Portaria fecha e abre porque é ela que vê o movimento, e
+// a Operação consulta para saber onde encostar.
+describe("docas", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listDocks.mockResolvedValue([
+      { number: 1, status: "disponivel", reason: null },
+      { number: 2, status: "indisponivel", reason: "carreta parada" },
+    ]);
+    mocks.setDockStatus.mockResolvedValue({ number: 1, status: "indisponivel", reason: "em manutenção" });
+  });
+
+  it("deixa a Portaria fechar e reabrir a doca", async () => {
+    const caller = appRouter.createCaller(context("portaria"));
+    await caller.docks.setStatus({ number: 1, status: "indisponivel", reason: "em manutenção" });
+    expect(mocks.setDockStatus).toHaveBeenCalledWith({
+      number: 1,
+      status: "indisponivel",
+      reason: "em manutenção",
+      updatedById: 7,
+    });
+  });
+
+  it("deixa a Operação apenas consultar", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await expect(caller.docks.list()).resolves.toHaveLength(2);
+    await expect(caller.docks.setStatus({ number: 1, status: "indisponivel" })).rejects.toThrow(/Portaria/);
+    expect(mocks.setDockStatus).not.toHaveBeenCalled();
+  });
+
+  it("mantém o fornecedor fora do quadro das docas", async () => {
+    const caller = appRouter.createCaller(context("supplier", 12));
+    await expect(caller.docks.list()).rejects.toThrow(/equipes/);
+    await expect(caller.docks.setStatus({ number: 1, status: "indisponivel" })).rejects.toThrow();
+  });
+
+  it("recusa uma doca que não existe", async () => {
+    mocks.setDockStatus.mockResolvedValue(null);
+    await expect(
+      appRouter.createCaller(context("portaria")).docks.setStatus({ number: 9, status: "indisponivel" })
+    ).rejects.toThrow(/não encontrada/i);
   });
 });

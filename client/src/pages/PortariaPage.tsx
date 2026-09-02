@@ -1,5 +1,6 @@
 import AttendanceHistoryDialog from "@/components/AttendanceHistoryDialog";
 import AttendanceStatusBadge from "@/components/AttendanceStatusBadge";
+import DockBoard from "@/components/DockBoard";
 import GateDayLogPanel from "@/components/GateDayLogPanel";
 import LoadingTruck from "@/components/LoadingTruck";
 import {
@@ -337,6 +338,8 @@ export default function PortariaPage() {
             </div>
           </form>
         </Panel>
+
+        <DockBoard />
 
         <Panel>
           <PanelHeader
