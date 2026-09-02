@@ -2,7 +2,7 @@ import { EmptyState, Panel, PanelBody, PanelHeader } from "@/components/PortalKi
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { formatCnpj, roleLabel, type PortalRole, homePathFor } from "@/lib/portal";
-import { CheckCircle2, ShieldCheck, UserCheck, UsersRound, X } from "lucide-react";
+import { Ban, CheckCircle2, ShieldCheck, UserCheck, UsersRound, X } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -18,7 +18,7 @@ type PendingRequest = {
 };
 
 /** Perfis internos que o administrador pode atribuir a uma conta já existente. */
-const assignableRoles = ["operator", "portaria", "operacao"] as const;
+const assignableRoles = ["admin", "operator", "portaria"] as const;
 
 export default function AccessRequests() {
   const [, setLocation] = useLocation();
@@ -40,6 +40,14 @@ export default function AccessRequests() {
   const setRole = trpc.staff.setRole.useMutation({
     onSuccess: () => {
       toast.success("Perfil atualizado.");
+      utils.staff.list.invalidate();
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  const setAccess = trpc.staff.setAccess.useMutation({
+    onSuccess: (_result, variables) => {
+      toast.success(variables.allowed ? "Acesso liberado." : "Acesso bloqueado. A conta não entra mais no sistema.");
       utils.staff.list.invalidate();
     },
     onError: error => toast.error(error.message),
@@ -133,7 +141,7 @@ export default function AccessRequests() {
           <PanelHeader
             eyebrow="Equipe interna"
             title="Perfis de acesso"
-            description="Defina quem atua no agendamento, na portaria ou no pátio. O administrador responde por todos."
+            description="Defina o perfil de cada conta e bloqueie quem não deve mais entrar. Uma conta bloqueada continua no histórico, mas não acessa o sistema."
             icon={UsersRound}
           />
           {staff.isLoading ? (
@@ -142,32 +150,32 @@ export default function AccessRequests() {
             </PanelBody>
           ) : team.length ? (
             <ul className="divide-y divide-line">
-              {team.map(member => (
+              {team.map(member => {
+                const blocked = member.accessStatus === "rejected";
+                return (
                 <li key={member.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-ink">{member.name || "Conta sem nome"}</p>
+                    <p className="truncate text-sm font-bold text-ink">
+                      {member.name || "Conta sem nome"}
+                      {member.id === auth.data?.id && <span className="ml-2 text-xs font-bold text-ink-faint">(você)</span>}
+                    </p>
                     <p className="mt-0.5 truncate text-sm text-ink-soft">{member.email || "E-mail não informado"}</p>
                     {member.accessStatus !== "approved" && (
-                      <span className="mt-1.5 inline-flex rounded-full bg-state-wait-bg px-2.5 py-0.5 text-[11px] font-bold text-state-wait">
-                        {member.accessStatus === "pending" ? "Aguardando aprovação" : "Acesso recusado"}
+                      <span className={`mt-1.5 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${blocked ? "bg-state-stop-bg text-state-stop" : "bg-state-wait-bg text-state-wait"}`}>
+                        {member.accessStatus === "pending" ? "Aguardando aprovação" : "Bloqueado — não entra no sistema"}
                       </span>
                     )}
                   </div>
-                  {member.role === "admin" ? (
-                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-rvd-plum-pale/60 px-3 py-1.5 text-xs font-bold text-rvd-plum">
-                      <ShieldCheck className="size-4" />
-                      Acesso total
-                    </span>
-                  ) : (
-                    <div className="flex shrink-0 flex-wrap gap-1 rounded-xl bg-canvas p-1">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap gap-1 rounded-xl bg-canvas p-1">
                       {assignableRoles.map(option => {
                         const active = member.role === option;
                         return (
                           <button
                             key={option}
                             onClick={() => setRole.mutate({ userId: member.id, role: option })}
-                            disabled={setRole.isPending || active}
-                            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                            disabled={setRole.isPending || active || member.id === auth.data?.id}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed ${
                               active ? "bg-surface text-rvd-plum shadow-sm" : "text-ink-soft hover:text-ink"
                             }`}
                           >
@@ -176,9 +184,31 @@ export default function AccessRequests() {
                         );
                       })}
                     </div>
-                  )}
+                    {blocked ? (
+                      <Button
+                        onClick={() => setAccess.mutate({ userId: member.id, allowed: true })}
+                        disabled={setAccess.isPending}
+                        variant="outline"
+                        className="h-9 rounded-xl border-line px-3.5 text-xs font-bold text-state-go hover:bg-state-go-bg"
+                      >
+                        <ShieldCheck className="size-4" />
+                        Liberar
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => setAccess.mutate({ userId: member.id, allowed: false })}
+                        disabled={setAccess.isPending}
+                        variant="outline"
+                        className="h-9 rounded-xl border-line px-3.5 text-xs font-bold text-state-stop hover:bg-state-stop-bg"
+                      >
+                        <Ban className="size-4" />
+                        Bloquear
+                      </Button>
+                    )}
+                  </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           ) : (
             <EmptyState

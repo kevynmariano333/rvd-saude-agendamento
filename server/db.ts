@@ -948,3 +948,18 @@ export async function setUserRole(input: { userId: number; role: UserRole }) {
   if (!db) return;
   await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId));
 }
+
+/**
+ * Quantos administradores ainda conseguem entrar. É o número que impede o
+ * sistema de ficar sem dono: bloquear ou rebaixar o último administrador
+ * fecharia a porta por fora, e a única volta seria mexer direto no banco.
+ */
+export async function countActiveAdmins(exceptUserId?: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.role, "admin"), eq(users.accessStatus, "approved")));
+  return rows.filter(row => row.id !== exceptUserId).length;
+}

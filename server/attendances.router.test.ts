@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   listAttendancesByDay: vi.fn(),
   listStaffUsers: vi.fn(),
   setUserRole: vi.fn(),
+  setUserAccessStatus: vi.fn(),
+  countActiveAdmins: vi.fn(),
+  getUserById: vi.fn(),
 }));
 
 vi.mock("./db", () => mocks);
@@ -289,6 +292,8 @@ describe("perfis internos", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listStaffUsers.mockResolvedValue([]);
+    mocks.countActiveAdmins.mockResolvedValue(1);
+    mocks.getUserById.mockResolvedValue({ id: 31, role: "portaria", accessStatus: "approved" });
   });
 
   it("permite ao administrador mover alguém para a Portaria", async () => {
@@ -301,6 +306,53 @@ describe("perfis internos", () => {
       appRouter.createCaller(context("admin", 7)).staff.setRole({ userId: 7, role: "operacao" })
     ).rejects.toThrow(/próprio perfil/);
     expect(mocks.setUserRole).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia e libera o acesso de uma conta", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 31, role: "portaria", accessStatus: "approved" });
+    const caller = appRouter.createCaller(context("admin"));
+
+    await caller.staff.setAccess({ userId: 31, allowed: false });
+    expect(mocks.setUserAccessStatus).toHaveBeenCalledWith({ userId: 31, accessStatus: "rejected" });
+
+    await caller.staff.setAccess({ userId: 31, allowed: true });
+    expect(mocks.setUserAccessStatus).toHaveBeenCalledWith({ userId: 31, accessStatus: "approved" });
+  });
+
+  // Sem esta trava, um clique tranca o sistema por fora e a única volta é abrir
+  // o banco na mão.
+  it("recusa bloquear o último administrador ativo", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 31, role: "admin", accessStatus: "approved" });
+    mocks.countActiveAdmins.mockResolvedValue(0);
+
+    await expect(
+      appRouter.createCaller(context("admin")).staff.setAccess({ userId: 31, allowed: false })
+    ).rejects.toThrow(/último administrador/);
+    expect(mocks.setUserAccessStatus).not.toHaveBeenCalled();
+  });
+
+  it("deixa bloquear um administrador quando ainda resta outro", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 31, role: "admin", accessStatus: "approved" });
+    mocks.countActiveAdmins.mockResolvedValue(1);
+
+    await appRouter.createCaller(context("admin")).staff.setAccess({ userId: 31, allowed: false });
+    expect(mocks.setUserAccessStatus).toHaveBeenCalledWith({ userId: 31, accessStatus: "rejected" });
+  });
+
+  it("recusa rebaixar o último administrador ativo", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 31, role: "admin", accessStatus: "approved" });
+    mocks.countActiveAdmins.mockResolvedValue(0);
+
+    await expect(
+      appRouter.createCaller(context("admin")).staff.setRole({ userId: 31, role: "portaria" })
+    ).rejects.toThrow(/último administrador/);
+    expect(mocks.setUserRole).not.toHaveBeenCalled();
+  });
+
+  it("promove uma conta a administrador", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 31, role: "portaria", accessStatus: "approved" });
+    await appRouter.createCaller(context("admin")).staff.setRole({ userId: 31, role: "admin" });
+    expect(mocks.setUserRole).toHaveBeenCalledWith({ userId: 31, role: "admin" });
   });
 
   it("mantém a gestão de perfis restrita ao administrador", async () => {
