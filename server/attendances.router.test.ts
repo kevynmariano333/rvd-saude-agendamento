@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   listAttendanceEvents: vi.fn(),
   listAttendances: vi.fn(),
   listAttendancesByDay: vi.fn(),
+  listAttendancesInRange: vi.fn(),
   listStaffUsers: vi.fn(),
   setUserRole: vi.fn(),
   setUserAccessStatus: vi.fn(),
@@ -503,6 +504,44 @@ describe("fornecedor na chegada", () => {
 
     expect(mocks.createAttendance).toHaveBeenCalledWith(
       expect.objectContaining({ classificationDetail: "cliente_retira" })
+    );
+  });
+});
+
+// O histórico geral é a consulta que vira planilha, então o período é dele: sem
+// as duas datas o servidor não sabe o que está sendo pedido.
+describe("histórico do portão por período", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listAttendancesInRange.mockResolvedValue([]);
+  });
+
+  it("consulta o período pedido", async () => {
+    await appRouter.createCaller(context("portaria")).attendances.report({ from: "2026-09-01", to: "2026-09-30" });
+    expect(mocks.listAttendancesInRange).toHaveBeenCalledWith("2026-09-01", "2026-09-30");
+  });
+
+  it("recusa um período de trás para frente", async () => {
+    await expect(
+      appRouter.createCaller(context("portaria")).attendances.report({ from: "2026-09-30", to: "2026-09-01" })
+    ).rejects.toThrow(/data inicial/i);
+    expect(mocks.listAttendancesInRange).not.toHaveBeenCalled();
+  });
+
+  it("recusa uma data fora do formato", async () => {
+    await expect(
+      appRouter.createCaller(context("portaria")).attendances.report({ from: "01/09/2026", to: "2026-09-30" })
+    ).rejects.toThrow();
+    expect(mocks.listAttendancesInRange).not.toHaveBeenCalled();
+  });
+
+  it("abre para as equipes internas e fecha para o fornecedor", async () => {
+    const periodo = { from: "2026-09-01", to: "2026-09-30" };
+    for (const role of ["portaria", "operacao", "operator", "admin"] as const) {
+      await expect(appRouter.createCaller(context(role)).attendances.report(periodo)).resolves.toEqual([]);
+    }
+    await expect(appRouter.createCaller(context("supplier", 12)).attendances.report(periodo)).rejects.toThrow(
+      /equipes/
     );
   });
 });

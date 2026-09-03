@@ -55,6 +55,7 @@ import {
   countActiveAdmins,
   deleteAttendanceById,
   listAttendancesByDay,
+  listAttendancesInRange,
   listStaffUsers,
   setUserRole,
 } from "./db";
@@ -671,6 +672,26 @@ export const appRouter = router({
         }
         // O dia corrente é o de São Paulo, e não o do relógio do servidor.
         return listAttendancesByDay(input?.date ?? formatSaoPauloDateKey());
+      }),
+
+    // O histórico geral é a consulta que a operação leva para a planilha, então
+    // ele pede o período em vez de assumir um: sem as duas datas, a tela não
+    // saberia o que está pedindo e o servidor devolveria o banco inteiro.
+    report: protectedProcedure
+      .input(
+        z.object({
+          from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD."),
+          to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD."),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        if (!canViewAttendances(ctx.user.role) && !isOperator(ctx.user.role)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Histórico restrito às equipes internas." });
+        }
+        if (input.from > input.to) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A data inicial não pode ser depois da final." });
+        }
+        return listAttendancesInRange(input.from, input.to);
       }),
 
     overview: protectedProcedure.query(async ({ ctx }) => {

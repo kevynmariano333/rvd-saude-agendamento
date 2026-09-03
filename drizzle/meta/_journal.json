@@ -155,6 +155,13 @@
       "when": 1788359011034,
       "tag": "0021_wonderful_jack_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1788464015018,
+      "tag": "0022_furry_agent_brand",
+      "breakpoints": true
     }
   ]
 }

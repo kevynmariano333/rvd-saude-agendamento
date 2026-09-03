@@ -1,0 +1,1 @@
+ALTER TABLE `attendances` ADD `enteredAt` datetime;
