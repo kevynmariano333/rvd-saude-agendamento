@@ -901,7 +901,7 @@ export async function executeAttendanceAction(input: {
       description: input.dockNumber
         ? `Entrada liberada pela Portaria para a doca ${input.dockNumber}.`
         : "Entrada liberada pela Portaria, sem doca definida.",
-      patch: input.dockNumber ? { dockNumber: input.dockNumber } : {},
+      patch: input.dockNumber ? { enteredAt: now, dockNumber: input.dockNumber } : { enteredAt: now },
     },
     liberar: {
       status: "liberado" as const,
@@ -984,4 +984,24 @@ export async function deleteAttendanceById(id: number) {
   const db = await getDb();
   if (!db) return;
   await db.delete(attendances).where(eq(attendances.id, id));
+}
+
+/**
+ * O histórico do portão por período. As bordas são as do dia de São Paulo, e
+ * não as do relógio do servidor: um caminhão que chegou às 22h pertence ao dia
+ * em que o porteiro o registrou.
+ */
+export async function listAttendancesInRange(fromDateKey: string, toDateKey: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const from = getSaoPauloDayRange(fromDateKey);
+  const to = getSaoPauloDayRange(toDateKey);
+  // Uma data inválida não pode virar um período aberto que devolve o banco
+  // inteiro: sem as duas bordas, não há consulta.
+  if (!from || !to) return [];
+  return db
+    .select()
+    .from(attendances)
+    .where(and(gte(attendances.arrivalAt, from.start), lte(attendances.arrivalAt, to.end)))
+    .orderBy(desc(attendances.arrivalAt));
 }

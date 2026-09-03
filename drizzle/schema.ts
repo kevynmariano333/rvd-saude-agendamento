@@ -218,6 +218,10 @@ export const attendances = mysqlTable(
     status: mysqlEnum("status", attendanceStatuses).default("aguardando").notNull(),
     arrivalAt: timestamp("arrivalAt").defaultNow().notNull(),
     decisionAt: datetime("decisionAt", { mode: "date" }),
+    // A hora em que a Portaria abriu o portão. Separada da chegada porque entre
+    // as duas está a espera pela decisão da Operação, e é a diferença entre
+    // elas que o histórico precisa mostrar.
+    enteredAt: datetime("enteredAt", { mode: "date" }),
     releasedAt: datetime("releasedAt", { mode: "date" }),
     concludedAt: datetime("concludedAt", { mode: "date" }),
     refusalReason: text("refusalReason"),

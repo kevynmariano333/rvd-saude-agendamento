@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ClipboardList,
   DoorOpen,
+  History,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -86,15 +87,18 @@ export default function PortalLayout({
   ];
   const gateNav: NavItem[] = [{ label: "Portaria", path: "/portaria", icon: DoorOpen }];
   const yardNav: NavItem[] = [{ label: "Operação", path: "/operacao", icon: PackageCheck, badge: releaseCount }];
+  // O histórico do portão é de quem trabalha nele e de quem responde por ele:
+  // a mesma consulta serve o porteiro no fim do turno e o operador no fim do mês.
+  const historyNav: NavItem[] = [{ label: "Histórico", path: "/portaria/historico", icon: History }];
 
   const nav: NavItem[] = isAdmin
-    ? [...schedulingNav, ...gateNav, ...yardNav]
+    ? [...schedulingNav, ...gateNav, ...yardNav, ...historyNav]
     : isOperator
-      ? [...schedulingNav, ...yardNav]
+      ? [...schedulingNav, ...yardNav, ...historyNav]
       : isPortalGate(role)
-        ? gateNav
+        ? [...gateNav, ...historyNav]
         : isPortalYard(role)
-          ? yardNav
+          ? [...yardNav, ...historyNav]
           : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }];
 
   const adminNav: NavItem[] = isAdmin
