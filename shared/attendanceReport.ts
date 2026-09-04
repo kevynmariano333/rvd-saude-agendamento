@@ -79,13 +79,17 @@ export function parseInvoiceNumbers(json: string | null) {
 
 export function toGateReportRow(
   item: GateReportSource,
-  labels: { status: (value: string) => string; serviceType: (value: string) => string; classification: (item: GateReportSource) => string }
+  labels: { status: (value: string) => string; serviceType: (value: string) => string; classification: (item: GateReportSource) => string },
+  // O RG do motorista é dado pessoal e só o administrador o leva na planilha.
+  // Fora disso a coluna não existe, em vez de existir vazia: uma coluna "RG"
+  // em branco convida a preencher à mão o que o portal decidiu não entregar.
+  options: { includeDriverDocument?: boolean } = {}
 ): GateReportRow {
   const stayMinutes = minutesBetween(item.arrivalAt, item.concludedAt);
   const waitMinutes = minutesBetween(item.arrivalAt, item.decisionAt);
   const dockMinutes = minutesBetween(item.enteredAt, item.releasedAt);
 
-  return {
+  const row: GateReportRow = {
     Protocolo: item.protocol,
     Data: reportDate(item.arrivalAt),
     Chegada: reportTime(item.arrivalAt),
@@ -101,16 +105,24 @@ export function toGateReportRow(
     Doca: item.dockNumber ?? "",
     Placa: item.licensePlate,
     Motorista: item.driverName,
-    RG: item.driverDocument ?? "",
     Fornecedor: item.supplierName ?? "",
     Notas: parseInvoiceNumbers(item.invoiceNumbersJson).join(", "),
     "Motivo da recusa": item.refusalReason ?? "",
     Observações: item.notes ?? "",
   };
+
+  if (options.includeDriverDocument) row.RG = item.driverDocument ?? "";
+  return row;
 }
 
 /** A ordem das colunas na planilha, e a largura de cada uma. */
-export const gateReportColumns: { key: string; width: number }[] = [
+export function gateReportColumns(options: { includeDriverDocument?: boolean } = {}) {
+  return options.includeDriverDocument
+    ? [...baseGateReportColumns, { key: "RG", width: 16 }]
+    : baseGateReportColumns;
+}
+
+const baseGateReportColumns: { key: string; width: number }[] = [
   { key: "Protocolo", width: 20 },
   { key: "Data", width: 11 },
   { key: "Chegada", width: 9 },
@@ -126,7 +138,6 @@ export const gateReportColumns: { key: string; width: number }[] = [
   { key: "Doca", width: 6 },
   { key: "Placa", width: 11 },
   { key: "Motorista", width: 26 },
-  { key: "RG", width: 16 },
   { key: "Fornecedor", width: 26 },
   { key: "Notas", width: 24 },
   { key: "Motivo da recusa", width: 34 },

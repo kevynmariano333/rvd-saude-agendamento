@@ -139,6 +139,16 @@ function assertOperacao(role: UserRole) {
   if (!canManageOperation(role)) throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o perfil de Operação pode executar esta ação." });
 }
 
+/**
+ * O RG do motorista é dado pessoal. Ele fica registrado — é o documento
+ * conferido no portão —, mas sai do que o portal devolve para quem não é
+ * administrador. Apagar só na tela não restringe nada: quem abre o inspetor do
+ * navegador lê o JSON igual.
+ */
+function hideDriverDocument<T extends { driverDocument: string | null }>(role: UserRole, rows: T[]) {
+  return role === "admin" ? rows : rows.map(row => ({ ...row, driverDocument: null }));
+}
+
 function assertAttendanceViewer(role: UserRole) {
   if (!canViewAttendances(role)) throw new TRPCError({ code: "FORBIDDEN", message: "O pátio é restrito às equipes internas." });
 }
@@ -659,7 +669,7 @@ export const appRouter = router({
       .input(z.object({ status: z.enum(attendanceStatuses).optional(), statuses: z.array(z.enum(attendanceStatuses)).optional(), serviceType: z.enum(attendanceServiceTypes).optional() }).optional())
       .query(async ({ ctx, input }) => {
         assertAttendanceViewer(ctx.user.role);
-        return listAttendances(input ?? {});
+        return hideDriverDocument(ctx.user.role, await listAttendances(input ?? {}));
       }),
     // O registro do dia é o que a operação de agendamentos consulta para saber
     // quais fornecedores e transportadoras entraram — por isso é o único ponto
@@ -671,7 +681,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Registro restrito às equipes internas." });
         }
         // O dia corrente é o de São Paulo, e não o do relógio do servidor.
-        return listAttendancesByDay(input?.date ?? formatSaoPauloDateKey());
+        return hideDriverDocument(ctx.user.role, await listAttendancesByDay(input?.date ?? formatSaoPauloDateKey()));
       }),
 
     // O histórico geral é a consulta que a operação leva para a planilha, então
@@ -691,7 +701,7 @@ export const appRouter = router({
         if (input.from > input.to) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "A data inicial não pode ser depois da final." });
         }
-        return listAttendancesInRange(input.from, input.to);
+        return hideDriverDocument(ctx.user.role, await listAttendancesInRange(input.from, input.to));
       }),
 
     overview: protectedProcedure.query(async ({ ctx }) => {

@@ -19,6 +19,7 @@ import {
   classificationLabel,
   formatArrival,
   formatElapsed,
+  parseInvoiceNumbers,
   serviceTypeCopy,
   type AttendanceServiceType,
   type AttendanceStatus,
@@ -182,6 +183,25 @@ export default function OperacaoPage() {
                     {classificationLabel(item.classification, item.classificationDetail)}
                   </p>
                   <p className="mt-0.5 text-xs text-ink-faint">Chegada em {formatArrival(item.arrivalAt)}</p>
+                  {(() => {
+                    const invoices = parseInvoiceNumbers(item.invoiceNumbersJson);
+                    if (!invoices.length) return null;
+                    return (
+                      <p className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
+                          {invoices.length > 1 ? "Notas" : "Nota"}
+                        </span>
+                        {invoices.map(invoice => (
+                          <span
+                            key={invoice}
+                            className="rounded-md bg-rvd-plum-pale/50 px-2 py-0.5 font-mono text-xs font-bold text-rvd-plum"
+                          >
+                            {invoice}
+                          </span>
+                        ))}
+                      </p>
+                    );
+                  })()}
                   {item.notes && (
                     <p className="mt-2 rounded-lg bg-canvas px-3 py-2 text-sm text-ink-soft">
                       <span className="font-bold">Da Portaria: </span>
@@ -276,6 +296,15 @@ export default function OperacaoPage() {
                       {item.supplierName ? ` · ${item.supplierName}` : ""}
                     </p>
                     <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{item.protocol}</p>
+                    {(() => {
+                      const invoices = parseInvoiceNumbers(item.invoiceNumbersJson);
+                      if (!invoices.length) return null;
+                      return (
+                        <p className="mt-1 font-mono text-xs font-bold text-rvd-plum">
+                          NF {invoices.join(", ")}
+                        </p>
+                      );
+                    })()}
                   </td>
                   <td>
                     <p className="text-sm font-bold text-ink">{serviceTypeCopy[item.serviceType]}</p>
