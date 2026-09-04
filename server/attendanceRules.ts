@@ -41,7 +41,17 @@ export function classificationDetailsFor(
 ): AttendanceClassificationDetail[] {
   if (classification === "amil") return ["maternidade", "hospital"];
   if (classification === "rvd") {
-    return ["correios", "braspress", "excargo", "rodonaves", "br4", "jamef", "mercado_livre", "cliente_retira"];
+    return [
+      "correios",
+      "braspress",
+      "excargo",
+      "rodonaves",
+      "br4",
+      "jamef",
+      "dibpel",
+      "mercado_livre",
+      "cliente_retira",
+    ];
   }
   return ["nao_aplicavel"];
 }

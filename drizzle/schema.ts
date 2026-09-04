@@ -35,6 +35,7 @@ export const attendanceClassificationDetails = [
   "br4",
   "jamef",
   "cliente_retira",
+  "dibpel",
   "nao_aplicavel",
 ] as const;
 export const attendanceStatuses = [

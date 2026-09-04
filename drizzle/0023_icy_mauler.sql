@@ -1,0 +1,1 @@
+ALTER TABLE `attendances` MODIFY COLUMN `classificationDetail` enum('maternidade','hospital','mercado_livre','correios','braspress','excargo','rodonaves','br4','jamef','cliente_retira','dibpel','nao_aplicavel') NOT NULL DEFAULT 'nao_aplicavel';

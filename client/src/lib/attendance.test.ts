@@ -21,6 +21,7 @@ describe("rótulos de classificação", () => {
       "rodonaves",
       "br4",
       "jamef",
+      "dibpel",
       "mercado_livre",
       "cliente_retira",
     ]);
