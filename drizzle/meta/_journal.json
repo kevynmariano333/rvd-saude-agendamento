@@ -162,6 +162,13 @@
       "when": 1788464015018,
       "tag": "0022_furry_agent_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1788555562993,
+      "tag": "0023_icy_mauler",
+      "breakpoints": true
     }
   ]
 }

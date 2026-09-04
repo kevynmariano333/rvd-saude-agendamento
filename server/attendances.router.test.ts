@@ -495,6 +495,31 @@ describe("fornecedor na chegada", () => {
     expect(mocks.createAttendance).toHaveBeenCalledWith(expect.objectContaining({ supplierName: null }));
   });
 
+  it("aceita a categoria DIBPEL na RVD", async () => {
+    await appRouter.createCaller(context("portaria")).attendances.create({
+      ...arrival,
+      classification: "rvd",
+      classificationDetail: "dibpel",
+    });
+
+    expect(mocks.createAttendance).toHaveBeenCalledWith(
+      expect.objectContaining({ classificationDetail: "dibpel" })
+    );
+  });
+
+  // A categoria pertence a uma classificação só: DIBPEL é da RVD, e aceitá-la
+  // na AMIL deixaria o relatório com uma categoria que não existe naquela conta.
+  it("recusa DIBPEL fora da RVD", async () => {
+    await expect(
+      appRouter.createCaller(context("portaria")).attendances.create({
+        ...arrival,
+        classification: "amil",
+        classificationDetail: "dibpel",
+      })
+    ).rejects.toThrow(/não corresponde à classificação/);
+    expect(mocks.createAttendance).not.toHaveBeenCalled();
+  });
+
   it("aceita a categoria Cliente retira na RVD", async () => {
     await appRouter.createCaller(context("portaria")).attendances.create({
       ...arrival,
