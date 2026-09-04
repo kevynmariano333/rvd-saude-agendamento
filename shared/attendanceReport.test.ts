@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatMinutes, minutesBetween, reportDate, reportTime, toGateReportRow } from "./attendanceReport";
+import {
+  formatMinutes,
+  gateReportColumns,
+  minutesBetween,
+  reportDate,
+  reportTime,
+  toGateReportRow,
+} from "./attendanceReport";
 
 const labels = {
   status: (value: string) => ({ concluido: "Concluído", aguardando: "Aguardando" })[value] ?? value,
@@ -74,11 +81,22 @@ describe("linhas do histórico do portão", () => {
   });
 
   it("não inventa campo que o atendimento não tem", () => {
-    const row = toGateReportRow(source({ supplierName: null, driverDocument: null, dockNumber: null }), labels);
+    const row = toGateReportRow(source({ supplierName: null, dockNumber: null }), labels, {
+      includeDriverDocument: true,
+    });
 
     expect(row.Fornecedor).toBe("");
-    expect(row.RG).toBe("");
     expect(row.Doca).toBe("");
+  });
+
+  // O RG é dado pessoal: fora da planilha do administrador a coluna não
+  // existe, em vez de existir vazia — uma coluna "RG" em branco convida a
+  // preencher à mão o que o portal decidiu não entregar.
+  it("leva o RG só quando quem exporta pode vê-lo", () => {
+    expect(toGateReportRow(source(), labels)).not.toHaveProperty("RG");
+    expect(toGateReportRow(source(), labels, { includeDriverDocument: true }).RG).toBe("12.345.678-9");
+    expect(gateReportColumns().some(column => column.key === "RG")).toBe(false);
+    expect(gateReportColumns({ includeDriverDocument: true }).some(column => column.key === "RG")).toBe(true);
   });
 });
 

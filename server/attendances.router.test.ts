@@ -545,3 +545,45 @@ describe("histórico do portão por período", () => {
     );
   });
 });
+
+// O RG do motorista é dado pessoal: fica registrado, mas o portal só o entrega
+// ao administrador. Apagar na tela e mandar no JSON não restringe nada.
+describe("RG do motorista", () => {
+  const withDocument = [
+    { ...attendance({ status: "concluido" }), driverName: "João da Silva", driverDocument: "12.345.678-9" },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listAttendances.mockResolvedValue(withDocument);
+    mocks.listAttendancesByDay.mockResolvedValue(withDocument);
+    mocks.listAttendancesInRange.mockResolvedValue(withDocument);
+  });
+
+  it("entrega o RG ao administrador", async () => {
+    const caller = appRouter.createCaller(context("admin"));
+    expect((await caller.attendances.list({}))[0].driverDocument).toBe("12.345.678-9");
+    expect((await caller.attendances.dayLog())[0].driverDocument).toBe("12.345.678-9");
+    const report = await caller.attendances.report({ from: "2026-09-01", to: "2026-09-30" });
+    expect(report[0].driverDocument).toBe("12.345.678-9");
+  });
+
+  it("não entrega o RG a mais ninguém, em nenhuma das consultas", async () => {
+    for (const role of ["portaria", "operacao", "operator"] as const) {
+      const caller = appRouter.createCaller(context(role));
+      expect((await caller.attendances.list({}))[0].driverDocument).toBeNull();
+      expect((await caller.attendances.dayLog())[0].driverDocument).toBeNull();
+      const report = await caller.attendances.report({ from: "2026-09-01", to: "2026-09-30" });
+      expect(report[0].driverDocument).toBeNull();
+    }
+  });
+
+  // Esconder o RG não pode custar o resto da linha: o portão continua
+  // precisando da placa, do motorista e do protocolo.
+  it("mantém o resto do atendimento intacto", async () => {
+    const [row] = await appRouter.createCaller(context("portaria")).attendances.dayLog();
+    expect(row.driverName).toBe("João da Silva");
+    expect(row.protocol).toBe("PRT-260901-AB12X");
+    expect(row.status).toBe("concluido");
+  });
+});

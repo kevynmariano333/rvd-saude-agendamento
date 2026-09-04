@@ -102,15 +102,22 @@ export default function GateHistoryPage() {
 
   function exportExcel() {
     if (!rows.length) return toast.error("Nenhum atendimento no filtro para exportar.");
+    // O RG do motorista é dado pessoal: só a planilha do administrador o leva.
+    const includeDriverDocument = auth.data?.role === "admin";
+    const columns = gateReportColumns({ includeDriverDocument });
     const sheetRows = rows.map(item =>
-      toGateReportRow(item as GateReportSource, {
-        status: value => attendanceStatusCopy[value as AttendanceStatus] ?? value,
-        serviceType: value => serviceTypeCopy[value as keyof typeof serviceTypeCopy] ?? value,
-        classification: source => classificationLabel(source.classification, source.classificationDetail as never),
-      })
+      toGateReportRow(
+        item as GateReportSource,
+        {
+          status: value => attendanceStatusCopy[value as AttendanceStatus] ?? value,
+          serviceType: value => serviceTypeCopy[value as keyof typeof serviceTypeCopy] ?? value,
+          classification: source => classificationLabel(source.classification, source.classificationDetail as never),
+        },
+        { includeDriverDocument }
+      )
     );
-    const worksheet = XLSX.utils.json_to_sheet(sheetRows, { header: gateReportColumns.map(column => column.key) });
-    worksheet["!cols"] = gateReportColumns.map(column => ({ wch: column.width }));
+    const worksheet = XLSX.utils.json_to_sheet(sheetRows, { header: columns.map(column => column.key) });
+    worksheet["!cols"] = columns.map(column => ({ wch: column.width }));
     // Congelar o cabeçalho: a planilha do portão passa de cem linhas rápido.
     worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
     const workbook = XLSX.utils.book_new();
