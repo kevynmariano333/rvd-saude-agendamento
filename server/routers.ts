@@ -827,7 +827,7 @@ export const appRouter = router({
       }),
   }),
   analytics: router({
-    dashboard: protectedProcedure.input(z.object({ month: z.number().int().min(1).max(12), year: z.number().int().min(2020).max(2100) })).query(async ({ ctx, input }) => {
+    dashboard: protectedProcedure.input(z.object({ month: z.number().int().min(1).max(12), year: z.number().int().min(2020).max(2100), day: z.number().int().min(1).max(31).optional() })).query(async ({ ctx, input }) => {
       assertOperator(ctx.user.role);
       const items = (await listAppointments()).filter(item => item.status !== "backlog");
       return buildDashboardMetrics(items, input);
