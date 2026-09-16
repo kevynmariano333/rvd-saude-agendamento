@@ -15,8 +15,11 @@ import {
   LogOut,
   Menu,
   MessageCircle,
+  MonitorSmartphone,
+  Moon,
   PackageCheck,
   ShieldCheck,
+  Sun,
   Truck,
   type LucideIcon,
   UserCheck,
@@ -25,9 +28,17 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTheme, type ThemeChoice } from "../contexts/ThemeContext";
 import ChangeNameDialog from "../components/ChangeNameDialog";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import { useLocation } from "wouter";
+
+/** Claro, escuro, ou acompanhar o aparelho. */
+const themeOptions: { value: ThemeChoice; label: string; icon: LucideIcon }[] = [
+  { value: "claro", label: "Claro", icon: Sun },
+  { value: "escuro", label: "Escuro", icon: Moon },
+  { value: "sistema", label: "Sistema", icon: MonitorSmartphone },
+];
 
 type PortalUser = { id: number; name: string | null; email: string | null; role: string };
 
@@ -49,6 +60,7 @@ export default function PortalLayout({
   children: React.ReactNode;
   onLogout?: () => void;
 }) {
+  const { choice, setChoice } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -377,6 +389,29 @@ export default function PortalLayout({
                 })}
               </div>
             )}
+            <div className="mt-4 border-t border-line pt-3">
+              <p className="eyebrow">Tema</p>
+              <div className="mt-2 flex gap-1 rounded-xl bg-canvas p-1">
+                {themeOptions.map(option => {
+                  const Icon = option.icon;
+                  const active = choice === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => setChoice(option.value)}
+                      aria-pressed={active}
+                      title={option.label}
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-bold transition ${
+                        active ? "bg-surface text-rvd-plum shadow-sm" : "text-ink-soft hover:text-ink"
+                      }`}
+                    >
+                      <Icon className="size-3.5" />
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <div className="mt-4 border-t border-line pt-3">
               <Button
                 onClick={() => {
