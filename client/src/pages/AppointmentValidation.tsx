@@ -20,7 +20,7 @@ export default function AppointmentValidation() {
           <div><p className="text-lg font-extrabold">RVD Saúde</p><p className="text-sm font-medium text-ink-soft">Validação de agendamento</p></div>
         </div>
         <Card className="overflow-hidden border-line bg-surface shadow-xl shadow-rvd-plum/10">
-          <div className={`h-2 ${isValid ? "bg-emerald-500" : "bg-rvd-plum"}`} />
+          <div className={`h-2 ${isValid ? "bg-emerald-500" : "bg-brand"}`} />
           <CardContent className="p-7 sm:p-9">
             {confirmation.isLoading ? <div className="flex min-h-64 flex-col items-center justify-center gap-4 text-center"><Loader2 className="size-10 animate-spin text-rvd-plum" /><p className="font-semibold">Validando o comprovante...</p></div> : isValid ? <>
               <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-state-go-bg text-state-go"><CheckCircle2 className="size-10" /></div>

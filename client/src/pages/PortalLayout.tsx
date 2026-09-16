@@ -217,7 +217,7 @@ export default function PortalLayout({
               {alertCount > 0 && (
                 <span
                   className={`absolute -right-0.5 -top-0.5 flex size-4.5 min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-extrabold text-white ${
-                    releaseCount > 0 ? "bg-state-stop" : "bg-rvd-plum"
+                    releaseCount > 0 ? "bg-state-stop" : "bg-brand"
                   }`}
                 >
                   {alertCount > 9 ? "9+" : alertCount}
@@ -256,7 +256,7 @@ export default function PortalLayout({
                     key={item.path}
                     onClick={() => go(item.path)}
                     className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold ${
-                      active ? "bg-rvd-plum text-white" : "bg-canvas text-ink-soft"
+                      active ? "bg-brand text-white" : "bg-canvas text-ink-soft"
                     }`}
                   >
                     <Icon className="size-4" />

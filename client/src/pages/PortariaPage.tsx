@@ -346,7 +346,7 @@ export default function PortariaPage() {
               <Button
                 type="submit"
                 disabled={create.isPending}
-                className="h-11 rounded-xl bg-rvd-plum px-5 text-sm font-bold text-white hover:bg-rvd-plum/90"
+                className="h-11 rounded-xl bg-brand px-5 text-sm font-bold text-white hover:bg-brand/90"
               >
                 <SendHorizontal className="size-4" />
                 {create.isPending ? "Enviando..." : "Enviar para a Operação"}
@@ -437,7 +437,7 @@ export default function PortariaPage() {
                       <Button
                         onClick={() => execute.mutate({ attendanceId: item.id, action: "concluir" })}
                         disabled={execute.isPending}
-                        className="h-9 rounded-lg bg-rvd-plum px-3.5 text-xs font-bold text-white hover:bg-rvd-plum/90"
+                        className="h-9 rounded-lg bg-brand px-3.5 text-xs font-bold text-white hover:bg-brand/90"
                       >
                         <LogOut className="size-4" />
                         Registrar saída

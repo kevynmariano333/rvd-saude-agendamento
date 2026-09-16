@@ -51,7 +51,7 @@ export default function PasswordReset() {
             </p>
             <Button
               onClick={() => setLocation("/entrar")}
-              className="mt-6 h-12 w-full rounded-xl bg-rvd-plum font-bold text-white hover:bg-rvd-plum"
+              className="mt-6 h-12 w-full rounded-xl bg-brand font-bold text-white hover:bg-brand"
             >
               Voltar para o login
             </Button>
@@ -65,7 +65,7 @@ export default function PasswordReset() {
             </p>
             <Button
               onClick={() => setLocation("/entrar")}
-              className="mt-6 h-12 w-full rounded-xl bg-rvd-plum font-bold text-white hover:bg-rvd-plum"
+              className="mt-6 h-12 w-full rounded-xl bg-brand font-bold text-white hover:bg-brand"
             >
               Ir para o login
             </Button>
@@ -114,7 +114,7 @@ export default function PasswordReset() {
               <Button
                 type="submit"
                 disabled={reset.isPending}
-                className="h-12 w-full rounded-xl bg-rvd-plum font-bold text-white hover:bg-rvd-plum"
+                className="h-12 w-full rounded-xl bg-brand font-bold text-white hover:bg-brand"
               >
                 {reset.isPending ? "Salvando..." : "Salvar nova senha"}
               </Button>

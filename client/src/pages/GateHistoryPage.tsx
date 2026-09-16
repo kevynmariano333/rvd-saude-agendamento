@@ -138,7 +138,7 @@ export default function GateHistoryPage() {
         <Button
           onClick={exportExcel}
           disabled={!rows.length}
-          className="h-11 rounded-xl bg-rvd-plum px-4 text-sm font-bold text-white hover:bg-rvd-plum/90"
+          className="h-11 rounded-xl bg-brand px-4 text-sm font-bold text-white hover:bg-brand/90"
         >
           <Download className="size-4" />
           Exportar Excel ({rows.length})

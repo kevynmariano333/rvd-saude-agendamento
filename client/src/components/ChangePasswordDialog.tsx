@@ -112,7 +112,7 @@ export default function ChangePasswordDialog({
               <Button
                 type="submit"
                 disabled={change.isPending}
-                className="h-11 flex-1 rounded-xl bg-rvd-plum font-bold text-white hover:bg-rvd-plum"
+                className="h-11 flex-1 rounded-xl bg-brand font-bold text-white hover:bg-brand"
               >
                 {change.isPending ? "Salvando..." : "Salvar"}
               </Button>

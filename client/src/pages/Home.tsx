@@ -21,9 +21,9 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-canvas">
-      <section className="relative overflow-hidden bg-rvd-plum text-white">
-        <div className="absolute right-[-8rem] top-[-7rem] size-80 rounded-full bg-rvd-blue/60" />
-        <div className="absolute bottom-[-12rem] left-[-8rem] size-96 rounded-full bg-rvd-lilac-blue/50" />
+      <section className="relative overflow-hidden bg-brand text-white">
+        <div className="absolute right-[-8rem] top-[-7rem] size-80 rounded-full bg-on-brand/40" />
+        <div className="absolute bottom-[-12rem] left-[-8rem] size-96 rounded-full bg-white/10" />
         <div className="relative z-10 mx-auto max-w-6xl px-6 py-10 sm:px-10 lg:px-12 lg:py-14">
           <div className="flex items-center gap-3">
             <span className="flex size-11 items-center justify-center rounded-2xl bg-white/95 p-1.5">
@@ -31,14 +31,14 @@ export default function Home() {
             </span>
             <div>
               <p className="font-display text-lg font-extrabold leading-tight">RVD Saúde</p>
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-rvd-blue-pale">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-brand-soft">
                 Portal operacional
               </p>
             </div>
           </div>
 
           <div className="mt-12 max-w-2xl lg:mt-16">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-rvd-blue-pale">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-on-brand-soft">
               Organização que cuida do seu tempo
             </p>
             <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.08] sm:text-5xl">
@@ -72,7 +72,7 @@ export default function Home() {
                 onClick={() => setLocation(accessProfilePath(profile.value))}
                 className="panel group flex flex-col rounded-3xl p-6 text-left transition hover:-translate-y-0.5 hover:border-rvd-plum/40 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rvd-plum"
               >
-                <span className="flex size-12 items-center justify-center rounded-2xl bg-rvd-plum-pale/50 text-rvd-plum transition group-hover:bg-rvd-plum group-hover:text-white">
+                <span className="flex size-12 items-center justify-center rounded-2xl bg-rvd-plum-pale/50 text-rvd-plum transition group-hover:bg-brand group-hover:text-white">
                   <Icon className="size-6" />
                 </span>
                 <p className="mt-5 font-display text-xl font-extrabold text-ink">{profile.headline}</p>

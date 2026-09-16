@@ -73,7 +73,7 @@ export default function AdminInvoiceManagement() {
       <section className="rounded-3xl border border-line bg-sunken p-5 sm:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex gap-4">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-rvd-plum text-white"><ShieldCheck className="size-6" /></span>
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand text-white"><ShieldCheck className="size-6" /></span>
             <div>
               <h2 className="font-display text-2xl font-extrabold text-ink">Área exclusiva do Administrador</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-soft">A exclusão é definitiva. Caso uma nota seja marcada como Recebida ou Concluída por engano, use <strong>Voltar para agendar</strong> para retornar o status a Agendado e permitir um novo horário. Todas as correções ficam registradas no histórico.</p>
@@ -103,7 +103,7 @@ export default function AdminInvoiceManagement() {
       <Dialog open={Boolean(correctionTarget)} onOpenChange={open => !open && setCorrectionTarget(null)}>
         <DialogContent className="max-w-md rounded-[2rem] border-line bg-surface p-7">
           <DialogHeader><div className="flex size-11 items-center justify-center rounded-2xl bg-rvd-blue-pale text-rvd-plum"><CalendarClock className="size-5" /></div><DialogTitle className="mt-4 font-display text-2xl font-extrabold text-ink">Retornar nota para Agendado?</DialogTitle><DialogDescription className="mt-2 text-rvd-plum">A nota <strong>{correctionTarget?.invoiceNumber || "sem número fiscal"}</strong> será corrigida de <strong>{correctionTarget ? statusLabel[correctionTarget.status] : ""}</strong> para <strong>Agendado</strong>. A confirmação de recebimento e a pré-nota serão removidas para que um novo horário seja definido. O histórico registrará esta correção administrativa.</DialogDescription></DialogHeader>
-          <div className="mt-7 flex gap-3"><Button variant="ghost" onClick={() => setCorrectionTarget(null)} className="flex-1 border border-line bg-surface font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button><Button onClick={() => correctionTarget && returnForRescheduling.mutate({ appointmentId: correctionTarget.id })} disabled={returnForRescheduling.isPending} className="flex-1 bg-rvd-plum font-bold text-white hover:bg-rvd-plum"><RotateCcw className="size-4" />{returnForRescheduling.isPending ? "Corrigindo..." : "Voltar para agendar"}</Button></div>
+          <div className="mt-7 flex gap-3"><Button variant="ghost" onClick={() => setCorrectionTarget(null)} className="flex-1 border border-line bg-surface font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button><Button onClick={() => correctionTarget && returnForRescheduling.mutate({ appointmentId: correctionTarget.id })} disabled={returnForRescheduling.isPending} className="flex-1 bg-brand font-bold text-white hover:bg-brand"><RotateCcw className="size-4" />{returnForRescheduling.isPending ? "Corrigindo..." : "Voltar para agendar"}</Button></div>
         </DialogContent>
       </Dialog>
 

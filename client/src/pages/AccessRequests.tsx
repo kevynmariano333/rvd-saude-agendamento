@@ -119,7 +119,7 @@ export default function AccessRequests() {
                     <Button
                       onClick={() => decide.mutate({ userId: request.id, approve: true })}
                       disabled={decide.isPending}
-                      className="h-10 rounded-xl bg-rvd-plum px-4 text-xs font-bold text-white hover:bg-rvd-plum/90"
+                      className="h-10 rounded-xl bg-brand px-4 text-xs font-bold text-white hover:bg-brand/90"
                     >
                       <UserCheck className="size-4" />
                       Aprovar

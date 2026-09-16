@@ -1,10 +1,22 @@
 @import "tailwindcss";
 
+/* Sem isto, os utilitários `dark:` dos componentes de base seguiriam só a
+   preferência do sistema e ignorariam a escolha feita no portal. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Manrope", "DM Sans", ui-sans-serif, system-ui, sans-serif;
 
-  /* Marca RVD Saúde — reservada a acentos, cabeçalhos e ações primárias. */
+  /* Marca RVD Saúde — reservada a acentos, cabeçalhos e ações primárias.
+     `brand` é o roxo cheio que carrega texto branco: ele é fundo nos dois temas
+     e não pode clarear, ou o botão primário perde o contraste com o texto.
+     `on-brand` é a tinta clara que vive sobre esse roxo, e pela mesma razão não
+     pode escurecer. `rvd-plum` e `rvd-blue` ficam com um papel só — tinta e
+     superfície — e por isso podem inverter com o tema. */
+  --color-brand: #782078;
+  --color-on-brand: #A8C8D8;
+  --color-on-brand-soft: #C9E1EE;
   --color-rvd-plum: #782078;
   --color-rvd-plum-soft: #D8B8D8;
   --color-rvd-plum-pale: #E0C8E0;
@@ -43,11 +55,13 @@
    continuar legível sobre fundo escuro, e os fundos de status deixam de ser
    lavados e passam a ser tinturas — um #FDF5E7 sobre escuro cegaria. */
 .dark {
+  --color-brand: #8C2E8C;
+
   --color-rvd-plum: #C77FC0;
   --color-rvd-plum-soft: #6B3A69;
   --color-rvd-plum-pale: #4A2449;
-  --color-rvd-blue: #7FB2E8;
-  --color-rvd-blue-pale: #24405C;
+  --color-rvd-blue: #26394A;
+  --color-rvd-blue-pale: #223140;
   --color-rvd-lilac-blue: #4A3A5E;
 
   --color-ink: #E7EAF1;

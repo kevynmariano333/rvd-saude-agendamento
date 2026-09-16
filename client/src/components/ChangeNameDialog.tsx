@@ -91,7 +91,7 @@ export default function ChangeNameDialog({
             <Button
               type="submit"
               disabled={update.isPending}
-              className="h-10 rounded-xl bg-rvd-plum px-4 text-sm font-bold text-white hover:bg-rvd-plum/90"
+              className="h-10 rounded-xl bg-brand px-4 text-sm font-bold text-white hover:bg-brand/90"
             >
               {update.isPending ? "Salvando..." : "Salvar nome"}
             </Button>

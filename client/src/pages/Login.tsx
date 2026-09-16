@@ -34,7 +34,7 @@ function ChosenAccess({
     const Icon = chosen.icon;
     return (
       <div className="flex items-center gap-3 rounded-xl border border-rvd-plum/30 bg-rvd-plum-pale/30 p-3.5">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-rvd-plum text-white">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand text-white">
           <Icon className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
@@ -153,26 +153,26 @@ export default function Login() {
   return (
     <main className="min-h-screen bg-canvas p-4 sm:p-6 lg:p-8">
       <div className="panel mx-auto grid min-h-[calc(100vh-2rem)] max-w-7xl overflow-hidden rounded-3xl lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="relative overflow-hidden bg-rvd-plum px-7 py-10 text-white sm:px-12 lg:flex lg:flex-col lg:justify-between lg:px-14 lg:py-14">
-          <div className="absolute right-[-6rem] top-[-5rem] size-64 rounded-full bg-rvd-blue/70" />
-          <div className="absolute bottom-[-10rem] left-[-7rem] size-80 rounded-full bg-rvd-lilac-blue/60" />
+        <section className="relative overflow-hidden bg-brand px-7 py-10 text-white sm:px-12 lg:flex lg:flex-col lg:justify-between lg:px-14 lg:py-14">
+          <div className="absolute right-[-6rem] top-[-5rem] size-64 rounded-full bg-on-brand/45" />
+          <div className="absolute bottom-[-10rem] left-[-7rem] size-80 rounded-full bg-white/10" />
           <div className="absolute left-14 top-32 z-10 hidden sm:block" aria-hidden="true">
             <div className="absolute -bottom-2 -left-5 w-32 border-t border-dashed border-white/45" />
             <div className="rvd-login-truck relative h-10 w-20 drop-shadow-lg">
-              <span className="absolute left-0 top-1 h-6 w-11 overflow-hidden rounded-md border-2 border-rvd-plum bg-white">
+              <span className="absolute left-0 top-1 h-6 w-11 overflow-hidden rounded-md border-2 border-brand bg-white">
                 <img src="/RVD-Saude.png" alt="" className="size-full object-contain p-0.5" />
               </span>
-              <span className="absolute left-11 top-3 h-4 w-6 rounded-r-md border-2 border-l-0 border-rvd-plum bg-rvd-blue" />
-              <span className="absolute bottom-0 left-2 size-3 rounded-full border-2 border-white bg-rvd-plum" />
-              <span className="absolute bottom-0 right-2 size-3 rounded-full border-2 border-white bg-rvd-plum" />
+              <span className="absolute left-11 top-3 h-4 w-6 rounded-r-md border-2 border-l-0 border-brand bg-on-brand" />
+              <span className="absolute bottom-0 left-2 size-3 rounded-full border-2 border-white bg-brand" />
+              <span className="absolute bottom-0 right-2 size-3 rounded-full border-2 border-white bg-brand" />
             </div>
           </div>
           <div className="relative z-10">
             <p className="font-display text-lg font-extrabold">RVD Saúde</p>
-            <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-rvd-blue-pale">Portal operacional</p>
+            <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-on-brand-soft">Portal operacional</p>
           </div>
           <div className="relative z-10 mt-20 max-w-md lg:mt-0">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-rvd-blue-pale">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-on-brand-soft">
               Organização que cuida do seu tempo
             </p>
             <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.08] sm:text-5xl">
@@ -297,7 +297,7 @@ export default function Login() {
               <Button
                 type="submit"
                 disabled={pending}
-                className="h-12 w-full rounded-xl bg-rvd-plum text-sm font-bold text-white hover:bg-rvd-plum/90 active:scale-[0.99]"
+                className="h-12 w-full rounded-xl bg-brand text-sm font-bold text-white hover:bg-brand/90 active:scale-[0.99]"
               >
                 {pending ? (
                   "Processando..."
