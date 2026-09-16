@@ -23,7 +23,7 @@ export default function AppointmentValidation() {
           <div className={`h-2 ${isValid ? "bg-emerald-500" : "bg-rvd-plum"}`} />
           <CardContent className="p-7 sm:p-9">
             {confirmation.isLoading ? <div className="flex min-h-64 flex-col items-center justify-center gap-4 text-center"><Loader2 className="size-10 animate-spin text-rvd-plum" /><p className="font-semibold">Validando o comprovante...</p></div> : isValid ? <>
-              <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 className="size-10" /></div>
+              <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-state-go-bg text-state-go"><CheckCircle2 className="size-10" /></div>
               <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-emerald-700">Comprovante validado</p>
               <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Agendamento confirmado</h1>
               <p className="mt-3 text-sm leading-6 text-ink-soft">Esta nota possui um agendamento ativo no portal RVD Saúde. Apresente o comprovante junto à entrega.</p>

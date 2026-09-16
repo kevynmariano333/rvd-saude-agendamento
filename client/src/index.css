@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@theme inline {
+@theme {
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Manrope", "DM Sans", ui-sans-serif, system-ui, sans-serif;
 
@@ -22,6 +22,7 @@
   --color-line-strong: #CFD5E1;
   --color-surface: #FFFFFF;
   --color-canvas: #F6F7FA;
+  --color-sunken: #FAFBFC;
 
   /* Semântica de status compartilhada por agendamentos e pátio. */
   --color-state-wait: #B4761A;
@@ -38,19 +39,52 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
+/* Tema escuro: os mesmos papéis, com a escala invertida. A marca clareia para
+   continuar legível sobre fundo escuro, e os fundos de status deixam de ser
+   lavados e passam a ser tinturas — um #FDF5E7 sobre escuro cegaria. */
+.dark {
+  --color-rvd-plum: #C77FC0;
+  --color-rvd-plum-soft: #6B3A69;
+  --color-rvd-plum-pale: #4A2449;
+  --color-rvd-blue: #7FB2E8;
+  --color-rvd-blue-pale: #24405C;
+  --color-rvd-lilac-blue: #4A3A5E;
+
+  --color-ink: #E7EAF1;
+  --color-ink-soft: #A6AEC1;
+  --color-ink-faint: #7C8497;
+  --color-line: #2A303D;
+  --color-line-strong: #3A4252;
+  --color-surface: #191D27;
+  --color-canvas: #12151C;
+  --color-sunken: #1E222C;
+
+  --color-state-wait: #E0A755;
+  --color-state-wait-bg: #2C2317;
+  --color-state-go: #58BE97;
+  --color-state-go-bg: #14291F;
+  --color-state-stop: #E08981;
+  --color-state-stop-bg: #2C1B19;
+  --color-state-move: #7FB2E8;
+  --color-state-move-bg: #16233A;
+  --color-state-done: #A6AEC1;
+  --color-state-done-bg: #1F242F;
+}
+
 @layer base {
-  * { border-color: #E5E8EF; }
-  html { background: #F6F7FA; }
+  * { border-color: var(--color-line); }
+  html { background: var(--color-canvas); color-scheme: light; }
+  html.dark { color-scheme: dark; }
   body {
     min-width: 320px;
-    background: #F6F7FA;
-    color: #1E2432;
+    background: var(--color-canvas);
+    color: var(--color-ink);
     font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   button, input, select, textarea { font: inherit; }
   button { cursor: pointer; }
-  :focus-visible { outline: 2px solid #782078; outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--color-rvd-plum); outline-offset: 2px; }
   main table th:not(:last-child), main table td:not(:last-child) { padding-right: 1.5rem; }
   main table th:first-child, main table td:first-child { min-width: 13rem; }
   main table th:nth-child(3), main table td:nth-child(3) { min-width: 8rem; }
@@ -73,6 +107,7 @@
     border-radius: 1rem;
     box-shadow: 0 1px 2px rgb(30 36 50 / 0.04);
   }
+  .dark .panel { box-shadow: 0 1px 2px rgb(0 0 0 / 0.35); }
 }
 
 @media (prefers-reduced-motion: no-preference) {

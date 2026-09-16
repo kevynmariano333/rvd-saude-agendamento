@@ -70,7 +70,7 @@ export default function AdminInvoiceManagement() {
 
   return (
     <PortalLayout user={auth.data} title="Administrar notas" subtitle="Correção auditável de status e exclusão definitiva de notas fiscais.">
-      <section className="rounded-3xl border border-line bg-[#fafbfc] p-5 sm:p-7">
+      <section className="rounded-3xl border border-line bg-sunken p-5 sm:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex gap-4">
             <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-rvd-plum text-white"><ShieldCheck className="size-6" /></span>
@@ -89,7 +89,7 @@ export default function AdminInvoiceManagement() {
       <section className="mt-6 overflow-hidden panel">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-left">
-            <thead className="bg-[#fafbfc]"><tr className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint"><th className="px-6 py-5">Nota fiscal</th><th className="px-6 py-5">Fornecedor</th><th className="px-6 py-5">Status</th><th className="px-6 py-5">Registro</th><th className="px-6 py-5 text-right">Administração</th></tr></thead>
+            <thead className="bg-sunken"><tr className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint"><th className="px-6 py-5">Nota fiscal</th><th className="px-6 py-5">Fornecedor</th><th className="px-6 py-5">Status</th><th className="px-6 py-5">Registro</th><th className="px-6 py-5 text-right">Administração</th></tr></thead>
             <tbody>
               {invoices.isLoading ? <tr><td colSpan={5} className="px-6 py-16 text-center font-bold text-rvd-plum">Carregando notas...</td></tr> : invoices.data?.length ? invoices.data.map(invoice => {
                 const canReturnForRescheduling = invoice.status === "received" || invoice.status === "completed";
