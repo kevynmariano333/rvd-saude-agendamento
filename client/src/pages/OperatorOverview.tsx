@@ -28,17 +28,17 @@ export default function OperatorOverview() {
     : { grid: "#E5E8EF", axis: "#5A6275", axisFaint: "#8B93A6", bar: "#39c99b", barMuted: "#cfe9dd", label: "#169b75", cursor: "#F6F7FA", tooltipBg: "#FFFFFF", tooltipLine: "#E5E8EF" };
   const analytics = trpc.analytics.dashboard.useQuery({ month, year, day: day || undefined });
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
+  const daysInMonth = new Date(year, month, 0).getDate();
+  // Trocar de mês pode deixar para trás um dia que lá não existe — 31 vindo de
+  // um mês de 31 para setembro. Nesse caso o painel volta ao mês inteiro.
+  useEffect(() => { if (day > daysInMonth) setDay(0); }, [day, daysInMonth]);
   useEffect(() => { if (auth.data && !isPortalOperator(auth.data.role as PortalRole)) setLocation(homePathFor(auth.data.role as PortalRole)); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
   if (auth.isLoading) return <LoadingTruck label="Preparando o dashboard" />;
   if (!auth.data || !isPortalOperator(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
   const data = analytics.data;
   const monthName = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(year, month - 1, 1));
   const yearOptions = Array.from({ length: 5 }, (_, index) => today.getFullYear() - 2 + index);
-  const daysInMonth = new Date(year, month, 0).getDate();
   const dayOptions = Array.from({ length: daysInMonth }, (_, index) => index + 1);
-  // Trocar de mês pode deixar para trás um dia que lá não existe — 31 vindo de
-  // um mês de 31 para setembro. Nesse caso o painel volta ao mês inteiro.
-  useEffect(() => { if (day > daysInMonth) setDay(0); }, [day, daysInMonth]);
   // O período é o que o painel está mostrando, e é assim que ele se apresenta.
   const periodLabel = day ? `${day} de ${monthName} de ${year}` : `${monthName} de ${year}`;
   const chartSeries =
