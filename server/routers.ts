@@ -76,6 +76,7 @@ import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, re
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { gerarBackup } from "./backup";
+import { normalizePurchaseOrder } from "./purchaseOrder";
 import { buildDashboardMetrics } from "./dashboardMetrics";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
 import { buildAttendanceMetrics } from "./attendanceMetrics";
@@ -492,13 +493,17 @@ export const appRouter = router({
         return createAppointment({ ...input, scheduledFor: date, supplierId: ctx.user.id });
       }),
     createManualXml: protectedProcedure
-      .input(z.object({ fileName: z.string().min(5).max(255), xmlBase64: z.string().min(4).max(2_800_000), suggestedFor: z.string().datetime().optional(), suggestionNotes: z.string().max(1000).optional() }))
+      .input(z.object({ fileName: z.string().min(5).max(255), xmlBase64: z.string().min(4).max(2_800_000), purchaseOrder: z.string().min(1).max(200), suggestedFor: z.string().datetime().optional(), suggestionNotes: z.string().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {
         if (!canRequestAppointment(ctx.user.role)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Somente fornecedores podem criar agendamentos manuais." });
         }
         if (!input.fileName.toLowerCase().endsWith(".xml")) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Envie apenas o arquivo XML da nota fiscal." });
+        }
+        const purchaseOrder = normalizePurchaseOrder(input.purchaseOrder);
+        if (!purchaseOrder) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o número do pedido de compra da nota." });
         }
         const suggestedFor = input.suggestedFor ? new Date(input.suggestedFor) : undefined;
         if (suggestedFor && (Number.isNaN(suggestedFor.getTime()) || suggestedFor.getTime() <= Date.now())) {
@@ -520,7 +525,11 @@ export const appRouter = router({
           xmlFileName: safeName,
           invoiceNumber: invoice.invoiceNumber,
           invoiceAccessKey: invoice.accessKey,
-          purchaseOrder: invoice.purchaseOrder,
+          // O que o fornecedor informou vale mais do que a tag xPed: o XML só a
+          // traz às vezes, e é este número que o Operador usa para achar a
+          // compra. O do XML continua sendo lido para os recebimentos avulsos,
+          // onde não há fornecedor na tela para digitar.
+          purchaseOrder,
           invoiceSupplierName: invoice.supplierName,
           recipientCnpj: invoice.recipientCnpj,
           invoiceIssuedAt: invoice.issuedAt,

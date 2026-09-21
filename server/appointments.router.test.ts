@@ -302,8 +302,27 @@ describe("procedures de agendamento", () => {
     mocks.createManualXmlAppointment.mockResolvedValue({ id: 11, status: "pending" });
     const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><emit><xNome>Fornecedor XML</xNome></emit><dest><CNPJ>12.345.678/0001-99</CNPJ></dest></infNFe></NFe>').toString("base64");
     const caller = appRouter.createCaller(context("supplier"));
-    await caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, suggestedFor: "2030-09-01T10:00:00.000Z", suggestionNotes: "Preferência pela manhã" });
-    expect(mocks.createManualXmlAppointment).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 12, suggestedFor: new Date("2030-09-01T10:00:00.000Z"), suggestionNotes: "Preferência pela manhã" }));
+    await caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: "4504748409", suggestedFor: "2030-09-01T10:00:00.000Z", suggestionNotes: "Preferência pela manhã" });
+    expect(mocks.createManualXmlAppointment).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 12, purchaseOrder: "4504748409", suggestedFor: new Date("2030-09-01T10:00:00.000Z"), suggestionNotes: "Preferência pela manhã" }));
+  });
+
+  it("recusa o envio do fornecedor sem pedido de compra", async () => {
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide></infNFe></NFe>').toString("base64");
+    const caller = appRouter.createCaller(context("supplier"));
+    // Só espaço passa pelo tamanho mínimo do schema, então a checagem precisa
+    // existir também depois da normalização.
+    await expect(caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: "   " })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.createManualXmlAppointment).not.toHaveBeenCalled();
+  });
+
+  it("grava o pedido que o fornecedor digitou, e não o que veio no XML", async () => {
+    mocks.createManualXmlAppointment.mockResolvedValue({ id: 12, status: "pending" });
+    // O xPed do XML costuma vir de outro sistema do fornecedor e nem sempre é o
+    // pedido da RVD; quem responde pela nota é quem a envia.
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><det><prod><xPed>PEDIDO-INTERNO-9</xPed></prod></det></infNFe></NFe>').toString("base64");
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: " 4504748409 " });
+    expect(mocks.createManualXmlAppointment).toHaveBeenCalledWith(expect.objectContaining({ purchaseOrder: "4504748409" }));
   });
 
   it("permite que o fornecedor envie uma mensagem no próprio agendamento", async () => {
