@@ -12,7 +12,11 @@ import {
 
 export const userRoles = ["admin", "operator", "supplier", "portaria", "operacao"] as const;
 export const appointmentStatuses = ["pending", "scheduled", "received", "completed", "backlog", "rejected"] as const;
-export const appointmentSources = ["portal", "manual_xml"] as const;
+// "importado" marca o histórico trazido de fora do portal (hoje, o acervo do
+// sistema Agiliza). Sem um valor próprio, milhares de notas antigas ficariam
+// indistinguíveis da operação do dia a dia na tela do operador e nos números do
+// painel — com ele, dá para reconhecer a procedência e filtrar.
+export const appointmentSources = ["portal", "manual_xml", "importado"] as const;
 export const suggestionStatuses = ["pending", "accepted", "declined"] as const;
 // A supplier login is approved on sight when it is the first for its CNPJ, and
 // held for an operator's decision when it joins a company that already exists.

@@ -169,6 +169,13 @@
       "when": 1788555562993,
       "tag": "0023_icy_mauler",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1790012341471,
+      "tag": "0024_plain_stellaris",
+      "breakpoints": true
     }
   ]
 }

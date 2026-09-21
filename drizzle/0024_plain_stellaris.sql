@@ -1,0 +1,1 @@
+ALTER TABLE `appointments` MODIFY COLUMN `source` enum('portal','manual_xml','importado') NOT NULL DEFAULT 'portal';
