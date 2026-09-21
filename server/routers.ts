@@ -75,6 +75,7 @@ import { createAppointmentValidationToken, readAppointmentValidationToken } from
 import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
+import { gerarBackup } from "./backup";
 import { buildDashboardMetrics } from "./dashboardMetrics";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
 import { buildAttendanceMetrics } from "./attendanceMetrics";
@@ -622,6 +623,10 @@ export const appRouter = router({
         if (!canApplySuggestion(suggestion.appointmentStatus)) throw new TRPCError({ code: "BAD_REQUEST", message: "O agendamento não pode receber esta sugestão." });
         return acceptAppointmentSuggestion({ suggestionId: input.suggestionId, appointmentStatus: suggestion.appointmentStatus, handledBy: ctx.user.id });
       }),
+  }),
+  manutencao: router({
+    // Só administrador: o arquivo gerado contém a base inteira.
+    gerarBackup: adminProcedure.mutation(async () => gerarBackup()),
   }),
   accessRequests: router({
     listPending: adminProcedure.query(async () => listPendingAccessRequests()),

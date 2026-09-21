@@ -10,6 +10,20 @@ export const statusCopy: Record<PortalStatus, string> = {
   rejected: "Rejeitado",
 };
 
+export type PortalSource = "portal" | "manual_xml" | "importado";
+
+/**
+ * A procedência aparece logo abaixo do número da nota. O histórico importado
+ * precisa de rótulo próprio: são notas que nunca passaram pelo portal — vieram
+ * do acervo do sistema antigo — e chamá-las de "Portal" faria o operador
+ * procurar uma conversa, um XML e um fornecedor logado que não existem.
+ */
+export const sourceCopy: Record<PortalSource, string> = {
+  portal: "Portal",
+  manual_xml: "XML",
+  importado: "Importado",
+};
+
 export const roleLabel: Record<PortalRole, string> = {
   admin: "Administrador",
   operator: "Operador",

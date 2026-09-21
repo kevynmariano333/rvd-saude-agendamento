@@ -1,4 +1,4 @@
-import { homePathFor, type PortalRole } from "@/lib/portal";
+import { homePathFor, type PortalRole, type PortalSource, sourceCopy } from "@/lib/portal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,7 @@ type Invoice = {
   invoiceSupplierName: string | null;
   supplierName: string | null;
   supplierEmail: string | null;
-  source: "portal" | "manual_xml";
+  source: PortalSource;
   status: string;
   createdAt: Date;
 };
@@ -93,7 +93,7 @@ export default function AdminInvoiceManagement() {
             <tbody>
               {invoices.isLoading ? <tr><td colSpan={5} className="px-6 py-16 text-center font-bold text-rvd-plum">Carregando notas...</td></tr> : invoices.data?.length ? invoices.data.map(invoice => {
                 const canReturnForRescheduling = invoice.status === "received" || invoice.status === "completed";
-                return <tr key={invoice.id} className="border-t border-line"><td className="px-6 py-5"><p className="font-display text-lg font-extrabold text-ink">{invoice.invoiceNumber || "Sem número fiscal"}</p><p className="text-xs text-ink-soft">{invoice.source === "manual_xml" ? "XML" : "Portal"}</p></td><td className="px-6 py-5"><p className="font-bold text-rvd-plum">{invoice.invoiceSupplierName || invoice.supplierName || "Fornecedor"}</p><p className="mt-1 text-xs text-ink-soft">{invoice.supplierEmail}</p></td><td className="px-6 py-5"><span className="rounded-full bg-rvd-plum-pale px-3 py-1 text-xs font-bold uppercase tracking-wide text-rvd-plum">{statusLabel[invoice.status] || invoice.status}</span></td><td className="px-6 py-5 text-sm text-ink-soft">{new Date(invoice.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</td><td className="px-6 py-5"><div className="flex justify-end gap-2">{canReturnForRescheduling && <Button onClick={() => setCorrectionTarget(invoice)} variant="ghost" className="border border-rvd-blue bg-surface font-bold text-rvd-plum hover:bg-rvd-blue-pale hover:text-rvd-plum"><RotateCcw className="size-4" />Voltar para agendar</Button>}<Button onClick={() => setDeleteTarget(invoice)} variant="ghost" className="border border-red-200 bg-surface font-bold text-red-700 hover:bg-red-50 hover:text-red-800"><Trash2 className="size-4" />Excluir nota</Button></div></td></tr>;
+                return <tr key={invoice.id} className="border-t border-line"><td className="px-6 py-5"><p className="font-display text-lg font-extrabold text-ink">{invoice.invoiceNumber || "Sem número fiscal"}</p><p className="text-xs text-ink-soft">{sourceCopy[invoice.source]}</p></td><td className="px-6 py-5"><p className="font-bold text-rvd-plum">{invoice.invoiceSupplierName || invoice.supplierName || "Fornecedor"}</p><p className="mt-1 text-xs text-ink-soft">{invoice.supplierEmail}</p></td><td className="px-6 py-5"><span className="rounded-full bg-rvd-plum-pale px-3 py-1 text-xs font-bold uppercase tracking-wide text-rvd-plum">{statusLabel[invoice.status] || invoice.status}</span></td><td className="px-6 py-5 text-sm text-ink-soft">{new Date(invoice.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</td><td className="px-6 py-5"><div className="flex justify-end gap-2">{canReturnForRescheduling && <Button onClick={() => setCorrectionTarget(invoice)} variant="ghost" className="border border-rvd-blue bg-surface font-bold text-rvd-plum hover:bg-rvd-blue-pale hover:text-rvd-plum"><RotateCcw className="size-4" />Voltar para agendar</Button>}<Button onClick={() => setDeleteTarget(invoice)} variant="ghost" className="border border-red-200 bg-surface font-bold text-red-700 hover:bg-red-50 hover:text-red-800"><Trash2 className="size-4" />Excluir nota</Button></div></td></tr>;
               }) : <tr><td colSpan={5} className="px-6 py-16 text-center"><FileWarning className="mx-auto size-8 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhuma nota encontrada</p><p className="mt-1 text-sm text-ink-soft">Ajuste o número da nota para localizar outro registro.</p></td></tr>}
             </tbody>
           </table>
