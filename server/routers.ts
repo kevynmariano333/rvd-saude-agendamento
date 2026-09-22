@@ -240,10 +240,16 @@ export const appRouter = router({
         let user;
 
         if (existing) {
+          // Operação e Planejamento não têm porta própria na tela de entrada:
+          // são perfis que o administrador atribui depois do cadastro, e a
+          // conta continua entrando pela porta por onde se cadastrou, a do
+          // Operador. Sem esta linha, promover alguém a Planejador o trancava
+          // para fora do sistema.
+          const entraPelaPortaDoOperador = existing.role === "operacao" || existing.role === "planejador";
           const profileAllowed =
             existing.role === input.profile ||
             (existing.role === "admin" && input.profile !== "supplier") ||
-            (existing.role === "operacao" && input.profile === "operator");
+            (entraPelaPortaDoOperador && input.profile === "operator");
           if (!profileAllowed || !existing.passwordHash || !passwordMatches(input.password, existing.passwordHash)) {
             throw new TRPCError({ code: "UNAUTHORIZED", message: "E-mail, senha ou perfil não conferem." });
           }
