@@ -1103,3 +1103,79 @@ export async function createAppointmentInternalNote(input: { appointmentId: numb
   const result = await db.insert(appointmentInternalNotes).values(input);
   return Number(result[0].insertId);
 }
+
+/**
+ * Uma linha por nota que já passou pelo backlog.
+ *
+ * As datas de entrada e de saída não existem em coluna nenhuma: são deduzidas
+ * do histórico de status, que é onde toda mudança fica registrada. Quando uma
+ * nota entra em backlog mais de uma vez, vale a última passagem — é a que
+ * responde "e essa nota, como está?".
+ */
+export async function listBacklogReportRows() {
+  const db = await getDb();
+  if (!db) return [];
+
+  const eventos = await db
+    .select({
+      appointmentId: appointmentStatusHistory.appointmentId,
+      previousStatus: appointmentStatusHistory.previousStatus,
+      nextStatus: appointmentStatusHistory.nextStatus,
+      createdAt: appointmentStatusHistory.createdAt,
+    })
+    .from(appointmentStatusHistory)
+    .where(or(eq(appointmentStatusHistory.nextStatus, "backlog"), eq(appointmentStatusHistory.previousStatus, "backlog")))
+    .orderBy(appointmentStatusHistory.createdAt);
+
+  const ids = Array.from(new Set(eventos.map(evento => evento.appointmentId)));
+  if (!ids.length) return [];
+
+  const [notas, observacoes] = await Promise.all([
+    db
+      .select({
+        id: appointments.id,
+        createdAt: appointments.createdAt,
+        status: appointments.status,
+        invoiceNumber: appointments.invoiceNumber,
+        invoiceSupplierName: appointments.invoiceSupplierName,
+        supplierName: users.name,
+        supplierCnpj: users.companyCnpj,
+        miroNumber: appointments.miroNumber,
+        backlogReasonCode: appointments.backlogReasonCode,
+        backlogReason: appointments.backlogReason,
+      })
+      .from(appointments)
+      .innerJoin(users, eq(appointments.supplierId, users.id))
+      .where(inArray(appointments.id, ids)),
+    db
+      .select({
+        appointmentId: appointmentInternalNotes.appointmentId,
+        body: appointmentInternalNotes.body,
+        createdAt: appointmentInternalNotes.createdAt,
+        authorName: users.name,
+      })
+      .from(appointmentInternalNotes)
+      .leftJoin(users, eq(appointmentInternalNotes.authorId, users.id))
+      .where(inArray(appointmentInternalNotes.appointmentId, ids))
+      .orderBy(appointmentInternalNotes.createdAt),
+  ]);
+
+  return notas.map(nota => {
+    const doNota = eventos.filter(evento => evento.appointmentId === nota.id);
+    const entradas = doNota.filter(evento => evento.nextStatus === "backlog");
+    const ultimaEntrada = entradas.length ? entradas[entradas.length - 1] : null;
+    // A saída é a primeira mudança que tira a nota do backlog depois da última
+    // entrada. Sem isso, uma nota que foi e voltou mostraria a saída antiga.
+    const saida = ultimaEntrada
+      ? doNota.find(evento => evento.previousStatus === "backlog" && evento.createdAt >= ultimaEntrada.createdAt) ?? null
+      : null;
+    return {
+      ...nota,
+      enteredBacklogAt: ultimaEntrada?.createdAt ?? null,
+      leftBacklogAt: saida?.createdAt ?? null,
+      comments: observacoes
+        .filter(observacao => observacao.appointmentId === nota.id)
+        .map(observacao => ({ authorName: observacao.authorName, body: observacao.body, createdAt: observacao.createdAt })),
+    };
+  });
+}

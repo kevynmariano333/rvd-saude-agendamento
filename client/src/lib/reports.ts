@@ -1,5 +1,6 @@
 import { type PortalStatus, statusCopy } from "./portal";
 import { apenasDigitos, filtroDeDestinatario, formatarCnpj, unidadePorCnpj } from "@shared/recipients";
+import { rotuloDoMotivo } from "@shared/backlogReasons";
 
 export type ReportAppointment = {
   id: number;
@@ -141,3 +142,79 @@ export function reportColumns(view: "consolidated" | "detailed"): string[] {
   const linha = view === "detailed" ? toDetailedReportRows([modelo])[0] : toConsolidatedReportRows([modelo])[0];
   return Object.keys(linha);
 }
+
+export type BacklogReportAppointment = {
+  id: number;
+  createdAt: Date | string;
+  enteredBacklogAt: Date | string | null;
+  leftBacklogAt: Date | string | null;
+  status: PortalStatus;
+  invoiceNumber: string | null;
+  invoiceSupplierName: string | null;
+  supplierName: string | null;
+  supplierCnpj: string | null;
+  miroNumber: string | null;
+  backlogReasonCode: string | null;
+  backlogReason: string | null;
+  comments: { authorName: string | null; body: string; createdAt: Date | string }[];
+};
+
+export type BacklogReportRow = {
+  "Data de Criação": string;
+  "Entrou em Backlog": string;
+  "Saiu do Backlog": string;
+  "Status Atual": string;
+  "Número da Nota": string;
+  "CNPJ Fornecedor": string;
+  "Nome Fornecedor": string;
+  "Cód. SAP": string;
+  Motivo: string;
+  Comentários: string;
+};
+
+/**
+ * Filtra o relatório de backlog.
+ *
+ * O período vale sobre a entrada no backlog, e não sobre o agendamento: quem
+ * abre este relatório quer saber o que travou no mês, não o que foi entregue.
+ */
+export function filterBacklogReport(linhas: BacklogReportAppointment[], filters: ReportFilters) {
+  const busca = filters.supplier?.trim().toLocaleLowerCase() ?? "";
+  const buscaDigitos = apenasDigitos(busca);
+  return linhas.filter(item => {
+    if (filters.status && filters.status !== "all" && item.status !== filters.status) return false;
+    if (!isWithinDateRange(item.enteredBacklogAt, filters.scheduledStart, filters.scheduledEnd)) return false;
+    if (busca) {
+      const nome = `${item.invoiceSupplierName || ""} ${item.supplierName || ""}`.toLocaleLowerCase();
+      const porCnpj = buscaDigitos.length > 0 && apenasDigitos(item.supplierCnpj).includes(buscaDigitos);
+      if (!nome.includes(busca) && !porCnpj) return false;
+    }
+    return true;
+  });
+}
+
+export function toBacklogReportRows(linhas: BacklogReportAppointment[]): BacklogReportRow[] {
+  return linhas.map(item => ({
+    "Data de Criação": formatReportDate(item.createdAt),
+    "Entrou em Backlog": formatReportDate(item.enteredBacklogAt),
+    // Sem saída registrada, a nota ainda está lá — dizer "—" esconderia isso.
+    "Saiu do Backlog": item.leftBacklogAt ? formatReportDate(item.leftBacklogAt) : "Em aberto",
+    "Status Atual": statusCopy[item.status],
+    "Número da Nota": item.invoiceNumber || "—",
+    "CNPJ Fornecedor": apenasDigitos(item.supplierCnpj) ? formatarCnpj(item.supplierCnpj) : "—",
+    "Nome Fornecedor": item.invoiceSupplierName || item.supplierName || "—",
+    "Cód. SAP": item.miroNumber || "—",
+    Motivo: [rotuloDoMotivo(item.backlogReasonCode), item.backlogReason].filter(Boolean).join(" — "),
+    // Os comentários vão numa célula só, cada um com quem escreveu e quando,
+    // separados por " | " para a planilha não quebrar a linha.
+    Comentários: item.comments.map(nota => `[${formatReportDate(nota.createdAt)}] ${nota.authorName || "Colaborador"}: ${nota.body.replace(/\s+/g, " ").trim()}`).join(" | "),
+  }));
+}
+
+export const COLUNAS_DO_BACKLOG = Object.keys(
+  toBacklogReportRows([{
+    id: 0, createdAt: new Date(0), enteredBacklogAt: null, leftBacklogAt: null, status: "backlog",
+    invoiceNumber: null, invoiceSupplierName: null, supplierName: null, supplierCnpj: null,
+    miroNumber: null, backlogReasonCode: null, backlogReason: null, comments: [],
+  }])[0],
+);

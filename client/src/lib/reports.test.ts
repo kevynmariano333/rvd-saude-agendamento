@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterReportAppointments, reportColumns, toConsolidatedReportRows, toDetailedReportRows, type ReportAppointment } from "./reports";
+import { COLUNAS_DO_BACKLOG, filterBacklogReport, filterReportAppointments, reportColumns, toBacklogReportRows, toConsolidatedReportRows, toDetailedReportRows, type BacklogReportAppointment, type ReportAppointment } from "./reports";
 
 const nota = (extra: Partial<ReportAppointment>): ReportAppointment => ({
   id: 1, invoiceNumber: "100", supplierName: "Fornecedor RVD", invoiceSupplierName: null,
@@ -62,5 +62,46 @@ describe("consolidado de relatórios", () => {
     expect(reportColumns("consolidated")).toEqual(Object.keys(toConsolidatedReportRows([appointments[0]])[0]));
     expect(reportColumns("detailed")).toEqual(Object.keys(toDetailedReportRows([appointments[0]])[0]));
     expect(reportColumns("detailed").length).toBeGreaterThan(reportColumns("consolidated").length);
+  });
+});
+
+const noBacklog = (extra: Partial<BacklogReportAppointment>): BacklogReportAppointment => ({
+  id: 1, createdAt: "2026-09-01T10:00:00.000Z", enteredBacklogAt: "2026-09-08T13:15:00.000Z",
+  leftBacklogAt: null, status: "backlog", invoiceNumber: "324055", invoiceSupplierName: "Onco Prod Distr",
+  supplierName: "Onco Prod", supplierCnpj: "04307650003070", miroNumber: null,
+  backlogReasonCode: "DIVERGENCIA_PRECO", backlogReason: "Preço da nota acima do pedido.",
+  comments: [], ...extra,
+});
+
+describe("relatório de backlog", () => {
+  it("monta as dez colunas do arquivo", () => {
+    const [linha] = toBacklogReportRows([noBacklog({
+      leftBacklogAt: "2026-09-10T16:00:00.000Z", status: "completed", miroNumber: "5105101642",
+      comments: [{ authorName: "Robert", body: "Realizado  entrada de\nmovimento 0244599", createdAt: "2026-09-08T20:53:00.000Z" }],
+    })]);
+    expect(Object.keys(linha)).toEqual(COLUNAS_DO_BACKLOG);
+    expect(linha["Número da Nota"]).toBe("324055");
+    expect(linha["CNPJ Fornecedor"]).toBe("04.307.650/0030-70");
+    expect(linha["Cód. SAP"]).toBe("5105101642");
+    expect(linha.Motivo).toBe("Divergência de preço — Preço da nota acima do pedido.");
+    // Quebra de linha e espaço duplo estouram a célula da planilha.
+    expect(linha.Comentários).toContain("Robert: Realizado entrada de movimento 0244599");
+    expect(linha.Comentários).not.toContain("\n");
+  });
+
+  it("diz que a nota ainda está lá em vez de deixar a saída vazia", () => {
+    const [linha] = toBacklogReportRows([noBacklog({})]);
+    expect(linha["Saiu do Backlog"]).toBe("Em aberto");
+  });
+
+  it("filtra pelo período em que a nota entrou no backlog, não pelo agendamento", () => {
+    const linhas = [noBacklog({ id: 1 }), noBacklog({ id: 2, enteredBacklogAt: "2026-08-02T10:00:00.000Z" })];
+    expect(filterBacklogReport(linhas, { scheduledStart: "2026-09-01", scheduledEnd: "2026-09-30" }).map(l => l.id)).toEqual([1]);
+  });
+
+  it("acha pelo nome e pelo CNPJ do fornecedor", () => {
+    const linhas = [noBacklog({ id: 1 }), noBacklog({ id: 2, invoiceSupplierName: "Outra", supplierName: "Outra", supplierCnpj: "99887766000155" })];
+    expect(filterBacklogReport(linhas, { supplier: "onco" }).map(l => l.id)).toEqual([1]);
+    expect(filterBacklogReport(linhas, { supplier: "99887766" }).map(l => l.id)).toEqual([2]);
   });
 });

@@ -31,6 +31,7 @@ import {
   listAppointmentsBetween,
   listAppointmentInternalNotes,
   listAppointmentSuggestions,
+  listBacklogReportRows,
   listUnreadAppointmentMessages,
   listSupplierActiveAppointments,
   markAppointmentMessagesRead,
@@ -746,6 +747,15 @@ export const appRouter = router({
         return { id };
       }),
     notifications: protectedProcedure.query(({ ctx }) => listUnreadAppointmentMessages({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
+  }),
+  reports: router({
+    // O relatório de backlog junta o que está na nota com o que só existe no
+    // histórico — quando entrou, quando saiu — e com as observações internas.
+    // Por isso é montado aqui, e não a partir da lista de agendamentos.
+    backlog: protectedProcedure.query(async ({ ctx }) => {
+      assertSchedulingDesk(ctx.user.role);
+      return listBacklogReportRows();
+    }),
   }),
   internalNotes: router({
     list: protectedProcedure

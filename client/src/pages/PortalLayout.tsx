@@ -44,7 +44,15 @@ const themeOptions: { value: ThemeChoice; label: string; icon: LucideIcon }[] = 
 type PortalUser = { id: number; name: string | null; email: string | null; role: string };
 
 /** Item da barra de navegação. O badge é a contagem que pede atenção agora. */
-type NavItem = { label: string; path: string; icon: LucideIcon; badge?: number };
+type NavItem = {
+  label: string;
+  path: string;
+  icon: LucideIcon;
+  badge?: number;
+  /** Quando existe, o item abre um menu em vez de navegar direto. */
+  grupo?: string;
+  filhos?: { label: string; path: string }[];
+};
 
 export default function PortalLayout({
   user,
@@ -100,7 +108,18 @@ export default function PortalLayout({
     { label: "Dashboard", path: "/operador/dashboard", icon: LayoutDashboard },
     { label: "Agendamentos", path: "/operador", icon: ClipboardList },
     { label: "Calendário", path: "/operador/calendario", icon: CalendarDays },
-    { label: "Relatórios", path: "/operador/relatorios", icon: BarChart3 },
+    // Relatórios abre um menu: são duas consultas diferentes, e a de backlog
+    // não é uma aba dentro da outra — tem período, colunas e público próprios.
+    {
+      label: "Relatórios",
+      path: "/operador/relatorios",
+      icon: BarChart3,
+      grupo: "Movimentação",
+      filhos: [
+        { label: "Notas lançadas", path: "/operador/relatorios" },
+        { label: "Backlog", path: "/operador/relatorios/backlog" },
+      ],
+    },
   ];
   // O backlog é a fila de tratativa do planejamento. Fica fora do menu do
   // Operador de propósito: é ele quem manda a nota para lá.
@@ -146,9 +165,11 @@ export default function PortalLayout({
     });
   }, [canApproveEntries, releaseRequests.data, releaseCount, setLocation]);
 
+  const [menuAberto, setMenuAberto] = useState<string | null>(null);
   const homePath = nav[0]?.path ?? "/";
   const go = (path: string) => {
     setLocation(path);
+    setMenuAberto(null);
     setMobileOpen(false);
     setProfileOpen(false);
   };
@@ -185,8 +206,42 @@ export default function PortalLayout({
           <nav className="hidden min-w-0 flex-1 items-center justify-center lg:flex">
             <div className="flex items-center gap-0.5">
               {nav.map(item => {
-                const active = location === item.path;
+                const active = item.filhos ? item.filhos.some(filho => location === filho.path) : location === item.path;
                 const Icon = item.icon;
+                if (item.filhos) {
+                  const aberto = menuAberto === item.path;
+                  return (
+                    <div key={item.path} className="relative">
+                      <button
+                        onClick={() => setMenuAberto(atual => (atual === item.path ? null : item.path))}
+                        aria-expanded={aberto}
+                        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition ${
+                          active ? "bg-rvd-plum-pale/50 text-rvd-plum" : "text-ink-soft hover:bg-canvas hover:text-ink"
+                        }`}
+                      >
+                        <Icon className="size-4" />
+                        {item.label}
+                        <ChevronDown className={`size-3.5 transition ${aberto ? "rotate-180" : ""}`} />
+                      </button>
+                      {aberto && (
+                        <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded-xl border border-line bg-surface p-2 shadow-xl">
+                          {item.grupo && <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-faint">{item.grupo}</p>}
+                          {item.filhos.map(filho => (
+                            <button
+                              key={filho.path}
+                              onClick={() => { setMenuAberto(null); go(filho.path); }}
+                              className={`block w-full rounded-lg px-3 py-2 text-left text-sm font-bold transition ${
+                                location === filho.path ? "bg-rvd-plum-pale/50 text-rvd-plum" : "text-ink-soft hover:bg-canvas hover:text-ink"
+                              }`}
+                            >
+                              {filho.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
                 return (
                   <button
                     key={item.path}
@@ -260,7 +315,7 @@ export default function PortalLayout({
         {mobileOpen && (
           <div className="border-t border-line bg-surface px-5 py-3 lg:hidden">
             <nav className="flex flex-wrap gap-2">
-              {[...nav, ...adminNav].map(item => {
+              {[...nav, ...adminNav].flatMap(item => (item.filhos ? item.filhos.map(filho => ({ ...item, label: filho.label, path: filho.path, filhos: undefined })) : [item])).map(item => {
                 const Icon = item.icon;
                 const active = location === item.path;
                 return (
