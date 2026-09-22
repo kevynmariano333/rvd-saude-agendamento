@@ -9,7 +9,7 @@ import {
   serviceTypeCopy,
   type AttendanceStatus,
 } from "@/lib/attendance";
-import { canSeeAttendances, homePathFor, type PortalRole } from "@/lib/portal";
+import { canSeeGateHistory, homePathFor, type PortalRole } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
 import {
   formatMinutes,
@@ -64,7 +64,7 @@ export default function GateHistoryPage() {
   useEffect(() => {
     if (auth.data === null) setLocation("/");
     const role = auth.data?.role as PortalRole | undefined;
-    if (role && !canSeeAttendances(role)) setLocation(homePathFor(role));
+    if (role && !canSeeGateHistory(role)) setLocation(homePathFor(role));
   }, [auth.data, setLocation]);
 
   const all = useMemo(() => report.data ?? [], [report.data]);
@@ -127,7 +127,7 @@ export default function GateHistoryPage() {
   }
 
   if (auth.isLoading) return <LoadingTruck label="Abrindo o histórico" />;
-  if (!auth.data || !canSeeAttendances(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
+  if (!auth.data || !canSeeGateHistory(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
 
   return (
     <PortalLayout

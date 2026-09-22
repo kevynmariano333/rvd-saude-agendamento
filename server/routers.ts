@@ -93,6 +93,7 @@ import {
   canManagePortaria,
   canPerformAttendanceAction,
   canViewAttendances,
+  canViewGateHistory,
   isValidClassificationDetail,
   validateEntryDecision,
   validateOperationalTransition,
@@ -819,8 +820,8 @@ export const appRouter = router({
         })
       )
       .query(async ({ ctx, input }) => {
-        if (!canViewAttendances(ctx.user.role) && !isOperator(ctx.user.role)) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Histórico restrito às equipes internas." });
+        if (!canViewGateHistory(ctx.user.role)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "O histórico do portão é de quem responde pelo pátio." });
         }
         if (input.from > input.to) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "A data inicial não pode ser depois da final." });

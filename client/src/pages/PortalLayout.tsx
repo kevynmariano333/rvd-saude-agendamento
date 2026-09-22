@@ -138,8 +138,10 @@ export default function PortalLayout({
       ? [...schedulingNav, ...yardNav, ...historyNav]
       : isPortalPlanner(role)
         ? [...schedulingNav, ...backlogNav]
-        : isPortalGate(role)
-          ? [...gateNav, ...historyNav]
+        : // A Portaria tem uma tela só: quem está no portão não navega pelo
+          // sistema no meio do turno.
+          isPortalGate(role)
+          ? gateNav
           : isPortalYard(role)
             ? [...yardNav, ...historyNav]
             : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSeeAttendances, canTreatBacklogPortal, formatCnpj, getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, homePathFor, isPortalGate, isPortalOperator, isPortalPlanner, isPortalSchedulingDesk, isPortalYard } from "./portal";
+import { canSeeAttendances, canSeeGateHistory, canTreatBacklogPortal, formatCnpj, getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, homePathFor, isPortalGate, isPortalOperator, isPortalPlanner, isPortalSchedulingDesk, isPortalYard } from "./portal";
 
 describe("momento exibido do agendamento", () => {
   it("prioriza a data e hora reais quando a nota foi recebida", () => {
@@ -97,5 +97,15 @@ describe("tratativa do backlog", () => {
     expect(canTreatBacklogPortal("operator")).toBe(false);
     expect(canTreatBacklogPortal("supplier")).toBe(false);
     expect(canTreatBacklogPortal("portaria")).toBe(false);
+  });
+});
+
+describe("histórico do portão na tela", () => {
+  it("fica fora da Portaria e do fornecedor", () => {
+    expect(canSeeGateHistory("operacao")).toBe(true);
+    expect(canSeeGateHistory("admin")).toBe(true);
+    expect(canSeeGateHistory("portaria")).toBe(false);
+    expect(canSeeGateHistory("supplier")).toBe(false);
+    expect(canSeeGateHistory("planejador")).toBe(false);
   });
 });

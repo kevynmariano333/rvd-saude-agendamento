@@ -87,6 +87,17 @@ export function canSeeAttendances(role: PortalRole) {
   return role !== "supplier" && role !== "planejador";
 }
 
+/**
+ * Quem consulta o histórico do portão.
+ *
+ * A Portaria tem uma tela só, de propósito: quem está no portão registra a
+ * chegada e decide a entrada, e não precisa — nem deve — navegar pelo resto do
+ * sistema no meio do turno.
+ */
+export function canSeeGateHistory(role: PortalRole) {
+  return role === "operacao" || role === "operator" || role === "admin";
+}
+
 /** A tela em que cada perfil começa depois de entrar. */
 export function homePathFor(role: PortalRole) {
   if (role === "supplier") return "/fornecedor";

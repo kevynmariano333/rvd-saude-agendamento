@@ -159,6 +159,10 @@ Seis perfis: `admin`, `operator`, `supplier`, `portaria`, `operacao`,
   propõe datas ao Operador e acompanha a nota até concluir. Marcar a data é
   compromisso com o fornecedor e continua sendo do Operador; o pátio e a
   administração ficam fora do perfil.
+- **A Portaria tem uma tela só.** Quem está no portão registra a chegada e
+  decide a entrada, e nada mais: o pátio é da Operação e o histórico é de quem
+  responde por ele. Um portão com menu cheio é um portão parado enquanto alguém
+  procura o que clicar.
 - **O backlog é a fila de tratativa do planejamento.** Quando o Operador
   constata no recebimento que a nota não fecha, ela vai para o backlog com o
   motivo. Reagendar não resolveria — a carga já chegou —, então o planejamento

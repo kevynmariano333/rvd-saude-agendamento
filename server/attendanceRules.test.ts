@@ -4,6 +4,7 @@ import {
   canManagePortaria,
   canPerformAttendanceAction,
   canViewAttendances,
+  canViewGateHistory,
   classificationDetailsFor,
   isValidClassificationDetail,
   validateEntryDecision,
@@ -131,5 +132,22 @@ describe("fluxo operacional", () => {
     expect(validateOperationalTransition("recusado", "iniciar")).toBe(message);
     expect(validateOperationalTransition("aprovado", "liberar")).toBe(message);
     expect(validateOperationalTransition("concluido", "concluir")).toBe(message);
+  });
+});
+
+describe("histórico do portão", () => {
+  it("é de quem responde pelo pátio, não de quem está no portão", () => {
+    expect(canViewGateHistory("operacao")).toBe(true);
+    expect(canViewGateHistory("operator")).toBe(true);
+    expect(canViewGateHistory("admin")).toBe(true);
+    // A Portaria tem uma tela só: registrar a chegada e decidir a entrada.
+    expect(canViewGateHistory("portaria")).toBe(false);
+    expect(canViewGateHistory("planejador")).toBe(false);
+    expect(canViewGateHistory("supplier")).toBe(false);
+  });
+
+  it("não tira da Portaria a própria tela", () => {
+    // Ela continua precisando da fila do portão para trabalhar o turno.
+    expect(canViewAttendances("portaria")).toBe(true);
   });
 });

@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   getAttendanceById: vi.fn(),
   listAttendanceEvents: vi.fn(),
   listAttendances: vi.fn(),
+  listAttendancesInRange: vi.fn(),
   listStaffUsers: vi.fn(),
   setUserRole: vi.fn(),
 }));
@@ -623,5 +624,28 @@ describe("observações internas", () => {
     }
     expect(mocks.createAppointmentInternalNote).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 9, body: "Movimento complementar 0244599" }));
     expect(mocks.createAppointmentInternalNote).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("alcance da Portaria", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("não abre o histórico do portão para quem está no portão", async () => {
+    const caller = appRouter.createCaller(context("portaria"));
+    await expect(caller.attendances.report({ from: "2026-09-01", to: "2026-09-30" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("mantém a fila do portão, que é o trabalho dela", async () => {
+    mocks.listAttendances.mockResolvedValue([]);
+    const caller = appRouter.createCaller(context("portaria"));
+    await expect(caller.attendances.list()).resolves.toEqual([]);
+  });
+
+  it("abre o histórico para a Operação e o Operador", async () => {
+    mocks.listAttendancesInRange.mockResolvedValue([]);
+    for (const perfil of ["operacao", "operator", "admin"] as const) {
+      const caller = appRouter.createCaller(context(perfil));
+      await expect(caller.attendances.report({ from: "2026-09-01", to: "2026-09-30" })).resolves.toEqual([]);
+    }
   });
 });

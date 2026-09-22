@@ -32,6 +32,17 @@ export function canViewAttendances(role: UserRole) {
   return role !== "supplier" && role !== "planejador";
 }
 
+/**
+ * Quem consulta o histórico do portão.
+ *
+ * A Portaria trabalha o turno na própria tela e não consulta o acervo: o
+ * histórico é de quem responde pelo pátio e pela operação. Manter o portão com
+ * uma tela só é o que impede que quem está no portão se perca no sistema.
+ */
+export function canViewGateHistory(role: UserRole) {
+  return role === "operacao" || role === "operator" || role === "admin";
+}
+
 /** Cada classificação carrega os seus subtipos; a LLT não tem nenhum. */
 export function isValidClassificationDetail(
   classification: AttendanceClassification,
