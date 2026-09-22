@@ -606,7 +606,7 @@ export const appRouter = router({
         const notaDoEvento = input.status === "backlog"
           ? `${rotuloDoMotivo(backlogReasonCode)}: ${observacao}`
           : observacao || (input.status === "received" ? "Recebimento confirmado pelo operador." : input.status === "completed" ? `Recebimento concluído. MIRO ${miroNumber}.` : undefined);
-        return updateAppointmentStatus({ ...input, miroNumber, backlogReasonCode, previousStatus: appointment.status, handledBy: ctx.user.id, eventNote: notaDoEvento });
+        return updateAppointmentStatus({ ...input, miroNumber, backlogReasonCode, backlogReason: observacao, previousStatus: appointment.status, handledBy: ctx.user.id, eventNote: notaDoEvento });
       }),
     confirmPreNote: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))
