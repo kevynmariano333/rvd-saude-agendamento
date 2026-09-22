@@ -13,11 +13,13 @@ export type Unidade = {
   cnpj: string;
   sigla: string;
   nome: string;
+  /** Como o nome cabe na coluna da tabela, que é estreita. */
+  curto: string;
 };
 
 export const UNIDADES: Unidade[] = [
-  { cnpj: "06033403000113", sigla: "HSH", nome: "Hospital" },
-  { cnpj: "43293604002120", sigla: "MSH", nome: "Maternidade" },
+  { cnpj: "06033403000113", sigla: "HSH", nome: "Hospital", curto: "HOSPITAL" },
+  { cnpj: "43293604002120", sigla: "MSH", nome: "Maternidade", curto: "MATERN." },
 ];
 
 export function apenasDigitos(valor: string | null | undefined): string {
@@ -36,17 +38,33 @@ export function unidadePorCnpj(cnpj: string | null | undefined): Unidade | null 
   return UNIDADES.find(unidade => unidade.cnpj === digitos) ?? null;
 }
 
+export type RotuloDestinatario = {
+  /** Primeira linha da célula. */
+  principal: string;
+  /** Segunda linha. */
+  secundaria: string;
+  /** Falso quando é um CNPJ que não conhecemos: aí a célula não ganha destaque. */
+  unidade: boolean;
+  /** O CNPJ por extenso, que fica no tooltip. */
+  tooltip: string;
+};
+
 /**
- * Como o destinatário aparece numa linha da tabela: a sigla em cima e o que ela
- * significa embaixo. Um CNPJ que não é de unidade conhecida mostra o número
- * formatado, e não um nome inventado.
+ * Como o destinatário aparece numa linha da tabela: a sigla e o tipo da unidade,
+ * em duas linhas, com o peso de quem é lido de relance — é por ele que a
+ * operação separa o que é do hospital do que é da maternidade.
+ *
+ * Um CNPJ que não é de unidade conhecida mostra o número formatado, sem
+ * destaque e sem nome inventado.
  */
-export function rotuloDoDestinatario(cnpj: string | null | undefined): { titulo: string; detalhe: string } {
+export function rotuloDoDestinatario(cnpj: string | null | undefined): RotuloDestinatario {
   const unidade = unidadePorCnpj(cnpj);
-  if (unidade) return { titulo: unidade.sigla, detalhe: unidade.nome };
+  if (unidade) {
+    return { principal: `${unidade.sigla} -`, secundaria: unidade.curto, unidade: true, tooltip: `${unidade.nome} · ${formatarCnpj(unidade.cnpj)}` };
+  }
   const digitos = apenasDigitos(cnpj);
-  if (!digitos) return { titulo: "—", detalhe: "Não informado" };
-  return { titulo: formatarCnpj(cnpj), detalhe: "Destinatário" };
+  if (!digitos) return { principal: "—", secundaria: "Não informado", unidade: false, tooltip: "Destinatário não informado na nota" };
+  return { principal: formatarCnpj(cnpj), secundaria: "Destinatário", unidade: false, tooltip: formatarCnpj(cnpj) };
 }
 
 /**

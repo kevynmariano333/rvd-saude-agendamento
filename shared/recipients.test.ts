@@ -2,18 +2,23 @@ import { describe, expect, it } from "vitest";
 import { filtroDeDestinatario, formatarCnpj, rotuloDoDestinatario, unidadePorCnpj } from "./recipients";
 
 describe("destinatário da nota", () => {
+  it("guarda o CNPJ no tooltip, que é o que o sistema realmente usa", () => {
+    expect(rotuloDoDestinatario("06033403000113").tooltip).toBe("Hospital · 06.033.403/0001-13");
+  });
+
   it("reconhece as duas unidades pelo CNPJ", () => {
     expect(unidadePorCnpj("06033403000113")?.sigla).toBe("HSH");
     expect(unidadePorCnpj("43293604002120")?.sigla).toBe("MSH");
   });
 
   it("reconhece o CNPJ mesmo pontuado, como vem de um filtro digitado", () => {
-    expect(rotuloDoDestinatario("06.033.403/0001-13")).toEqual({ titulo: "HSH", detalhe: "Hospital" });
-    expect(rotuloDoDestinatario("43.293.604/0021-20")).toEqual({ titulo: "MSH", detalhe: "Maternidade" });
+    expect(rotuloDoDestinatario("06.033.403/0001-13")).toMatchObject({ principal: "HSH -", secundaria: "HOSPITAL", unidade: true });
+    expect(rotuloDoDestinatario("43.293.604/0021-20")).toMatchObject({ principal: "MSH -", secundaria: "MATERN.", unidade: true });
   });
 
   it("mostra o número quando a unidade não é conhecida, em vez de inventar um nome", () => {
-    expect(rotuloDoDestinatario("12345678000199")).toEqual({ titulo: "12.345.678/0001-99", detalhe: "Destinatário" });
+    // Sem destaque: a célula grande é a marca de unidade reconhecida.
+    expect(rotuloDoDestinatario("12345678000199")).toMatchObject({ principal: "12.345.678/0001-99", secundaria: "Destinatário", unidade: false });
   });
 
   it("não confunde um CNPJ incompleto com uma unidade", () => {
@@ -23,7 +28,7 @@ describe("destinatário da nota", () => {
   });
 
   it("avisa quando a nota não trouxe destinatário", () => {
-    expect(rotuloDoDestinatario(null)).toEqual({ titulo: "—", detalhe: "Não informado" });
+    expect(rotuloDoDestinatario(null)).toMatchObject({ principal: "—", secundaria: "Não informado", unidade: false });
   });
 
   it("deixa o número legível", () => {
