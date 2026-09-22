@@ -1,13 +1,26 @@
 /**
- * Importação do histórico de recebimento do sistema Agiliza.
+ * Importação do acervo de recebimento do sistema Agiliza.
  *
- * O Agiliza era o sistema de uma empresa parceira e saiu do ar. O que sobrou do
- * acervo da RVD Saúde é um CSV com as notas já recebidas, sem XML, sem valor
- * fiscal e sem volumes. Este script traz esse acervo para dentro do portal para
- * que cada fornecedor encontre o próprio histórico quando se cadastrar.
+ * O Agiliza é o sistema da empresa parceira, e a RVD Saúde exportou de lá o que
+ * é dela. São três relatórios, e cada um traz uma parte do que a nota precisa:
  *
- *   pnpm exec tsx scripts/importar-agiliza.ts caminho/agiliza.csv              # simulação
- *   pnpm exec tsx scripts/importar-agiliza.ts caminho/agiliza.csv --confirmar  # grava
+ *   consolidado  uma linha por nota: datas, status, pedido, fornecedor, destino
+ *   detalhado    uma linha por item: descrição, código SAP do material, valores
+ *   backlog      uma linha por episódio: motivo, entrada, saída e comentários
+ *
+ * Só o consolidado é obrigatório; os outros dois entram por opção e enriquecem
+ * as mesmas notas. Rodar de novo com um arquivo a mais NÃO completa as notas já
+ * importadas — a idempotência é por nota, e nota que já existe é pulada. Então
+ * passe de uma vez o que tiver.
+ *
+ *   pnpm exec tsx scripts/importar-agiliza.ts consolidado.csv \
+ *     --itens=detalhado.csv --backlog=backlog.csv              # simulação
+ *   pnpm exec tsx scripts/importar-agiliza.ts consolidado.csv \
+ *     --itens=detalhado.csv --backlog=backlog.csv --confirmar  # grava
+ *
+ * O "Cód. SAP" do detalhado é o código do material, e não o número MIRO: ele
+ * muda de item para item dentro da mesma nota. Fica com o item; miroNumber
+ * continua vazio nas notas importadas, porque esse número o acervo não tem.
  *
  * A simulação é o padrão de propósito: é uma carga grande, feita uma vez, num
  * banco de produção que não tem tela nenhuma para desfazer o estrago. Sem
@@ -20,10 +33,12 @@
  */
 
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { z } from "zod";
 import {
+  appointmentInternalNotes,
   appointments,
   appointmentStatusHistory,
   users,
@@ -48,11 +63,72 @@ const CNPJS_DA_RVD = new Map<string, string>([
 ]);
 
 /** O "Último Status" do Agiliza vem acentuado; comparar sem acento não casa nada. */
-const STATUS_AGILIZA = {
+export const STATUS_AGILIZA = {
   Concluída: "completed",
   Recebida: "received",
+  // Nota que ainda vai ser entregue: entra agendada e aparece na agenda do
+  // Operador como qualquer outra, que é o ponto de trazer o acervo para cá.
+  Agendada: "scheduled",
   Backlog: "backlog",
 } as const satisfies Record<string, AppointmentStatus>;
+
+const CABECALHO_ITENS = [
+  "Número da Nota",
+  "Último Status",
+  "Data do Último Status",
+  "Data de Agendamento",
+  "Número do Pedido",
+  "CNPJ Fornecedor",
+  "Nome Fornecedor",
+  "CNPJ Destino",
+  "Descrição Destino",
+  "Cód. Fornecedor",
+  "Descrição do Item",
+  "Cód. SAP",
+  "Quantidade",
+  "Valor Unitário",
+  "Valor Total",
+] as const;
+
+const CABECALHO_BACKLOG = [
+  "Data de Criação",
+  "Entrou em Backlog",
+  "Saiu do Backlog",
+  "Status Atual",
+  "Número da Nota",
+  "CNPJ Fornecedor",
+  "Nome Fornecedor",
+  "Cód. SAP",
+  "Motivo",
+  "Comentários",
+] as const;
+
+/**
+ * O motivo do backlog no Agiliza e o código da lista fechada daqui.
+ *
+ * Três pares ficaram ambíguos — "cnpj" e "divergencia_cnpj", "quantidade" e
+ * "divergencia_quantidade", e "valor" —, porque a lista daqui tem a divergência
+ * simples e a divergência "nota x pedido" para os mesmos assuntos e o arquivo
+ * não diz qual é qual. O código curto foi lido como a comparação com o pedido,
+ * que é o que "valor" é sem ambiguidade. O código de origem fica escrito na
+ * descrição de toda nota importada: se a leitura estiver trocada, o dado não se
+ * perdeu, e corrigir é reescrever esta tabela.
+ */
+export const MOTIVOS_DO_AGILIZA: Record<string, string> = {
+  avaliacao_lote_incompleta: "AVALIACAO_LOTE_INCOMPLETA",
+  caixaria: "UNIDADE_MEDIDA_CAIXARIA",
+  cnpj: "DIVERGENCIA_CNPJ_PEDIDO_NOTA",
+  divergencia_cnpj: "DIVERGENCIA_CNPJ",
+  divergencia_preco: "DIVERGENCIA_PRECO",
+  divergencia_quantidade: "DIVERGENCIA_QUANTIDADE",
+  quantidade: "DIVERGENCIA_QUANTIDADE_NOTA_PEDIDO",
+  valor: "DIVERGENCIA_VALOR_NOTA_PEDIDO",
+  erro_atribuicao_itens: "ERRO_ATRIBUICAO_ITENS",
+  erro_erp: "ERRO_SISTEMA_ERP",
+  erro_tributario: "ERRO_TRIBUTARIO_FISCAL",
+  pedido_compra: "PENDENCIA_PEDIDO_COMPRA",
+  outro: "OUTRO",
+};
 
 const CABECALHO_ESPERADO = [
   "Data de Criação",
@@ -133,7 +209,7 @@ const PADRAO_DATA = /^(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{2}):(\d{2}):(\d{2})$/;
  * nenhum gráfico — nenhuma data do arquivo cai entre 00:00 e 03:00, então
  * nenhuma linha mudaria de dia. Só apareceria na nota aberta, com hora errada.
  */
-function lerDataSaoPaulo(valor: string): Date | null {
+export function lerDataSaoPaulo(valor: string): Date | null {
   const partes = PADRAO_DATA.exec(valor.trim());
   if (!partes) return null;
   const [, dia, mes, ano, hora, minuto, segundo] = partes.map(Number);
@@ -212,6 +288,171 @@ function lerPedidos(valor: string) {
   return pedidos.length ? pedidos.join(", ") : null;
 }
 
+type Recusa = { linha: number; motivo: string };
+type Aviso = { linha: number; texto: string };
+
+/** "14.626,50" -> 1462650. Centavos, como o resto do sistema guarda dinheiro. */
+export function lerDinheiroEmCentavos(valor: string): number | null {
+  const limpo = valor.trim().replace(/\./g, "").replace(",", ".");
+  if (!limpo || !/^-?\d+(\.\d+)?$/.test(limpo)) return null;
+  return Math.round(Number(limpo) * 100);
+}
+
+function lerInteiro(valor: string): number | null {
+  const limpo = valor.trim().replace(/\./g, "").replace(",", ".");
+  if (!limpo || !/^-?\d+(\.\d+)?$/.test(limpo)) return null;
+  const numero = Number(limpo);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+const chaveDaNota = (cnpj: string, nota: string) => `${cnpj}|${nota}`;
+
+// ---------------------------------------------------------------------------
+// Relatório detalhado: os itens da nota
+// ---------------------------------------------------------------------------
+
+/**
+ * O item como a tela de detalhamento lê: os quatro primeiros campos são os
+ * mesmos que o leitor de XML produz, e é por eles que a tabela de itens
+ * funciona sem saber de onde a nota veio. Os dois últimos são do acervo — o
+ * código do material no SAP e o código do fornecedor —, guardados porque é o
+ * que permite cruzar a nota antiga com o ERP depois.
+ */
+type ItemDaNota = {
+  description: string;
+  quantity: number | null;
+  unitPriceCents: number | null;
+  totalCents: number | null;
+  sapCode: string | null;
+  supplierCode: string | null;
+};
+
+type ItensDaNota = { itens: ItemDaNota[]; totalCents: number | null; linhas: number };
+
+const LIMITE_DE_ITENS = 50;
+
+function lerItens(caminho: string): { porNota: Map<string, ItensDaNota>; linhas: number; recusas: Recusa[] } {
+  const linhas = lerCsv(readFileSync(caminho, "utf8").replace(/^\ufeff/, ""));
+  if (!linhas.length) throw new Error(`O arquivo de itens está vazio: ${caminho}`);
+  const cabecalho = linhas[0].map(coluna => coluna.trim());
+  if (cabecalho.length !== CABECALHO_ITENS.length || CABECALHO_ITENS.some((esperado, i) => cabecalho[i] !== esperado)) {
+    throw new Error(`Cabeçalho inesperado no arquivo de itens.\n  esperado: ${CABECALHO_ITENS.join(" | ")}\n  recebido: ${cabecalho.join(" | ")}`);
+  }
+
+  const porNota = new Map<string, ItensDaNota>();
+  const recusas: Recusa[] = [];
+  linhas.slice(1).forEach((colunas, indice) => {
+    const numeroDaLinha = indice + 2;
+    if (colunas.length !== CABECALHO_ITENS.length) {
+      recusas.push({ linha: numeroDaLinha, motivo: `linha de item com ${colunas.length} colunas, esperadas ${CABECALHO_ITENS.length}` });
+      return;
+    }
+    const nota = colunas[0].trim();
+    const cnpj = soDigitos(colunas[5]);
+    if (!nota || !cnpj) {
+      recusas.push({ linha: numeroDaLinha, motivo: "linha de item sem número da nota ou sem CNPJ do fornecedor" });
+      return;
+    }
+    const descricao = limparNome(colunas[10]);
+    const item: ItemDaNota = {
+      description: descricao || "Item sem descrição na origem",
+      quantity: lerInteiro(colunas[12]),
+      unitPriceCents: lerDinheiroEmCentavos(colunas[13]),
+      totalCents: lerDinheiroEmCentavos(colunas[14]),
+      sapCode: colunas[11].trim() || null,
+      supplierCode: colunas[9].trim() || null,
+    };
+    const chave = chaveDaNota(cnpj, nota);
+    const atual = porNota.get(chave) ?? { itens: [], totalCents: 0, linhas: 0 };
+    atual.linhas += 1;
+    // Guardar item demais engorda a linha do banco sem ajudar ninguém: a tela
+    // mostra os 50 primeiros. O total continua somando todos.
+    if (atual.itens.length < LIMITE_DE_ITENS) atual.itens.push(item);
+    atual.totalCents = atual.totalCents === null || item.totalCents === null ? null : atual.totalCents + item.totalCents;
+    porNota.set(chave, atual);
+  });
+  return { porNota, linhas: linhas.length - 1, recusas };
+}
+
+// ---------------------------------------------------------------------------
+// Relatório de backlog: motivo, datas e comentários
+// ---------------------------------------------------------------------------
+
+type ComentarioDoAcervo = { quando: Date | null; autor: string; texto: string };
+
+export type EpisodioDeBacklog = {
+  codigoOriginal: string;
+  codigo: string | null;
+  entrouEm: Date | null;
+  saiuEm: Date | null;
+  comentarios: ComentarioDoAcervo[];
+};
+
+const CABECALHO_DE_COMENTARIO = /\[(\d{2})\/(\d{2})\/(\d{2}) - (\d{2}):(\d{2}) — ([^\]]+)\]/g;
+
+/**
+ * Os comentários chegam num campo só, colados, cada um precedido de
+ * "[18/09/26 - 13:11 — Fulano]". Separar é o que transforma um paredão de texto
+ * em anotações com autor e hora dentro da nota.
+ */
+export function lerComentarios(bruto: string): ComentarioDoAcervo[] {
+  const texto = bruto.replace(/\r/g, "");
+  const marcas = Array.from(texto.matchAll(CABECALHO_DE_COMENTARIO));
+  if (!marcas.length) {
+    const solto = texto.trim();
+    return solto ? [{ quando: null, autor: "Autor não identificado", texto: solto }] : [];
+  }
+  return marcas
+    .map((marca, indice) => {
+      const inicio = (marca.index ?? 0) + marca[0].length;
+      const fim = indice + 1 < marcas.length ? marcas[indice + 1].index ?? texto.length : texto.length;
+      const [, dia, mes, ano, hora, minuto, autor] = marca;
+      return {
+        quando: lerDataSaoPaulo(`${dia}/${mes}/20${ano}, ${hora}:${minuto}:00`),
+        autor: limparNome(autor) || "Autor não identificado",
+        texto: texto.slice(inicio, fim).replace(/\s+/g, " ").trim(),
+      };
+    })
+    .filter(comentario => comentario.texto.length > 0);
+}
+
+function lerBacklog(caminho: string): { porNota: Map<string, EpisodioDeBacklog>; linhas: number; recusas: Recusa[]; motivosDesconhecidos: Map<string, number> } {
+  const linhas = lerCsv(readFileSync(caminho, "utf8").replace(/^\ufeff/, ""));
+  if (!linhas.length) throw new Error(`O arquivo de backlog está vazio: ${caminho}`);
+  const cabecalho = linhas[0].map(coluna => coluna.trim());
+  if (cabecalho.length !== CABECALHO_BACKLOG.length || CABECALHO_BACKLOG.some((esperado, i) => cabecalho[i] !== esperado)) {
+    throw new Error(`Cabeçalho inesperado no arquivo de backlog.\n  esperado: ${CABECALHO_BACKLOG.join(" | ")}\n  recebido: ${cabecalho.join(" | ")}`);
+  }
+
+  const porNota = new Map<string, EpisodioDeBacklog>();
+  const recusas: Recusa[] = [];
+  const motivosDesconhecidos = new Map<string, number>();
+  linhas.slice(1).forEach((colunas, indice) => {
+    const numeroDaLinha = indice + 2;
+    if (colunas.length !== CABECALHO_BACKLOG.length) {
+      recusas.push({ linha: numeroDaLinha, motivo: `linha de backlog com ${colunas.length} colunas, esperadas ${CABECALHO_BACKLOG.length}` });
+      return;
+    }
+    const nota = colunas[4].trim();
+    const cnpj = soDigitos(colunas[5]);
+    if (!nota || !cnpj) {
+      recusas.push({ linha: numeroDaLinha, motivo: "linha de backlog sem número da nota ou sem CNPJ do fornecedor" });
+      return;
+    }
+    const codigoOriginal = colunas[8].replace(/^Problema relatado:\s*/i, "").trim().toLowerCase();
+    const codigo = MOTIVOS_DO_AGILIZA[codigoOriginal] ?? null;
+    if (codigoOriginal && !codigo) motivosDesconhecidos.set(codigoOriginal, (motivosDesconhecidos.get(codigoOriginal) ?? 0) + 1);
+    porNota.set(chaveDaNota(cnpj, nota), {
+      codigoOriginal,
+      codigo,
+      entrouEm: lerDataSaoPaulo(colunas[1]),
+      saiuEm: lerDataSaoPaulo(colunas[2]),
+      comentarios: lerComentarios(colunas[9]),
+    });
+  });
+  return { porNota, linhas: linhas.length - 1, recusas, motivosDesconhecidos };
+}
+
 // ---------------------------------------------------------------------------
 // Validação da linha
 // ---------------------------------------------------------------------------
@@ -223,7 +464,7 @@ const DataAgiliza = z
 
 const EsquemaLinha = z.object({
   dataCriacao: DataAgiliza,
-  ultimoStatus: z.enum(["Concluída", "Recebida", "Backlog"]),
+  ultimoStatus: z.enum(["Concluída", "Recebida", "Agendada", "Backlog"]),
   dataUltimoStatus: DataAgiliza,
   dataAgendamento: DataAgiliza,
   numeroNota: z
@@ -254,17 +495,15 @@ const EsquemaLinha = z.object({
   descricaoDestino: z.string().transform(valor => valor.replace(/\s+/g, " ").trim()),
 });
 
-type LinhaValidada = z.infer<typeof EsquemaLinha>;
+export type LinhaValidada = z.infer<typeof EsquemaLinha>;
 
 type LinhaLida = { numero: number; dados: LinhaValidada };
-type Recusa = { linha: number; motivo: string };
-type Aviso = { linha: number; texto: string };
 
 // ---------------------------------------------------------------------------
 // Plano de importação
 // ---------------------------------------------------------------------------
 
-type Evento = {
+export type Evento = {
   anterior: AppointmentStatus | null;
   proximo: AppointmentStatus;
   quando: Date;
@@ -280,6 +519,8 @@ type PlanoNota = {
   recebidoEm: Date | null;
   destino: string | null;
   eventos: Evento[];
+  itens: ItensDaNota | null;
+  episodio: EpisodioDeBacklog | null;
 };
 
 type PlanoFornecedor = {
@@ -291,9 +532,10 @@ type PlanoFornecedor = {
 
 /**
  * A cadeia de status que o sistema vivo produziria para uma nota dessas:
- * criação, agendamento, recebimento e conclusão, cada passo respeitando o grafo
- * de server/permissions.ts. Um agendamento sem histórico nenhum é um registro
- * que o portal nunca geraria — o diálogo "Histórico de datas" abriria vazio.
+ * criação, agendamento, a passagem pelo backlog quando houve, recebimento e
+ * conclusão, cada passo respeitando o grafo de server/permissions.ts. Um
+ * agendamento sem histórico nenhum é um registro que o portal nunca geraria —
+ * o diálogo "Histórico de datas" abriria vazio.
  *
  * Os carimbos são forçados a não retroceder: 72 linhas do arquivo têm
  * agendamento anterior à criação (a maioria por 1 ou 2 segundos de relógio da
@@ -301,7 +543,7 @@ type PlanoFornecedor = {
  * 23/03/2026). As datas de negócio entram como vieram; só a linha do tempo é
  * ajustada, senão a nota apareceria concluída antes de existir.
  */
-function montarEventos(dados: LinhaValidada, status: AppointmentStatus): Evento[] {
+export function montarEventos(dados: LinhaValidada, status: AppointmentStatus, episodio: EpisodioDeBacklog | null): Evento[] {
   const eventos: Evento[] = [];
   let ultimoMomento = dados.dataCriacao;
   const emOrdem = (momento: Date) => {
@@ -318,17 +560,6 @@ function montarEventos(dados: LinhaValidada, status: AppointmentStatus): Evento[
     nota: `Registro criado no sistema ${ORIGEM}.`,
   });
 
-  if (status === "backlog") {
-    eventos.push({
-      anterior: "pending",
-      proximo: "backlog",
-      quando: emOrdem(dados.dataUltimoStatus),
-      agendadoPara: null,
-      nota: `Nota deixada em backlog no sistema ${ORIGEM}.`,
-    });
-    return eventos;
-  }
-
   eventos.push({
     anterior: "pending",
     proximo: "scheduled",
@@ -338,6 +569,60 @@ function montarEventos(dados: LinhaValidada, status: AppointmentStatus): Evento[
     agendadoPara: dados.dataAgendamento,
     nota: `Data agendada no sistema ${ORIGEM}.`,
   });
+  if (status === "scheduled") return eventos;
+
+  // A passagem pelo backlog só é conhecida quando o relatório de backlog entra
+  // junto. Sem ele, a nota concluída conta a história curta: agendada, recebida,
+  // concluída — que é o que o consolidado sabe.
+  if (episodio) {
+    eventos.push({
+      anterior: "scheduled",
+      proximo: "backlog",
+      quando: emOrdem(episodio.entrouEm ?? dados.dataUltimoStatus),
+      agendadoPara: null,
+      nota: `Nota enviada ao backlog no sistema ${ORIGEM}${episodio.codigoOriginal ? ` (motivo: ${episodio.codigoOriginal})` : ""}.`,
+    });
+    if (status === "backlog") return eventos;
+    if (status === "received") {
+      // Voltar do backlog para recebida passa por agendada: é o caminho que o
+      // portal permite, e inventar um atalho deixaria o histórico impossível.
+      eventos.push({
+        anterior: "backlog",
+        proximo: "scheduled",
+        quando: emOrdem(episodio.saiuEm ?? dados.dataUltimoStatus),
+        agendadoPara: null,
+        nota: `Backlog resolvido no sistema ${ORIGEM}.`,
+      });
+      eventos.push({
+        anterior: "scheduled",
+        proximo: "received",
+        quando: emOrdem(dados.dataUltimoStatus),
+        agendadoPara: null,
+        nota: `Recebimento registrado no sistema ${ORIGEM}.`,
+      });
+      return eventos;
+    }
+    eventos.push({
+      anterior: "backlog",
+      proximo: "completed",
+      quando: emOrdem(episodio.saiuEm ?? dados.dataUltimoStatus),
+      agendadoPara: null,
+      nota: `Backlog tratado e nota concluída no sistema ${ORIGEM}.`,
+    });
+    return eventos;
+  }
+
+  if (status === "backlog") {
+    eventos.push({
+      anterior: "scheduled",
+      proximo: "backlog",
+      quando: emOrdem(dados.dataUltimoStatus),
+      agendadoPara: null,
+      nota: `Nota deixada em backlog no sistema ${ORIGEM}.`,
+    });
+    return eventos;
+  }
+
   eventos.push({
     anterior: "scheduled",
     proximo: "received",
@@ -366,10 +651,30 @@ function montarObservacao(plano: PlanoNota) {
   // "Total de Linhas" é a quantidade de itens da nota e não pode ir para
   // invoiceVolumeCount, que a tela lê como quantidade de volumes.
   if (plano.dados.totalLinhas !== null) partes.push(`Linhas da nota na origem: ${plano.dados.totalLinhas}.`);
+  if (plano.itens) {
+    partes.push(`Itens trazidos do relatório detalhado: ${plano.itens.linhas}.`);
+    // O código do SAP que o acervo tem é o do material, um por item. O MIRO, que
+    // é o número do lançamento da nota, o Agiliza não exportou — dizer isso aqui
+    // evita que alguém leia o campo vazio como erro da importação.
+    partes.push("Código SAP do acervo é o do material, por item; o número MIRO da nota não veio na exportação.");
+  }
+  if (plano.episodio) {
+    const entrada = plano.episodio.entrouEm ? formatarData(plano.episodio.entrouEm) : "data não informada";
+    const saida = plano.episodio.saiuEm ? formatarData(plano.episodio.saiuEm) : "ainda em aberto";
+    partes.push(`Passou pelo backlog na origem (motivo "${plano.episodio.codigoOriginal || "não informado"}"): entrou em ${entrada}, saiu em ${saida}.`);
+  }
   if (plano.destino === null && plano.dados.cnpjDestino) {
     partes.push(`CNPJ de destino da origem não reconhecido e não gravado: ${plano.dados.cnpjDestino}.`);
   }
   return partes.join(" ");
+}
+
+/** A descrição do motivo guarda o código como ele veio, que é o dado bruto. */
+function montarDescricaoDoMotivo(episodio: EpisodioDeBacklog) {
+  const origem = episodio.codigoOriginal || "não informado";
+  return episodio.codigo
+    ? `Motivo importado do ${ORIGEM} (código de origem: ${origem}).`
+    : `Motivo importado do ${ORIGEM} sem correspondência na lista do portal (código de origem: ${origem}).`;
 }
 
 // ---------------------------------------------------------------------------
@@ -462,7 +767,36 @@ function lerArgumentos(argv: string[]) {
   const loteBruto = argv.find(argumento => argumento.startsWith("--lote="))?.split("=")[1];
   const lote = loteBruto ? Number(loteBruto) : LOTE_PADRAO;
   if (!Number.isInteger(lote) || lote < 1) throw new Error("--lote precisa ser um número inteiro maior que zero.");
-  return { csv: caminhos[0], confirmar, lote };
+  const valorDe = (nome: string) => argv.find(argumento => argumento.startsWith(`--${nome}=`))?.split("=").slice(1).join("=") || null;
+  return { csv: caminhos[0], confirmar, lote, itens: valorDe("itens"), backlog: valorDe("backlog") };
+}
+
+/**
+ * Procura a nota pelo par CNPJ + número e, se não achar, pelo número sozinho.
+ *
+ * Os três relatórios trazem o mesmo CNPJ mutilado nas mesmas empresas, e a
+ * reconstrução só acontece no consolidado. Cair para o número sozinho reaproxima
+ * essas notas — mas só quando aquele número aparece uma vez em todo o arquivo,
+ * senão a nota 570619 de uma empresa levaria os itens da 570619 de outra.
+ */
+function buscarPorNota<T>(mapa: Map<string, T>, porNumero: Map<string, T[]>, cnpj: string, numero: string, numeroEhUnico: boolean): T | null {
+  const exata = mapa.get(chaveDaNota(cnpj, numero));
+  if (exata) return exata;
+  // Sem o par exato, o número sozinho só vale quando é único dos dois lados:
+  // dois fornecedores diferentes emitem notas com o mesmo número, e aí os itens
+  // de uma entrariam na outra.
+  if (!numeroEhUnico) return null;
+  const candidatas = porNumero.get(numero) ?? [];
+  return candidatas.length === 1 ? candidatas[0] : null;
+}
+
+function indexarPorNumero<T>(mapa: Map<string, T>): Map<string, T[]> {
+  const porNumero = new Map<string, T[]>();
+  for (const [chave, valor] of Array.from(mapa.entries())) {
+    const numero = chave.split("|")[1] ?? "";
+    porNumero.set(numero, [...(porNumero.get(numero) ?? []), valor]);
+  }
+  return porNumero;
 }
 
 function emLotes<T>(itens: T[], tamanho: number): T[][] {
@@ -475,7 +809,7 @@ const formatarData = (data: Date) =>
   new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "medium", timeZone: "America/Sao_Paulo" }).format(data);
 
 async function principal() {
-  const { csv, confirmar, lote } = lerArgumentos(process.argv.slice(2));
+  const { csv, confirmar, lote, itens: csvItens, backlog: csvBacklog } = lerArgumentos(process.argv.slice(2));
   if (!csv) {
     console.error("Informe o caminho do CSV: pnpm exec tsx scripts/importar-agiliza.ts caminho/agiliza.csv [--confirmar]");
     process.exit(1);
@@ -495,6 +829,14 @@ async function principal() {
   const recusas: Recusa[] = [];
   const avisos: Aviso[] = [];
   const lidas: LinhaLida[] = [];
+
+  const detalhado = csvItens ? lerItens(csvItens) : null;
+  const acervoDeBacklog = csvBacklog ? lerBacklog(csvBacklog) : null;
+  const itensPorNota = detalhado?.porNota ?? new Map<string, ItensDaNota>();
+  const backlogPorNota = acervoDeBacklog?.porNota ?? new Map<string, EpisodioDeBacklog>();
+  const itensPorNumero = indexarPorNumero(itensPorNota);
+  const backlogPorNumero = indexarPorNumero(backlogPorNota);
+  for (const recusa of [...(detalhado?.recusas ?? []), ...(acervoDeBacklog?.recusas ?? [])]) recusas.push(recusa);
 
   linhas.slice(1).forEach((colunas, indice) => {
     const numeroDaLinha = indice + 2; // +1 do cabeçalho, +1 porque planilha conta do 1
@@ -528,6 +870,11 @@ async function principal() {
   const cnpjsConhecidos = new Set(
     lidas.map(linha => linha.dados.cnpjFornecedor).filter(cnpj => cnpj.length === 14 && cnpjValido(cnpj))
   );
+
+  // Quantas vezes cada número de nota aparece no consolidado: é o que decide se
+  // a busca pelo número sozinho é segura quando o CNPJ não casa.
+  const repetidosNoConsolidado = new Map<string, number>();
+  for (const { dados } of lidas) repetidosNoConsolidado.set(dados.numeroNota, (repetidosNoConsolidado.get(dados.numeroNota) ?? 0) + 1);
 
   const planos: PlanoNota[] = [];
   const paresVistos = new Set<string>();
@@ -575,7 +922,13 @@ async function principal() {
     }
 
     const status = STATUS_AGILIZA[dados.ultimoStatus];
-    const eventos = montarEventos(dados, status);
+    const numeroEhUnico = (repetidosNoConsolidado.get(dados.numeroNota) ?? 0) === 1;
+    const itens = buscarPorNota(itensPorNota, itensPorNumero, cnpj, dados.numeroNota, numeroEhUnico);
+    const episodio = buscarPorNota(backlogPorNota, backlogPorNumero, cnpj, dados.numeroNota, numeroEhUnico);
+    const eventos = montarEventos(dados, status, episodio);
+    if (itens && dados.totalLinhas !== null && itens.linhas !== dados.totalLinhas) {
+      avisos.push({ linha: numero, texto: `o consolidado diz ${dados.totalLinhas} linha(s) e o detalhado trouxe ${itens.linhas} para a nota ${dados.numeroNota}` });
+    }
     if (dados.dataAgendamento < dados.dataCriacao) {
       const atraso = Math.round((dados.dataCriacao.getTime() - dados.dataAgendamento.getTime()) / 1000);
       if (atraso > 60) {
@@ -594,9 +947,13 @@ async function principal() {
       // completed no portal só se alcança passando por received, então toda nota
       // concluída de verdade tem recebimento. Sem receivedAt a nota some do
       // "Data recebida" do relatório e de todos os números de recebimento do painel.
-      recebidoEm: status === "backlog" ? null : dados.dataUltimoStatus,
+      // Agendada ainda não chegou, e backlog não fechou: nenhuma das duas tem
+      // recebimento, e inventar um as colocaria nos números de recebido.
+      recebidoEm: status === "backlog" || status === "scheduled" ? null : dados.dataUltimoStatus,
       destino,
       eventos,
+      itens,
+      episodio,
     });
   }
 
@@ -633,7 +990,7 @@ async function principal() {
   const db = abrirBanco();
   if (confirmar && !db) throw new Error("DATABASE_URL não está definida: sem banco não há o que confirmar.");
 
-  const contagem = { importadas: 0, jaExistentes: 0, criados: 0, reaproveitados: 0 };
+  const contagem = { importadas: 0, jaExistentes: 0, criados: 0, reaproveitados: 0, comentarios: 0 };
 
   if (db) {
     const idPorCnpj = new Map<string, number>();
@@ -675,7 +1032,7 @@ async function principal() {
       // sem histórico é um registro que o portal não sabe explicar. O lote é
       // pequeno para que uma falha no meio do arquivo deixe o trabalho já feito
       // gravado — o que faltar entra na próxima execução, sem duplicar.
-      const parcial = { importadas: 0, jaExistentes: 0 };
+      const parcial = { importadas: 0, jaExistentes: 0, comentarios: 0 };
       await db.transaction(async tx => {
         for (const plano of lotePlanos) {
           const supplierId = idPorCnpj.get(plano.cnpj);
@@ -685,6 +1042,7 @@ async function principal() {
             continue;
           }
           const ultimoEvento = plano.eventos[plano.eventos.length - 1];
+          const episodio = plano.episodio;
           const inserida = await tx.insert(appointments).values({
             supplierId,
             // Mesmo formato curto que o portal usa em createUnscheduledReceipt:
@@ -698,6 +1056,14 @@ async function principal() {
             invoiceSupplierName: plano.dados.nomeFornecedor,
             recipientCnpj: plano.destino,
             receivedAt: plano.recebidoEm,
+            // Valor e itens vêm do relatório detalhado; sem ele a nota entra
+            // sem resumo financeiro, como entrava antes.
+            invoiceTotalCents: plano.itens?.totalCents ?? null,
+            invoiceItemsJson: plano.itens ? JSON.stringify(plano.itens.itens) : null,
+            // O motivo fica gravado mesmo em nota já resolvida: é dele que o
+            // relatório de backlog monta a coluna "Motivo" de cada episódio.
+            backlogReasonCode: episodio?.codigo ?? null,
+            backlogReason: episodio ? montarDescricaoDoMotivo(episodio) : null,
             status: plano.status,
             handledBy: null,
             // createdAt/updatedAt têm default "agora": sem passar as datas do
@@ -718,11 +1084,26 @@ async function principal() {
               createdAt: evento.quando,
             }))
           );
+          // Os comentários do acervo entram como observações internas, e não
+          // como mensagens do fornecedor: são conversa de dentro da operação e
+          // a outra tabela é visível para quem enviou a nota.
+          if (episodio?.comentarios.length) {
+            await tx.insert(appointmentInternalNotes).values(
+              episodio.comentarios.map(comentario => ({
+                appointmentId,
+                authorId: null,
+                body: `[${ORIGEM}] ${comentario.autor}: ${comentario.texto}`,
+                createdAt: comentario.quando ?? plano.dados.dataUltimoStatus,
+              }))
+            );
+            parcial.comentarios += episodio.comentarios.length;
+          }
           parcial.importadas += 1;
         }
       });
       contagem.importadas += parcial.importadas;
       contagem.jaExistentes += parcial.jaExistentes;
+      contagem.comentarios += parcial.comentarios;
     }
   } else {
     contagem.importadas = planos.length;
@@ -738,11 +1119,29 @@ async function principal() {
   console.log(`Arquivo: ${csv}`);
   if (!db) console.log("DATABASE_URL não definida: as contagens de 'já existente' não puderam ser verificadas.");
   console.log("");
-  console.log(`Linhas lidas no arquivo: ${linhas.length - 1}`);
+  console.log(`Linhas lidas no consolidado: ${linhas.length - 1}`);
+  if (detalhado) console.log(`Linhas lidas no detalhado:   ${detalhado.linhas} (${itensPorNota.size} notas com itens)`);
+  if (acervoDeBacklog) console.log(`Linhas lidas no backlog:     ${acervoDeBacklog.linhas} (${backlogPorNota.size} episódios)`);
   console.log(`${confirmar ? "Importadas:             " : "A importar:             "} ${contagem.importadas}`);
   console.log(`Já existentes:           ${contagem.jaExistentes}`);
   console.log(`Recusadas:               ${recusas.length}`);
   console.log(`Fornecedores:            ${fornecedores.size} (${contagem.criados} criados, ${contagem.reaproveitados} já cadastrados)`);
+  const comItens = planos.filter(plano => plano.itens !== null).length;
+  const comBacklog = planos.filter(plano => plano.episodio !== null).length;
+  if (detalhado) console.log(`Notas com itens:         ${comItens} de ${planos.length}`);
+  if (acervoDeBacklog) {
+    console.log(`Notas com backlog:       ${comBacklog} (${planos.filter(plano => plano.status === "backlog").length} ainda abertas)`);
+    console.log(`Comentários:             ${confirmar ? contagem.comentarios : planos.reduce((total, plano) => total + (plano.episodio?.comentarios.length ?? 0), 0)}`);
+    const orfaos = backlogPorNota.size - comBacklog;
+    if (orfaos > 0) console.log(`Episódios de backlog sem nota correspondente no consolidado: ${orfaos}`);
+    if (acervoDeBacklog.motivosDesconhecidos.size) {
+      console.log(`\nMotivos de backlog sem correspondência na lista do portal (gravados só na descrição):`);
+      for (const [codigo, quantidade] of Array.from(acervoDeBacklog.motivosDesconhecidos.entries())) console.log(`  ${codigo}: ${quantidade}`);
+    }
+  }
+  const porStatus = new Map<AppointmentStatus, number>();
+  for (const plano of planos) porStatus.set(plano.status, (porStatus.get(plano.status) ?? 0) + 1);
+  console.log(`Por status:              ${Array.from(porStatus.entries()).map(([status, quantidade]) => `${status} ${quantidade}`).join(", ")}`);
 
   if (avisos.length) {
     console.log(`\nAvisos (${avisos.length}):`);
@@ -758,9 +1157,13 @@ async function principal() {
   console.log("");
 }
 
-principal()
-  .then(() => process.exit(0))
-  .catch(erro => {
-    console.error(`\n[Importação ${ORIGEM}] ${erro instanceof Error ? erro.message : erro}`);
-    process.exit(1);
-  });
+// Só roda quando é chamado pela linha de comando: assim o teste importa as
+// funções puras sem disparar uma carga no banco.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  principal()
+    .then(() => process.exit(0))
+    .catch(erro => {
+      console.error(`\n[Importação ${ORIGEM}] ${erro instanceof Error ? erro.message : erro}`);
+      process.exit(1);
+    });
+}
