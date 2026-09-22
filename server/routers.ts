@@ -77,6 +77,7 @@ import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { gerarBackup } from "./backup";
 import { normalizePurchaseOrder } from "./purchaseOrder";
+import { MIRO_DIGITS, normalizeMiroNumber } from "./miro";
 import { buildDashboardMetrics } from "./dashboardMetrics";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
 import { buildAttendanceMetrics } from "./attendanceMetrics";
@@ -564,7 +565,7 @@ export const appRouter = router({
         return createUnscheduledReceipt({ operatorId: ctx.user.id, xmlStorageKey: stored.key, xmlUrl: stored.url, xmlFileName: safeName, invoiceNumber: invoice.invoiceNumber, invoiceAccessKey: invoice.accessKey, purchaseOrder: invoice.purchaseOrder, invoiceSupplierName: invoice.supplierName, recipientCnpj: invoice.recipientCnpj, invoiceIssuedAt: invoice.issuedAt, serviceDescription: invoice.serviceDescription, invoiceTotalCents: invoice.totalCents, invoiceItemsJson: JSON.stringify(invoice.items), invoiceVolumeCount: invoice.volumeCount });
       }),
     updateStatus: protectedProcedure
-      .input(z.object({ appointmentId: z.number().int().positive(), status: z.enum(["scheduled", "received", "completed", "backlog", "rejected"]), rejectionReason: z.string().max(1000).optional() }))
+      .input(z.object({ appointmentId: z.number().int().positive(), status: z.enum(["scheduled", "received", "completed", "backlog", "rejected"]), rejectionReason: z.string().max(1000).optional(), miroNumber: z.string().max(40).optional(), note: z.string().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {
         if (!canMoveAppointmentStatus(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a quem cuida da agenda." });
         const appointment = await getAppointmentById(input.appointmentId);
@@ -572,7 +573,17 @@ export const appRouter = router({
         if (!canTransitionAppointment(appointment.status, input.status)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Essa alteração de status não é permitida." });
         }
-        return updateAppointmentStatus({ ...input, previousStatus: appointment.status, handledBy: ctx.user.id, eventNote: input.status === "received" ? "Recebimento confirmado pelo operador." : input.status === "completed" ? "Recebimento concluído pelo operador." : undefined });
+        // Concluir é o passo que fecha a nota contra o SAP, e o MIRO é o que
+        // liga um ao outro. Cobrado aqui porque depois ninguém volta para
+        // preencher: a nota sai da tela e o número se perde.
+        let miroNumber: string | undefined;
+        if (input.status === "completed") {
+          const numero = normalizeMiroNumber(input.miroNumber);
+          if (!numero) throw new TRPCError({ code: "BAD_REQUEST", message: `Informe o número MIRO com exatamente ${MIRO_DIGITS} dígitos.` });
+          miroNumber = numero;
+        }
+        const observacao = input.note?.trim();
+        return updateAppointmentStatus({ ...input, miroNumber, previousStatus: appointment.status, handledBy: ctx.user.id, eventNote: observacao || (input.status === "received" ? "Recebimento confirmado pelo operador." : input.status === "completed" ? `Recebimento concluído. MIRO ${miroNumber}.` : undefined) });
       }),
     confirmPreNote: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))

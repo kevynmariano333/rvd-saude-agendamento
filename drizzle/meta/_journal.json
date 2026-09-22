@@ -183,6 +183,13 @@
       "when": 1790036073926,
       "tag": "0025_tiresome_nightshade",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1790036828602,
+      "tag": "0026_common_human_torch",
+      "breakpoints": true
     }
   ]
 }

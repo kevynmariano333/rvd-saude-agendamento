@@ -475,8 +475,8 @@ describe("perfil planejador", () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "received" });
     mocks.updateAppointmentStatus.mockResolvedValue({ id: 7, status: "completed" });
     const caller = appRouter.createCaller(context("planejador"));
-    await caller.appointments.updateStatus({ appointmentId: 7, status: "completed" });
-    expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 7, status: "completed", handledBy: 24 }));
+    await caller.appointments.updateStatus({ appointmentId: 7, status: "completed", miroNumber: "5105101642" });
+    expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 7, status: "completed", handledBy: 24, miroNumber: "5105101642" }));
   });
 
   it("fica fora do pátio e do recebimento avulso", async () => {
@@ -492,5 +492,46 @@ describe("perfil planejador", () => {
     await expect(caller.accessRequests.listPending()).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.staff.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.manutencao.gerarBackup()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+
+describe("fechamento do recebimento", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "received" });
+    mocks.updateAppointmentStatus.mockResolvedValue({ id: 7, status: "completed" });
+  });
+
+  it("não conclui sem o número MIRO", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await expect(caller.appointments.updateStatus({ appointmentId: 7, status: "completed" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.updateAppointmentStatus).not.toHaveBeenCalled();
+  });
+
+  it("não conclui com um MIRO que não tem dez dígitos", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    for (const miroNumber of ["510510164", "51051016423", "51051O1642"]) {
+      await expect(caller.appointments.updateStatus({ appointmentId: 7, status: "completed", miroNumber })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    }
+    expect(mocks.updateAppointmentStatus).not.toHaveBeenCalled();
+  });
+
+  it("registra o MIRO no histórico junto da conclusão", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.updateStatus({ appointmentId: 7, status: "completed", miroNumber: " 5105101642 " });
+    expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ miroNumber: "5105101642", eventNote: "Recebimento concluído. MIRO 5105101642." }));
+  });
+
+  it("manda para o backlog sem exigir MIRO, guardando o motivo", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", note: "Divergência de volumes." });
+    expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "backlog", miroNumber: undefined, eventNote: "Divergência de volumes." }));
+  });
+
+  it("ignora um MIRO enviado numa transição que não é a conclusão", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", miroNumber: "5105101642" });
+    expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "backlog", miroNumber: undefined }));
   });
 });

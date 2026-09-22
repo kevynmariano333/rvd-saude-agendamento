@@ -1,0 +1,1 @@
+ALTER TABLE `appointments` ADD `miroNumber` varchar(10);

@@ -7,6 +7,7 @@ export type ReportAppointment = {
   invoiceSupplierName: string | null;
   recipientCnpj: string | null;
   purchaseOrder: string | null;
+  miroNumber: string | null;
   serviceType: string;
   status: PortalStatus;
   scheduledFor: Date | string;
@@ -28,6 +29,7 @@ export type ConsolidatedReportRow = {
   Fornecedor: string;
   "CNPJ destinatário": string;
   Pedido: string;
+  "Número MIRO": string;
   Status: string;
   "Data de agendamento": string;
   "Data de recebimento": string;
@@ -72,6 +74,9 @@ export function toConsolidatedReportRows(appointments: ReportAppointment[]): Con
     Fornecedor: item.invoiceSupplierName || item.supplierName || "—",
     "CNPJ destinatário": item.recipientCnpj || "—",
     Pedido: item.purchaseOrder || "—",
+    // O MIRO é a chave para cruzar este relatório com o SAP; sem ele a
+    // conferência volta a ser nota por nota, na mão.
+    "Número MIRO": item.miroNumber || "—",
     Status: statusCopy[item.status],
     "Data de agendamento": formatReportDate(item.scheduledFor),
     "Data de recebimento": formatReportDate(item.receivedAt),

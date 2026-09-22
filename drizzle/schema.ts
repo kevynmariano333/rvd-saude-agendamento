@@ -133,6 +133,10 @@ export const appointments = mysqlTable(
     invoiceItemsJson: text("invoiceItemsJson"),
     invoiceVolumeCount: int("invoiceVolumeCount"),
     receivedAt: datetime("receivedAt", { mode: "date" }),
+    // Número do lançamento da nota no SAP (MIRO), pedido ao concluir. É o elo
+    // entre o recebimento aqui e o financeiro lá: sem ele, conferir o que já
+    // foi lançado só olhando um sistema de cada vez.
+    miroNumber: varchar("miroNumber", { length: 10 }),
     status: mysqlEnum("status", appointmentStatuses).default("pending").notNull(),
     handledBy: int("handledBy").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),

@@ -182,6 +182,7 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       invoiceItemsJson: appointments.invoiceItemsJson,
       invoiceVolumeCount: appointments.invoiceVolumeCount,
       receivedAt: appointments.receivedAt,
+      miroNumber: appointments.miroNumber,
       rejectionReason: appointments.rejectionReason,
       status: appointments.status,
       createdAt: appointments.createdAt,
@@ -468,6 +469,8 @@ export async function updateAppointmentStatus(input: {
   handledBy: number;
   rejectionReason?: string;
   eventNote?: string;
+  /** Lançamento no SAP, informado ao concluir. */
+  miroNumber?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
@@ -481,6 +484,7 @@ export async function updateAppointmentStatus(input: {
         updatedAt: new Date(),
         ...(receivedAt ? { receivedAt } : {}),
         ...(input.status === "rejected" ? { rejectionReason: input.rejectionReason?.trim() || "Motivo não informado" } : {}),
+        ...(input.miroNumber ? { miroNumber: input.miroNumber } : {}),
       })
       .where(eq(appointments.id, input.appointmentId));
     await tx.insert(appointmentStatusHistory).values({
