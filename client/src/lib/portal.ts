@@ -51,6 +51,15 @@ export function isPortalPlanner(role: PortalRole) {
   return role === "planejador";
 }
 
+/**
+ * Quem trata o backlog. É do planejamento: o Operador é quem manda a nota para
+ * lá, ao constatar que o recebimento não fechou. O administrador entra porque
+ * responde pelo sistema inteiro.
+ */
+export function canTreatBacklogPortal(role: PortalRole) {
+  return role === "planejador" || role === "admin";
+}
+
 export function isPortalAdmin(role: PortalRole) {
   return role === "admin";
 }

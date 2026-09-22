@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => ({
   returnAppointmentForRescheduling: vi.fn(),
   touchUserSignIn: vi.fn(),
   updateAppointmentStatus: vi.fn(),
+  treatBacklogAppointment: vi.fn(),
+  listAppointmentInternalNotes: vi.fn(),
+  createAppointmentInternalNote: vi.fn(),
   createLocalUser: vi.fn(),
   deleteAppointmentById: vi.fn(),
   scheduleAppointment: vi.fn(),
@@ -533,5 +536,71 @@ describe("fechamento do recebimento", () => {
     const caller = appRouter.createCaller(context("operator"));
     await caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", miroNumber: "5105101642" });
     expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "backlog", miroNumber: undefined }));
+  });
+});
+
+describe("tratativa do backlog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getAppointmentById.mockResolvedValue({ id: 9, supplierId: 12, status: "backlog" });
+    mocks.treatBacklogAppointment.mockResolvedValue({ id: 9, status: "completed" });
+  });
+
+  it("é do planejador, e não de quem mandou a nota para o backlog", async () => {
+    const operador = appRouter.createCaller(context("operator"));
+    await expect(operador.appointments.tratarBacklog({ appointmentId: 9, miroNumber: "5105101642" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const fornecedor = appRouter.createCaller(context("supplier"));
+    await expect(fornecedor.appointments.tratarBacklog({ appointmentId: 9, miroNumber: "5105101642" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.treatBacklogAppointment).not.toHaveBeenCalled();
+  });
+
+  it("grava os documentos e conclui a nota", async () => {
+    const caller = appRouter.createCaller(context("planejador"));
+    await caller.appointments.tratarBacklog({ appointmentId: 9, miroNumber: " 5105101642 ", quotationNumber: " COT-88 ", hisEntryDocument: "0244599" });
+    expect(mocks.treatBacklogAppointment).toHaveBeenCalledWith(expect.objectContaining({
+      appointmentId: 9, handledBy: 24, miroNumber: "5105101642", quotationNumber: "COT-88",
+      memorizedOrder: null, hisEntryDocument: "0244599", hisExitDocument: null,
+      eventNote: "Backlog tratado: MIRO 5105101642, cotação COT-88, entrada HIS 0244599.",
+    }));
+  });
+
+  it("não fecha a tratativa sem MIRO de dez dígitos", async () => {
+    const caller = appRouter.createCaller(context("planejador"));
+    await expect(caller.appointments.tratarBacklog({ appointmentId: 9, miroNumber: "510510" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.treatBacklogAppointment).not.toHaveBeenCalled();
+  });
+
+  it("recusa tratar uma nota que não está em backlog", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 9, supplierId: 12, status: "received" });
+    const caller = appRouter.createCaller(context("planejador"));
+    await expect(caller.appointments.tratarBacklog({ appointmentId: 9, miroNumber: "5105101642" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("observações internas", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getAppointmentById.mockResolvedValue({ id: 9, supplierId: 12, status: "backlog" });
+    mocks.listAppointmentInternalNotes.mockResolvedValue([]);
+    mocks.createAppointmentInternalNote.mockResolvedValue(3);
+  });
+
+  it("ficam restritas a quem trabalha a agenda", async () => {
+    // São movimentações internas de SAP: o fornecedor não lê nem escreve.
+    const fornecedor = appRouter.createCaller(context("supplier"));
+    await expect(fornecedor.internalNotes.list({ appointmentId: 9 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(fornecedor.internalNotes.create({ appointmentId: 9, body: "teste" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const portaria = appRouter.createCaller(context("portaria"));
+    await expect(portaria.internalNotes.list({ appointmentId: 9 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.createAppointmentInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("o planejador e o operador escrevem nelas", async () => {
+    for (const perfil of ["planejador", "operator"] as const) {
+      const caller = appRouter.createCaller(context(perfil));
+      await caller.internalNotes.create({ appointmentId: 9, body: "  Movimento complementar 0244599  " });
+    }
+    expect(mocks.createAppointmentInternalNote).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 9, body: "Movimento complementar 0244599" }));
+    expect(mocks.createAppointmentInternalNote).toHaveBeenCalledTimes(2);
   });
 });

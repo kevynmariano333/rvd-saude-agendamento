@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSeeAttendances, formatCnpj, getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, homePathFor, isPortalGate, isPortalOperator, isPortalPlanner, isPortalSchedulingDesk, isPortalYard } from "./portal";
+import { canSeeAttendances, canTreatBacklogPortal, formatCnpj, getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, homePathFor, isPortalGate, isPortalOperator, isPortalPlanner, isPortalSchedulingDesk, isPortalYard } from "./portal";
 
 describe("momento exibido do agendamento", () => {
   it("prioriza a data e hora reais quando a nota foi recebida", () => {
@@ -86,5 +86,16 @@ describe("separação de responsabilidades entre os perfis", () => {
     expect(isPortalYard("planejador")).toBe(false);
     // Entra pelo painel, a primeira das quatro telas do perfil.
     expect(homePathFor("planejador")).toBe("/operador/dashboard");
+  });
+});
+
+describe("tratativa do backlog", () => {
+  it("é do planejamento e da administração, não de quem opera a doca", () => {
+    expect(canTreatBacklogPortal("planejador")).toBe(true);
+    expect(canTreatBacklogPortal("admin")).toBe(true);
+    // Quem manda a nota para o backlog é o Operador; tratá-la é outro trabalho.
+    expect(canTreatBacklogPortal("operator")).toBe(false);
+    expect(canTreatBacklogPortal("supplier")).toBe(false);
+    expect(canTreatBacklogPortal("portaria")).toBe(false);
   });
 });

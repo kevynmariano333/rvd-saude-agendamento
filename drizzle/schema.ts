@@ -137,6 +137,20 @@ export const appointments = mysqlTable(
     // entre o recebimento aqui e o financeiro lá: sem ele, conferir o que já
     // foi lançado só olhando um sistema de cada vez.
     miroNumber: varchar("miroNumber", { length: 10 }),
+    // Tratativa do backlog. Quando o recebimento não fecha, a nota volta para o
+    // planejamento, que resolve a divergência no SAP e no HIS e registra aqui o
+    // que foi feito — é esse registro que permite dizer, meses depois, como
+    // aquela nota foi destravada.
+    quotationNumber: varchar("quotationNumber", { length: 60 }),
+    memorizedOrder: varchar("memorizedOrder", { length: 60 }),
+    hisEntryDocument: varchar("hisEntryDocument", { length: 60 }),
+    hisExitDocument: varchar("hisExitDocument", { length: 60 }),
+    // O motivo que o Operador escreveu ao mandar a nota para o backlog. Fica na
+    // própria nota, e não só no histórico, porque é a primeira coisa que o
+    // planejamento precisa ler na lista, antes de abrir qualquer coisa.
+    backlogReason: varchar("backlogReason", { length: 500 }),
+    treatedAt: datetime("treatedAt", { mode: "date" }),
+    treatedById: int("treatedById").references(() => users.id, { onDelete: "set null" }),
     status: mysqlEnum("status", appointmentStatuses).default("pending").notNull(),
     handledBy: int("handledBy").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -164,6 +178,28 @@ export const appointmentStatusHistory = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => [index("appointment_status_history_idx").on(table.appointmentId, table.createdAt)]
+);
+
+/**
+ * Observações internas de uma nota: o que a equipe registra entre si durante a
+ * tratativa de um backlog ("realizado movimento complementar…").
+ *
+ * Fica numa tabela própria, e não junto das mensagens do fornecedor, porque
+ * essas mensagens são visíveis a ele. Um esquecimento de filtro num fluxo
+ * dessa outra tabela vazaria movimentação interna de SAP para fora da empresa.
+ */
+export const appointmentInternalNotes = mysqlTable(
+  "appointmentInternalNotes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    appointmentId: int("appointmentId")
+      .notNull()
+      .references(() => appointments.id, { onDelete: "cascade" }),
+    authorId: int("authorId").references(() => users.id, { onDelete: "set null" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [index("appointment_internal_notes_idx").on(table.appointmentId, table.createdAt)]
 );
 
 export const appointmentSuggestions = mysqlTable(

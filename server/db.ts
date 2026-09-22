@@ -5,6 +5,7 @@ import {
   appointments,
   appointmentMessages,
   appointmentStatusHistory,
+  appointmentInternalNotes,
   appointmentSuggestions,
   attendanceEvents,
   attendances,
@@ -186,6 +187,12 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       invoiceVolumeCount: appointments.invoiceVolumeCount,
       receivedAt: appointments.receivedAt,
       miroNumber: appointments.miroNumber,
+      quotationNumber: appointments.quotationNumber,
+      memorizedOrder: appointments.memorizedOrder,
+      hisEntryDocument: appointments.hisEntryDocument,
+      hisExitDocument: appointments.hisExitDocument,
+      backlogReason: appointments.backlogReason,
+      treatedAt: appointments.treatedAt,
       rejectionReason: appointments.rejectionReason,
       status: appointments.status,
       createdAt: appointments.createdAt,
@@ -488,6 +495,9 @@ export async function updateAppointmentStatus(input: {
         ...(receivedAt ? { receivedAt } : {}),
         ...(input.status === "rejected" ? { rejectionReason: input.rejectionReason?.trim() || "Motivo não informado" } : {}),
         ...(input.miroNumber ? { miroNumber: input.miroNumber } : {}),
+        // O motivo acompanha a nota até a tratativa; um backlog novo apaga o
+        // motivo do backlog anterior, que já não descreve esta ida.
+        ...(input.status === "backlog" ? { backlogReason: input.eventNote?.slice(0, 500) ?? null } : {}),
       })
       .where(eq(appointments.id, input.appointmentId));
     await tx.insert(appointmentStatusHistory).values({
@@ -1015,4 +1025,76 @@ export async function listAttendancesInRange(fromDateKey: string, toDateKey: str
     .from(attendances)
     .where(and(gte(attendances.arrivalAt, from.start), lte(attendances.arrivalAt, to.end)))
     .orderBy(desc(attendances.arrivalAt));
+}
+
+/**
+ * Fecha um backlog com a tratativa feita no SAP e no HIS.
+ *
+ * A nota sai para "concluída" pelo mesmo caminho de sempre — com registro no
+ * histórico —, e o que foi feito fica gravado na própria nota. Sem isso, o
+ * backlog sumia da tela sem deixar rastro de como foi resolvido.
+ */
+export async function treatBacklogAppointment(input: {
+  appointmentId: number;
+  previousStatus: AppointmentStatus;
+  handledBy: number;
+  eventNote: string;
+  miroNumber: string;
+  quotationNumber: string | null;
+  memorizedOrder: string | null;
+  hisEntryDocument: string | null;
+  hisExitDocument: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const agora = new Date();
+  await db.transaction(async tx => {
+    await tx
+      .update(appointments)
+      .set({
+        status: "completed",
+        miroNumber: input.miroNumber,
+        quotationNumber: input.quotationNumber,
+        memorizedOrder: input.memorizedOrder,
+        hisEntryDocument: input.hisEntryDocument,
+        hisExitDocument: input.hisExitDocument,
+        treatedAt: agora,
+        treatedById: input.handledBy,
+        handledBy: input.handledBy,
+        updatedAt: agora,
+      })
+      .where(eq(appointments.id, input.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({
+      appointmentId: input.appointmentId,
+      previousStatus: input.previousStatus,
+      nextStatus: "completed",
+      handledBy: input.handledBy,
+      eventNote: input.eventNote,
+    });
+  });
+  return getAppointmentById(input.appointmentId);
+}
+
+export async function listAppointmentInternalNotes(appointmentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: appointmentInternalNotes.id,
+      body: appointmentInternalNotes.body,
+      createdAt: appointmentInternalNotes.createdAt,
+      authorName: users.name,
+      authorEmail: users.email,
+    })
+    .from(appointmentInternalNotes)
+    .leftJoin(users, eq(appointmentInternalNotes.authorId, users.id))
+    .where(eq(appointmentInternalNotes.appointmentId, appointmentId))
+    .orderBy(appointmentInternalNotes.createdAt);
+}
+
+export async function createAppointmentInternalNote(input: { appointmentId: number; authorId: number; body: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const result = await db.insert(appointmentInternalNotes).values(input);
+  return Number(result[0].insertId);
 }

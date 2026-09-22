@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
-import { isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
+import { canTreatBacklogPortal, isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
 import { serviceTypeCopy } from "@/lib/attendance";
 import { trpc } from "@/lib/trpc";
 import {
+  AlertTriangle,
   BarChart3,
   Bell,
   CalendarDays,
@@ -21,10 +22,10 @@ import {
   ShieldCheck,
   Sun,
   Truck,
-  type LucideIcon,
   UserCheck,
   UserRound,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -84,6 +85,10 @@ export default function PortalLayout({
     { enabled: canApproveEntries, refetchInterval: 15_000 }
   );
   const pendingReleases = canApproveEntries ? (releaseRequests.data ?? []) : [];
+  // Quem trata o backlog precisa saber que ele encheu sem abrir a tela.
+  const podeTratarBacklog = canTreatBacklogPortal(role);
+  const backlogFila = trpc.appointments.list.useQuery({ status: "backlog" }, { enabled: podeTratarBacklog, refetchInterval: 60_000 });
+  const backlogCount = podeTratarBacklog ? (backlogFila.data?.length ?? 0) : 0;
   const releaseCount = pendingReleases.length;
   const alertCount = unreadCount + releaseCount;
 
@@ -97,6 +102,9 @@ export default function PortalLayout({
     { label: "Calendário", path: "/operador/calendario", icon: CalendarDays },
     { label: "Relatórios", path: "/operador/relatorios", icon: BarChart3 },
   ];
+  // O backlog é a fila de tratativa do planejamento. Fica fora do menu do
+  // Operador de propósito: é ele quem manda a nota para lá.
+  const backlogNav: NavItem[] = [{ label: "Backlog", path: "/operador/backlog", icon: AlertTriangle, badge: backlogCount }];
   const gateNav: NavItem[] = [{ label: "Portaria", path: "/portaria", icon: DoorOpen }];
   const yardNav: NavItem[] = [{ label: "Operação", path: "/operacao", icon: PackageCheck, badge: releaseCount }];
   // O histórico do portão é de quem trabalha nele e de quem responde por ele:
@@ -106,11 +114,11 @@ export default function PortalLayout({
   // O planejador para na agenda: as quatro telas de planejamento e nada do
   // pátio. É o recorte inteiro do perfil.
   const nav: NavItem[] = isAdmin
-    ? [...schedulingNav, ...gateNav, ...yardNav, ...historyNav]
+    ? [...schedulingNav, ...backlogNav, ...gateNav, ...yardNav, ...historyNav]
     : isOperator
       ? [...schedulingNav, ...yardNav, ...historyNav]
       : isPortalPlanner(role)
-        ? schedulingNav
+        ? [...schedulingNav, ...backlogNav]
         : isPortalGate(role)
           ? [...gateNav, ...historyNav]
           : isPortalYard(role)

@@ -154,11 +154,17 @@ como passo anterior ao deploy.
 Seis perfis: `admin`, `operator`, `supplier`, `portaria`, `operacao`,
 `planejador`.
 
-- **O planejador cuida da agenda sem confirmá-la.** Ele tem as quatro telas de
-  planejamento — painel, agendamentos, calendário e relatórios —, propõe datas
-  ao Operador e acompanha a nota até concluir. Marcar a data é compromisso com
-  o fornecedor e continua sendo do Operador; o pátio e a administração ficam
-  fora do perfil.
+- **O planejador cuida da agenda sem confirmá-la.** Ele tem as telas de
+  planejamento — painel, agendamentos, calendário, relatórios e backlog —,
+  propõe datas ao Operador e acompanha a nota até concluir. Marcar a data é
+  compromisso com o fornecedor e continua sendo do Operador; o pátio e a
+  administração ficam fora do perfil.
+- **O backlog é a fila de tratativa do planejamento.** Quando o Operador
+  constata no recebimento que a nota não fecha, ela vai para o backlog com o
+  motivo. Reagendar não resolveria — a carga já chegou —, então o planejamento
+  acerta o lançamento no SAP e no HIS e registra na nota o que fez. As
+  observações internas dessa tratativa ficam em tabela própria, invisível ao
+  fornecedor.
 - **Nenhum cadastro entra sozinho.** Todo registro novo nasce pendente e espera
   aprovação de um administrador, inclusive os de operador — a tela de cadastro é
   aberta a qualquer pessoa, e um operador aprovado enxerga a base inteira.

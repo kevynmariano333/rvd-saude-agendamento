@@ -12,6 +12,7 @@ import {
 import {
   type AppointmentFilters,
   createAppointment,
+  createAppointmentInternalNote,
   createAppointmentSuggestion,
   createManualXmlAppointment,
   createUnscheduledReceipt,
@@ -28,6 +29,7 @@ import {
   listAppointmentMessages,
   listAppointments,
   listAppointmentsBetween,
+  listAppointmentInternalNotes,
   listAppointmentSuggestions,
   listUnreadAppointmentMessages,
   listSupplierActiveAppointments,
@@ -36,6 +38,7 @@ import {
   rescueAppointment,
   scheduleAppointment,
   touchUserSignIn,
+  treatBacklogAppointment,
   updateAppointmentStatus,
   consumePasswordResetToken,
   updateUserName,
@@ -60,7 +63,8 @@ import {
   setUserRole,
 } from "./db";
 import { supplierNameRule } from "../shared/attendanceFields";
-import { canApplySuggestion, canMoveAppointmentStatus, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, isOperator, isSchedulingDesk } from "./permissions";
+import { canApplySuggestion, canMoveAppointmentStatus, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, canTreatBacklog, isOperator, isSchedulingDesk } from "./permissions";
+import { validarTratativa, resumoDaTratativa } from "../shared/tratativa";
 import { clearRvdSession, createRvdSession } from "./session";
 import { systemRouter } from "./_core/systemRouter";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -77,7 +81,7 @@ import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { gerarBackup } from "./backup";
 import { normalizePurchaseOrder } from "./purchaseOrder";
-import { MIRO_DIGITS, normalizeMiroNumber } from "./miro";
+import { MIRO_DIGITS, normalizeMiroNumber } from "../shared/miro";
 import { buildDashboardMetrics } from "./dashboardMetrics";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
 import { buildAttendanceMetrics } from "./attendanceMetrics";
@@ -612,6 +616,34 @@ export const appRouter = router({
         }
         return scheduleAppointment({ appointmentId: appointment.id, previousStatus: appointment.status, previousScheduledFor: appointment.scheduledFor, scheduledFor, handledBy: ctx.user.id, rescheduled: appointment.status === "scheduled", acceptedSuggestionId: input.acceptedSuggestionId });
       }),
+    tratarBacklog: protectedProcedure
+      .input(z.object({
+        appointmentId: z.number().int().positive(),
+        miroNumber: z.string().max(40),
+        quotationNumber: z.string().max(120).optional(),
+        memorizedOrder: z.string().max(120).optional(),
+        hisEntryDocument: z.string().max(120).optional(),
+        hisExitDocument: z.string().max(120).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!canTreatBacklog(ctx.user.role)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "A tratativa do backlog é do Planejador." });
+        }
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+        if (appointment.status !== "backlog") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Só notas em Backlog entram em tratativa." });
+        }
+        const validacao = validarTratativa(input);
+        if (!validacao.ok) throw new TRPCError({ code: "BAD_REQUEST", message: validacao.erro });
+        return treatBacklogAppointment({
+          appointmentId: appointment.id,
+          previousStatus: appointment.status,
+          handledBy: ctx.user.id,
+          eventNote: resumoDaTratativa(validacao.dados),
+          ...validacao.dados,
+        });
+      }),
     rescue: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
@@ -697,6 +729,25 @@ export const appRouter = router({
         return { id };
       }),
     notifications: protectedProcedure.query(({ ctx }) => listUnreadAppointmentMessages({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
+  }),
+  internalNotes: router({
+    list: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        assertSchedulingDesk(ctx.user.role);
+        return listAppointmentInternalNotes(input.appointmentId);
+      }),
+    create: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive(), body: z.string().trim().min(1, "Escreva a observação.").max(2000) }))
+      .mutation(async ({ ctx, input }) => {
+        // Internas quer dizer internas: o fornecedor nunca lê esta tabela, e
+        // quem não trabalha a agenda também não escreve nela.
+        assertSchedulingDesk(ctx.user.role);
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+        const id = await createAppointmentInternalNote({ appointmentId: appointment.id, authorId: ctx.user.id, body: input.body.trim() });
+        return { id };
+      }),
   }),
   calendar: router({
     list: protectedProcedure

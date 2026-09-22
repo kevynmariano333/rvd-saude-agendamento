@@ -36,6 +36,17 @@ export function canMoveAppointmentStatus(role: UserRole) {
   return isSchedulingDesk(role);
 }
 
+/**
+ * Tratar um backlog: resolver a divergência no SAP e no HIS e fechar a nota.
+ *
+ * É trabalho do planejamento, não de quem opera a doca — quem mandou a nota
+ * para o backlog foi justamente o Operador, ao constatar que o recebimento não
+ * fechava. O administrador entra porque responde pelo sistema inteiro.
+ */
+export function canTreatBacklog(role: UserRole) {
+  return role === "planejador" || role === "admin";
+}
+
 export function canApplySuggestion(status: AppointmentStatus) {
   return status === "pending" || status === "backlog" || status === "scheduled";
 }
