@@ -164,6 +164,9 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       supplierId: appointments.supplierId,
       supplierName: users.name,
       supplierEmail: users.email,
+      // O CNPJ de quem enviou: o relatório promete busca por nome ou CNPJ do
+      // fornecedor, e sem esta coluna a segunda metade da promessa era falsa.
+      supplierCnpj: users.companyCnpj,
       serviceType: appointments.serviceType,
       scheduledFor: appointments.scheduledFor,
       notes: appointments.notes,

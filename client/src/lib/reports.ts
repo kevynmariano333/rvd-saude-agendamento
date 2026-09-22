@@ -1,13 +1,17 @@
 import { type PortalStatus, statusCopy } from "./portal";
+import { apenasDigitos, filtroDeDestinatario, formatarCnpj, unidadePorCnpj } from "@shared/recipients";
 
 export type ReportAppointment = {
   id: number;
   invoiceNumber: string | null;
   supplierName: string | null;
   invoiceSupplierName: string | null;
+  supplierCnpj: string | null;
   recipientCnpj: string | null;
   purchaseOrder: string | null;
   miroNumber: string | null;
+  invoiceVolumeCount: number | null;
+  invoiceTotalCents: number | null;
   serviceType: string;
   status: PortalStatus;
   scheduledFor: Date | string;
@@ -27,13 +31,21 @@ export type ReportFilters = {
 export type ConsolidatedReportRow = {
   "Nota fiscal": string;
   Fornecedor: string;
-  "CNPJ destinatário": string;
+  Unidade: string;
   Pedido: string;
   "Número MIRO": string;
   Status: string;
   "Data de agendamento": string;
   "Data de recebimento": string;
   "Item recebido": string;
+};
+
+/** O detalhado acrescenta o que não cabe numa visão de conferência rápida. */
+export type DetailedReportRow = ConsolidatedReportRow & {
+  "CNPJ fornecedor": string;
+  "CNPJ destinatário": string;
+  Volumes: string;
+  "Valor total": string;
 };
 
 function isWithinDateRange(value: Date | string | null, start?: string, end?: string) {
@@ -45,21 +57,24 @@ function isWithinDateRange(value: Date | string | null, start?: string, end?: st
   return true;
 }
 
-function normalize(value: string) {
-  return value.replace(/\D/g, "");
-}
-
 export function filterReportAppointments(appointments: ReportAppointment[], filters: ReportFilters) {
-  const supplier = filters.supplier?.trim().toLocaleLowerCase();
-  const recipientCnpj = filters.recipientCnpj ? normalize(filters.recipientCnpj) : "";
+  const busca = filters.supplier?.trim().toLocaleLowerCase() ?? "";
+  // Um CNPJ digitado vem com ponto e barra; o que está guardado, não.
+  const buscaDigitos = apenasDigitos(busca);
+  // O filtro de destinatário aceita a sigla da unidade, como na tela de agenda.
+  const destinatario = filters.recipientCnpj ? apenasDigitos(filtroDeDestinatario(filters.recipientCnpj)) : "";
   return appointments.filter(item => {
     if (item.status === "backlog") return false;
     if (filters.status && filters.status !== "all" && item.status !== filters.status) return false;
     if (!isWithinDateRange(item.scheduledFor, filters.scheduledStart, filters.scheduledEnd)) return false;
     if (!isWithinDateRange(item.receivedAt, filters.receivedStart, filters.receivedEnd)) return false;
-    const supplierName = `${item.invoiceSupplierName || ""} ${item.supplierName || ""}`.toLocaleLowerCase();
-    if (supplier && !supplierName.includes(supplier)) return false;
-    if (recipientCnpj && !normalize(item.recipientCnpj || "").includes(recipientCnpj)) return false;
+    if (busca) {
+      const nome = `${item.invoiceSupplierName || ""} ${item.supplierName || ""}`.toLocaleLowerCase();
+      // O campo diz "nome ou CNPJ", então os dois precisam encontrar a nota.
+      const porCnpj = buscaDigitos.length > 0 && apenasDigitos(item.supplierCnpj).includes(buscaDigitos);
+      if (!nome.includes(busca) && !porCnpj) return false;
+    }
+    if (destinatario && !apenasDigitos(item.recipientCnpj).includes(destinatario)) return false;
     return true;
   });
 }
@@ -68,11 +83,23 @@ export function formatReportDate(value: Date | string | null) {
   return value ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
 }
 
-export function toConsolidatedReportRows(appointments: ReportAppointment[]): ConsolidatedReportRow[] {
-  return appointments.map(item => ({
+export function formatReportMoney(cents: number | null) {
+  if (cents === null) return "—";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
+}
+
+/** A unidade que recebeu, pelo nome que a operação usa. */
+export function unitLabel(recipientCnpj: string | null) {
+  const unidade = unidadePorCnpj(recipientCnpj);
+  if (unidade) return `${unidade.sigla} — ${unidade.nome}`;
+  return apenasDigitos(recipientCnpj) ? formatarCnpj(recipientCnpj) : "—";
+}
+
+function baseRow(item: ReportAppointment): ConsolidatedReportRow {
+  return {
     "Nota fiscal": item.invoiceNumber || "—",
     Fornecedor: item.invoiceSupplierName || item.supplierName || "—",
-    "CNPJ destinatário": item.recipientCnpj || "—",
+    Unidade: unitLabel(item.recipientCnpj),
     Pedido: item.purchaseOrder || "—",
     // O MIRO é a chave para cruzar este relatório com o SAP; sem ele a
     // conferência volta a ser nota por nota, na mão.
@@ -81,5 +108,36 @@ export function toConsolidatedReportRows(appointments: ReportAppointment[]): Con
     "Data de agendamento": formatReportDate(item.scheduledFor),
     "Data de recebimento": formatReportDate(item.receivedAt),
     "Item recebido": item.status === "received" || item.status === "completed" ? item.serviceType : "Aguardando recebimento",
+  };
+}
+
+export function toConsolidatedReportRows(appointments: ReportAppointment[]): ConsolidatedReportRow[] {
+  return appointments.map(baseRow);
+}
+
+export function toDetailedReportRows(appointments: ReportAppointment[]): DetailedReportRow[] {
+  return appointments.map(item => ({
+    ...baseRow(item),
+    "CNPJ fornecedor": apenasDigitos(item.supplierCnpj) ? formatarCnpj(item.supplierCnpj) : "—",
+    "CNPJ destinatário": apenasDigitos(item.recipientCnpj) ? formatarCnpj(item.recipientCnpj) : "—",
+    Volumes: item.invoiceVolumeCount === null ? "—" : String(item.invoiceVolumeCount),
+    "Valor total": formatReportMoney(item.invoiceTotalCents),
   }));
+}
+
+/**
+ * Os nomes das colunas de cada visão, tirados das próprias linhas.
+ *
+ * A tela e o Excel liam listas de colunas diferentes, e foi assim que o número
+ * MIRO passou a sair na exportação sem nunca aparecer na tela. Derivando as duas
+ * da mesma função, elas não têm como divergir de novo.
+ */
+export function reportColumns(view: "consolidated" | "detailed"): string[] {
+  const modelo: ReportAppointment = {
+    id: 0, invoiceNumber: null, supplierName: null, invoiceSupplierName: null, supplierCnpj: null,
+    recipientCnpj: null, purchaseOrder: null, miroNumber: null, invoiceVolumeCount: null,
+    invoiceTotalCents: null, serviceType: "", status: "pending", scheduledFor: new Date(0), receivedAt: null,
+  };
+  const linha = view === "detailed" ? toDetailedReportRows([modelo])[0] : toConsolidatedReportRows([modelo])[0];
+  return Object.keys(linha);
 }
