@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
+import { CAMPOS_DO_OPERADOR, OPERADOR_LOGISTICO } from "@shared/operadorLogistico";
 
 export type ReceiptCertificateData = {
   invoiceNumber: string | null;
@@ -42,6 +43,26 @@ function getRvdLogoDataUrl() {
   return logoDataUrlPromise;
 }
 
+const ALTURA_DA_LINHA_DO_AVISO = 4;
+const ALTURA_DA_LINHA_DE_CAMPOS = 11;
+const PRIMEIRO_CAMPO = 17;
+const ALTURA_DA_CONFIRMACAO = 46;
+/** Abaixo disto está o rodapé, que nenhum bloco pode invadir. */
+const LIMITE_DA_PAGINA = 272;
+
+/**
+ * A altura do quadro "Entregar em", medida pelo que ele contém.
+ *
+ * O aviso pode quebrar em mais de uma linha conforme a fonte, e os campos vêm
+ * de uma lista que pode crescer. Fixar a altura na mão deixaria o último campo
+ * para fora do quadro no dia em que qualquer um dos dois mudasse.
+ */
+export function alturaDoBlocoDeEntrega(linhasDoAviso: number, campos: number) {
+  const linhasDeCampos = Math.ceil(campos / 2);
+  const ultimoValor = PRIMEIRO_CAMPO + linhasDoAviso * ALTURA_DA_LINHA_DO_AVISO + (linhasDeCampos - 1) * ALTURA_DA_LINHA_DE_CAMPOS + 4.5;
+  return ultimoValor + 3;
+}
+
 export async function generateReceiptCertificatePdf(data: ReceiptCertificateData) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const plum: [number, number, number] = [120, 32, 120];
@@ -55,15 +76,40 @@ export async function generateReceiptCertificatePdf(data: ReceiptCertificateData
   doc.setTextColor(...plum); doc.setFontSize(19); doc.text("Comprovante de agendamento", 16, 64);
   doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(70, 50, 70); doc.text("Documento para acompanhar a entrega da nota fiscal agendada.", 16, 72);
   doc.setDrawColor(...blue); doc.setLineWidth(0.7); doc.line(16, 79, 194, 79);
+
+  // Para onde a carga vai. Fica antes dos dados da nota porque é o que o
+  // motorista precisa ler primeiro — endereço errado custa a viagem inteira.
+  const avisoLinhas = doc.splitTextToSize(OPERADOR_LOGISTICO.aviso, 168);
+  const entregaY = 84;
+  const alturaDaEntrega = alturaDoBlocoDeEntrega(avisoLinhas.length, CAMPOS_DO_OPERADOR.length);
+  doc.setFillColor(247, 242, 247); doc.roundedRect(16, entregaY, 178, alturaDaEntrega, 4, 4, "F");
+  doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text("ENTREGAR EM", 22, entregaY + 8);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(70, 50, 70); doc.text(avisoLinhas, 22, entregaY + 13.5);
+
+  let campoY = entregaY + PRIMEIRO_CAMPO + avisoLinhas.length * ALTURA_DA_LINHA_DO_AVISO;
+  for (let indice = 0; indice < CAMPOS_DO_OPERADOR.length; indice += 2) {
+    CAMPOS_DO_OPERADOR.slice(indice, indice + 2).forEach((campo, coluna) => {
+      const x = coluna === 0 ? 22 : 112;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(120, 100, 120); doc.text(campo.rotulo.toUpperCase(), x, campoY);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(45, 35, 45);
+      doc.text(doc.splitTextToSize(campo.valor, coluna === 0 ? 86 : 76), x, campoY + 4.5);
+    });
+    campoY += ALTURA_DA_LINHA_DE_CAMPOS;
+  }
+
   const rows = [["Nota fiscal", data.invoiceNumber || "Não informado"], ["Fornecedor", data.supplierName || "Não informado"], ["Pedido", data.purchaseOrder || "Não informado"], ["CNPJ destinatário", data.recipientCnpj || "Não informado"], ["Data e hora da entrega", formatDateTime(data.scheduledFor)], ["Agendamento confirmado por", data.confirmedByName], ["Login do confirmador", data.confirmedByLogin]];
-  let y = 93;
+  let y = entregaY + alturaDaEntrega + 10;
   for (const [label, value] of rows) {
     doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...plum); doc.text(label, 18, y);
     doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(45, 35, 45); const text = doc.splitTextToSize(value, 112); doc.text(text, 76, y); y += Math.max(11, text.length * 5 + 5);
     doc.setDrawColor(230, 215, 230); doc.setLineWidth(0.25); doc.line(18, y - 4, 192, y - 4);
   }
   const qrCode = await QRCode.toDataURL(data.validationUrl, { errorCorrectionLevel: "M", margin: 1, width: 240, color: { dark: "#782078", light: "#FFFFFF" } });
-  const confirmationY = y + 8;
+  // Um nome de fornecedor comprido quebra em duas linhas e empurra tudo para
+  // baixo; se a confirmação não couber inteira acima do rodapé, ela vira
+  // página em vez de imprimir por cima dele.
+  let confirmationY = y + 6;
+  if (confirmationY + ALTURA_DA_CONFIRMACAO > LIMITE_DA_PAGINA) { doc.addPage(); confirmationY = 24; }
   doc.setFillColor(247, 242, 247); doc.roundedRect(16, confirmationY, 178, 46, 4, 4, "F");
   doc.addImage(qrCode, "PNG", 151, confirmationY + 5, 35, 35);
   doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("AGENDAMENTO CONFIRMADO", 22, confirmationY + 14);
