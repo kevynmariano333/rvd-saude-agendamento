@@ -65,6 +65,7 @@ import {
 import { supplierNameRule } from "../shared/attendanceFields";
 import { canApplySuggestion, canMoveAppointmentStatus, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, canTreatBacklog, isOperator, isSchedulingDesk } from "./permissions";
 import { validarTratativa, resumoDaTratativa } from "../shared/tratativa";
+import { ehMotivoConhecido, rotuloDoMotivo } from "../shared/backlogReasons";
 import { clearRvdSession, createRvdSession } from "./session";
 import { systemRouter } from "./_core/systemRouter";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -569,7 +570,7 @@ export const appRouter = router({
         return createUnscheduledReceipt({ operatorId: ctx.user.id, xmlStorageKey: stored.key, xmlUrl: stored.url, xmlFileName: safeName, invoiceNumber: invoice.invoiceNumber, invoiceAccessKey: invoice.accessKey, purchaseOrder: invoice.purchaseOrder, invoiceSupplierName: invoice.supplierName, recipientCnpj: invoice.recipientCnpj, invoiceIssuedAt: invoice.issuedAt, serviceDescription: invoice.serviceDescription, invoiceTotalCents: invoice.totalCents, invoiceItemsJson: JSON.stringify(invoice.items), invoiceVolumeCount: invoice.volumeCount });
       }),
     updateStatus: protectedProcedure
-      .input(z.object({ appointmentId: z.number().int().positive(), status: z.enum(["scheduled", "received", "completed", "backlog", "rejected"]), rejectionReason: z.string().max(1000).optional(), miroNumber: z.string().max(40).optional(), note: z.string().max(1000).optional() }))
+      .input(z.object({ appointmentId: z.number().int().positive(), status: z.enum(["scheduled", "received", "completed", "backlog", "rejected"]), rejectionReason: z.string().max(1000).optional(), miroNumber: z.string().max(40).optional(), note: z.string().max(1000).optional(), backlogReasonCode: z.string().max(60).optional() }))
       .mutation(async ({ ctx, input }) => {
         if (!canMoveAppointmentStatus(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a quem cuida da agenda." });
         const appointment = await getAppointmentById(input.appointmentId);
@@ -587,7 +588,23 @@ export const appRouter = router({
           miroNumber = numero;
         }
         const observacao = input.note?.trim();
-        return updateAppointmentStatus({ ...input, miroNumber, previousStatus: appointment.status, handledBy: ctx.user.id, eventNote: observacao || (input.status === "received" ? "Recebimento confirmado pelo operador." : input.status === "completed" ? `Recebimento concluído. MIRO ${miroNumber}.` : undefined) });
+        // O backlog exige a categoria e a descrição. A categoria dá o número do
+        // fim do mês; a descrição é o que quem vai tratar precisa ler. Uma nota
+        // que volta sem dizer por quê só transfere o problema de mesa.
+        let backlogReasonCode: string | undefined;
+        if (input.status === "backlog") {
+          if (!ehMotivoConhecido(input.backlogReasonCode)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione o motivo do backlog." });
+          }
+          if (!observacao) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Descreva o que houve para mandar a nota ao backlog." });
+          }
+          backlogReasonCode = input.backlogReasonCode;
+        }
+        const notaDoEvento = input.status === "backlog"
+          ? `${rotuloDoMotivo(backlogReasonCode)}: ${observacao}`
+          : observacao || (input.status === "received" ? "Recebimento confirmado pelo operador." : input.status === "completed" ? `Recebimento concluído. MIRO ${miroNumber}.` : undefined);
+        return updateAppointmentStatus({ ...input, miroNumber, backlogReasonCode, previousStatus: appointment.status, handledBy: ctx.user.id, eventNote: notaDoEvento });
       }),
     confirmPreNote: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))

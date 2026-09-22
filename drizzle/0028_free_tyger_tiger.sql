@@ -1,0 +1,1 @@
+ALTER TABLE `appointments` ADD `backlogReasonCode` varchar(60);

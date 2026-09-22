@@ -11,6 +11,7 @@ import { isScheduledForDate } from "@/lib/agendaFilters";
 import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { filtroDeDestinatario, rotuloDoDestinatario } from "@shared/recipients";
 import { pedidosDaNota } from "@shared/purchaseOrders";
+import { MOTIVOS_DE_BACKLOG } from "@shared/backlogReasons";
 import { AlertTriangle, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardCheck, FileText, Filter, Grid2X2, MessageSquare, RefreshCw, RotateCcw, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -59,6 +60,7 @@ export default function OperatorDashboard() {
   const [finalizeMode, setFinalizeMode] = useState<"sucesso" | "problema">("sucesso");
   const [miro, setMiro] = useState("");
   const [finalizeNote, setFinalizeNote] = useState("");
+  const [finalizeReason, setFinalizeReason] = useState("");
   const [suggestTarget, setSuggestTarget] = useState<Appointment | null>(null);
   const [suggestDate, setSuggestDate] = useState("");
   const [suggestTime, setSuggestTime] = useState("");
@@ -115,11 +117,14 @@ export default function OperatorDashboard() {
     if (!podeConfirmar) { setSuggestTarget(item); setSuggestDate(""); setSuggestTime(""); setSuggestNotes(""); return; }
     setSelected(item); setScheduleDate(""); setScheduleTime(""); setAcceptedSuggestionId(undefined);
   };
-  const openFinalize = (item: Appointment) => { setFinalizeTarget(item); setFinalizeMode("sucesso"); setMiro(""); setFinalizeNote(""); };
+  const openFinalize = (item: Appointment) => { setFinalizeTarget(item); setFinalizeMode("sucesso"); setMiro(""); setFinalizeNote(""); setFinalizeReason(""); };
   const confirmFinalize = () => {
     if (!finalizeTarget) return;
     if (finalizeMode === "problema") {
-      updateStatus.mutate({ appointmentId: finalizeTarget.id, status: "backlog", note: finalizeNote.trim() || undefined });
+      // As mesmas exigências do servidor, aqui só para responder na hora.
+      if (!finalizeReason) return toast.error("Selecione o motivo do backlog.");
+      if (!finalizeNote.trim()) return toast.error("Descreva o que houve.");
+      updateStatus.mutate({ appointmentId: finalizeTarget.id, status: "backlog", backlogReasonCode: finalizeReason, note: finalizeNote.trim() });
       return;
     }
     // A mesma regra do servidor, aqui só para responder na hora em vez de
@@ -140,7 +145,7 @@ export default function OperatorDashboard() {
       <div className="flex flex-wrap justify-center gap-2">{tabs.map(tab => { const Icon = tab.icon; const count = counters[tab.id]; const active = activeStatus === tab.id; const showsCounter = tab.id === "pending" || tab.id === "scheduled"; return <button key={tab.id} onClick={() => setActiveStatus(tab.id)} className={`relative inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${active ? "border-rvd-plum bg-brand text-white" : "border-line bg-surface text-rvd-plum hover:bg-rvd-plum-pale"}`}><Icon className="size-3.5" />{tab.label}{showsCounter && count > 0 && <span className={`-right-2 -top-2 absolute flex size-5 items-center justify-center rounded-full text-[10px] font-extrabold ${active ? "bg-rvd-blue text-rvd-plum" : "bg-brand text-white"}`}>{count}</span>}</button>; })}</div>
     </section>
       <section className="mt-6 overflow-hidden panel"><div className="overflow-x-auto"><table className="w-full min-w-[1060px] text-left"><thead className="bg-sunken"><tr className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint"><th className="px-3 py-4">Status</th><th className="px-3 py-4">Fornecedor</th><th className="px-3 py-4">Destinatário</th><th className="px-3 py-4">Nota fiscal</th><th className="px-3 py-4">Pedido</th><th className="px-3 py-4">{activeStatus === "rejected" ? "Motivo da recusa" : activeStatus === "pending" ? "Confirmação" : activeStatus === "received" ? "Recebimento" : "Agendamento"}</th><th className="px-3 py-4 text-right">Ações</th></tr></thead><tbody>{agenda.isLoading ? <tr><td colSpan={7} className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando agendamentos...</td></tr> : visibleAgenda.length ? visibleAgenda.map(item => <AppointmentRow key={item.id} item={item} activeStatus={activeStatus} canConfirm={podeConfirmar} onFinalize={() => openFinalize(item)} onDetails={() => setDetails(item)} onHistory={() => setDateHistory(item)} onChat={() => setChatTarget(item)} onPreNote={() => item.preNoteConfirmedAt ? toast.info("Pré-nota já confirmada.") : setPreNoteTarget(item)} onSchedule={() => openSchedule(item)} onUpdate={(status, reason) => updateStatus.mutate({ appointmentId: item.id, status, rejectionReason: reason })} onRescue={() => rescue.mutate({ appointmentId: item.id })} />) : <tr><td colSpan={7} className="px-4 py-16 text-center"><Search className="mx-auto size-7 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhum agendamento encontrado</p><p className="mt-1 text-sm text-ink-soft">Ajuste os filtros ou selecione outra aba de status.</p></td></tr>}</tbody></table></div></section>
-    <FinalizeDialog item={finalizeTarget} open={Boolean(finalizeTarget)} onOpenChange={open => !open && setFinalizeTarget(null)} mode={finalizeMode} onMode={setFinalizeMode} miro={miro} onMiro={setMiro} note={finalizeNote} onNote={setFinalizeNote} onConfirm={confirmFinalize} loading={updateStatus.isPending} />
+    <FinalizeDialog item={finalizeTarget} open={Boolean(finalizeTarget)} onOpenChange={open => !open && setFinalizeTarget(null)} mode={finalizeMode} onMode={setFinalizeMode} miro={miro} onMiro={setMiro} note={finalizeNote} onNote={setFinalizeNote} reason={finalizeReason} onReason={setFinalizeReason} onConfirm={confirmFinalize} loading={updateStatus.isPending} />
     <SuggestDialog item={suggestTarget} open={Boolean(suggestTarget)} onOpenChange={open => !open && setSuggestTarget(null)} date={suggestDate} time={suggestTime} notes={suggestNotes} onDate={setSuggestDate} onTime={setSuggestTime} onNotes={setSuggestNotes} onConfirm={confirmSuggestion} loading={createSuggestion.isPending} />
     <ScheduleDialog item={selected} open={Boolean(selected)} onOpenChange={open => !open && setSelected(null)} date={scheduleDate} time={scheduleTime} onDate={setScheduleDate} onTime={setScheduleTime} onConfirm={confirmSchedule} loading={schedule.isPending} activeAppointments={activeSupplier.data?.filter(item => item.id !== selected?.id) ?? []} suggestions={pendingSuggestions.data ?? []} acceptedSuggestionId={acceptedSuggestionId} onAcceptSuggestion={acceptSuggestion} />
     <AppointmentDetailsDialog appointment={details} open={Boolean(details)} onOpenChange={open => !open && setDetails(null)} onHistory={() => { if (details) { setDateHistory(details); setDetails(null); } }} />
@@ -191,12 +196,25 @@ function SuggestDialog({ item, open, onOpenChange, date, time, notes, onDate, on
  * O MIRO é pedido aqui porque é o único momento em que quem lançou está com o
  * número na tela. Depois a nota sai da lista e ninguém volta para preencher.
  */
-function FinalizeDialog({ item, open, onOpenChange, mode, onMode, miro, onMiro, note, onNote, onConfirm, loading }: { item: Appointment | null; open: boolean; onOpenChange: (open: boolean) => void; mode: "sucesso" | "problema"; onMode: (value: "sucesso" | "problema") => void; miro: string; onMiro: (value: string) => void; note: string; onNote: (value: string) => void; onConfirm: () => void; loading: boolean }) {
+function FinalizeDialog({ item, open, onOpenChange, mode, onMode, miro, onMiro, note, onNote, reason, onReason, onConfirm, loading }: { item: Appointment | null; open: boolean; onOpenChange: (open: boolean) => void; mode: "sucesso" | "problema"; onMode: (value: "sucesso" | "problema") => void; miro: string; onMiro: (value: string) => void; note: string; onNote: (value: string) => void; reason: string; onReason: (value: string) => void; onConfirm: () => void; loading: boolean }) {
   const cardClass = (active: boolean) => `flex flex-1 flex-col items-center gap-2 rounded-2xl border px-4 py-5 text-sm font-bold transition ${active ? "border-rvd-plum bg-brand text-white" : "border-line bg-sunken text-ink-soft hover:bg-rvd-plum-pale hover:text-rvd-plum"}`;
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-lg rounded-[2rem] border-line bg-surface p-7"><DialogHeader><DialogTitle className="flex items-center gap-2 font-display text-2xl font-extrabold text-ink"><CheckCircle2 className="size-6 text-rvd-plum" />Finalizar recebimento</DialogTitle><DialogDescription className="text-rvd-plum">{item?.invoiceNumber ? `Nota ${item.invoiceNumber}` : "Nota sem número"} · confirme o resultado da operação.</DialogDescription></DialogHeader>
     <div className="mt-6 flex gap-3"><button type="button" onClick={() => onMode("sucesso")} className={cardClass(mode === "sucesso")} aria-pressed={mode === "sucesso"}><CheckCircle2 className="size-5" />Sucesso</button><button type="button" onClick={() => onMode("problema")} className={cardClass(mode === "problema")} aria-pressed={mode === "problema"}><AlertTriangle className="size-5" />Problema / Backlog</button></div>
     {mode === "sucesso" ? <div className="mt-6 rounded-2xl border border-line bg-canvas p-5"><Label htmlFor="miro" className="text-xs font-bold uppercase tracking-[0.14em] text-ink-faint">Número MIRO (SAP)</Label><Input id="miro" value={miro} onChange={event => onMiro(event.target.value)} inputMode="numeric" maxLength={14} placeholder="0000000000" className="mt-2 h-12 border-line bg-surface font-mono text-lg text-rvd-plum" /><p className="mt-2 text-xs text-ink-soft">Deve ter exatamente 10 dígitos numéricos.</p></div>
-      : <div className="mt-6 rounded-2xl border border-line bg-canvas p-5"><Label htmlFor="finalize-note" className="text-xs font-bold uppercase tracking-[0.14em] text-ink-faint">O que houve? <span className="font-normal normal-case tracking-normal">(opcional)</span></Label><Textarea id="finalize-note" value={note} onChange={event => onNote(event.target.value)} placeholder="Ex.: divergência de volumes, nota retida na conferência." className="mt-2 min-h-24 border-line bg-surface text-rvd-plum" /><p className="mt-2 text-xs text-ink-soft">A nota vai para o Backlog e fica na aba própria até ser reagendada.</p></div>}
+      : <div className="mt-6 space-y-4 rounded-2xl border border-line bg-canvas p-5">
+          <div>
+            <Label htmlFor="finalize-reason" className="text-xs font-bold uppercase tracking-[0.14em] text-ink-faint">Motivo *</Label>
+            <select id="finalize-reason" value={reason} onChange={event => onReason(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-line bg-surface px-3 text-sm font-semibold text-rvd-plum focus:outline-none focus:ring-2 focus:ring-rvd-blue">
+              <option value="">Selecione um motivo...</option>
+              {MOTIVOS_DE_BACKLOG.map(motivo => <option key={motivo.codigo} value={motivo.codigo}>{motivo.rotulo}</option>)}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="finalize-note" className="text-xs font-bold uppercase tracking-[0.14em] text-ink-faint">O que houve? *</Label>
+            <Textarea id="finalize-note" value={note} onChange={event => onNote(event.target.value)} placeholder="Descreva o que houve de errado..." className="mt-2 min-h-24 border-line bg-surface text-rvd-plum" />
+            <p className="mt-2 text-xs text-ink-soft">A nota vai para o Backlog e fica lá até o Planejador tratar. É este texto que ele lê primeiro.</p>
+          </div>
+        </div>}
     <div className="mt-7 flex justify-end gap-3"><Button variant="ghost" onClick={() => onOpenChange(false)} className="font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button><Button onClick={onConfirm} disabled={loading} className="h-12 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand">{loading ? "Confirmando..." : mode === "sucesso" ? "Confirmar finalização" : "Enviar para o backlog"}</Button></div>
   </DialogContent></Dialog>;
 }

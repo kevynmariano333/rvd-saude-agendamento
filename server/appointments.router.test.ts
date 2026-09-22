@@ -526,15 +526,33 @@ describe("fechamento do recebimento", () => {
     expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ miroNumber: "5105101642", eventNote: "Recebimento concluído. MIRO 5105101642." }));
   });
 
-  it("manda para o backlog sem exigir MIRO, guardando o motivo", async () => {
+  it("manda para o backlog sem exigir MIRO, guardando motivo e descrição", async () => {
     const caller = appRouter.createCaller(context("operator"));
-    await caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", note: "Divergência de volumes." });
-    expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "backlog", miroNumber: undefined, eventNote: "Divergência de volumes." }));
+    await caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", backlogReasonCode: "DIVERGENCIA_QUANTIDADE", note: "Chegaram 6 de 8." });
+    expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({
+      status: "backlog", miroNumber: undefined, backlogReasonCode: "DIVERGENCIA_QUANTIDADE",
+      eventNote: "Divergência de quantidade: Chegaram 6 de 8.",
+    }));
+  });
+
+  it("não manda para o backlog sem motivo nem sem descrição", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    // Uma nota que volta sem dizer por quê só muda o problema de mesa.
+    await expect(caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", note: "Chegaram 6 de 8." })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", backlogReasonCode: "DIVERGENCIA_QUANTIDADE" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", backlogReasonCode: "DIVERGENCIA_QUANTIDADE", note: "   " })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.updateAppointmentStatus).not.toHaveBeenCalled();
+  });
+
+  it("recusa motivo que não está na lista", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await expect(caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", backlogReasonCode: "INVENTADO", note: "Qualquer coisa." })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.updateAppointmentStatus).not.toHaveBeenCalled();
   });
 
   it("ignora um MIRO enviado numa transição que não é a conclusão", async () => {
     const caller = appRouter.createCaller(context("operator"));
-    await caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", miroNumber: "5105101642" });
+    await caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", backlogReasonCode: "OUTRO", note: "Retida na conferência.", miroNumber: "5105101642" });
     expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "backlog", miroNumber: undefined }));
   });
 });

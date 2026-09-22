@@ -8,6 +8,7 @@ import { formatAppointmentDate } from "@/lib/portal";
 import { rotuloDoDestinatario } from "@shared/recipients";
 import { pedidosDaNota } from "@shared/purchaseOrders";
 import { ERRO_MIRO, validarTratativa } from "@shared/tratativa";
+import { rotuloDoMotivo } from "@shared/backlogReasons";
 import { AlertTriangle, ClipboardCheck, MessageSquare, Send } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -77,7 +78,8 @@ export default function TratarPendenciaDialog({ appointment, open, onOpenChange,
     <div className="px-6 py-7 sm:px-9">
       <section className="rounded-3xl border border-line bg-canvas p-5 sm:p-6">
         <p className={rotuloClasse}>Por que voltou</p>
-        <p className="mt-2 text-sm leading-6 text-ink-soft">{appointment.backlogReason || "Motivo não registrado ao enviar para o backlog."}</p>
+        <p className="mt-2 font-display text-lg font-extrabold text-ink">{rotuloDoMotivo(appointment.backlogReasonCode)}</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-ink-soft">{appointment.backlogReason || "Sem descrição registrada."}</p>
       </section>
 
       <section className="mt-6 grid gap-5 sm:grid-cols-3">

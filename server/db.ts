@@ -191,6 +191,7 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       memorizedOrder: appointments.memorizedOrder,
       hisEntryDocument: appointments.hisEntryDocument,
       hisExitDocument: appointments.hisExitDocument,
+      backlogReasonCode: appointments.backlogReasonCode,
       backlogReason: appointments.backlogReason,
       treatedAt: appointments.treatedAt,
       rejectionReason: appointments.rejectionReason,
@@ -481,6 +482,8 @@ export async function updateAppointmentStatus(input: {
   eventNote?: string;
   /** Lançamento no SAP, informado ao concluir. */
   miroNumber?: string;
+  /** Categoria do motivo, quando a nota vai para o backlog. */
+  backlogReasonCode?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
@@ -497,7 +500,9 @@ export async function updateAppointmentStatus(input: {
         ...(input.miroNumber ? { miroNumber: input.miroNumber } : {}),
         // O motivo acompanha a nota até a tratativa; um backlog novo apaga o
         // motivo do backlog anterior, que já não descreve esta ida.
-        ...(input.status === "backlog" ? { backlogReason: input.eventNote?.slice(0, 500) ?? null } : {}),
+        ...(input.status === "backlog"
+          ? { backlogReasonCode: input.backlogReasonCode ?? null, backlogReason: input.eventNote?.slice(0, 500) ?? null }
+          : {}),
       })
       .where(eq(appointments.id, input.appointmentId));
     await tx.insert(appointmentStatusHistory).values({

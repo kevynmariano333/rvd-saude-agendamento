@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { canTreatBacklogPortal, formatAppointmentDate, homePathFor, type PortalRole } from "@/lib/portal";
 import { rotuloDoDestinatario } from "@shared/recipients";
 import { pedidosDaNota } from "@shared/purchaseOrders";
+import { curtoDoMotivo } from "@shared/backlogReasons";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, FileText } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -73,7 +74,8 @@ export default function BacklogPage() {
                 return <tr key={item.id} className="border-t border-line align-top">
                   <td className="px-3 py-4">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-state-wait-bg px-3 py-1 text-xs font-bold uppercase tracking-wide text-state-wait"><AlertTriangle className="size-3.5" />Backlog</span>
-                    <p className="mt-2 max-w-44 text-xs leading-5 text-ink-soft">{item.backlogReason || "Motivo não registrado"}</p>
+                    <p className="mt-2 inline-flex rounded-md bg-rvd-plum-pale px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">{curtoDoMotivo(item.backlogReasonCode)}</p>
+                    <p className="mt-1.5 line-clamp-3 max-w-44 text-xs leading-5 text-ink-soft">{item.backlogReason || "Sem descrição"}</p>
                   </td>
                   <td className="px-3 py-4">
                     <p title={item.invoiceSupplierName || item.supplierName || undefined} className="line-clamp-2 max-w-48 font-bold leading-5 text-rvd-plum">{item.invoiceSupplierName || item.supplierName || "Fornecedor"}</p>

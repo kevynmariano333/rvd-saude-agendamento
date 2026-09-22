@@ -148,6 +148,10 @@ export const appointments = mysqlTable(
     // O motivo que o Operador escreveu ao mandar a nota para o backlog. Fica na
     // própria nota, e não só no histórico, porque é a primeira coisa que o
     // planejamento precisa ler na lista, antes de abrir qualquer coisa.
+    // O motivo tem duas partes: a categoria escolhida numa lista fechada, que
+    // é o que dá para contar no fim do mês, e a descrição do caso, que é o que
+    // a pessoa da tratativa precisa ler. As duas são exigidas.
+    backlogReasonCode: varchar("backlogReasonCode", { length: 60 }),
     backlogReason: varchar("backlogReason", { length: 500 }),
     treatedAt: datetime("treatedAt", { mode: "date" }),
     treatedById: int("treatedById").references(() => users.id, { onDelete: "set null" }),
