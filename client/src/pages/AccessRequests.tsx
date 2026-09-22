@@ -19,7 +19,7 @@ type PendingRequest = {
 };
 
 /** Perfis internos que o administrador pode atribuir a uma conta já existente. */
-const assignableRoles = ["admin", "operator", "portaria"] as const;
+const assignableRoles = ["admin", "operator", "planejador", "portaria"] as const;
 
 export default function AccessRequests() {
   const [, setLocation] = useLocation();

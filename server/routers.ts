@@ -60,7 +60,7 @@ import {
   setUserRole,
 } from "./db";
 import { supplierNameRule } from "../shared/attendanceFields";
-import { canApplySuggestion, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canTransitionAppointment, isOperator } from "./permissions";
+import { canApplySuggestion, canMoveAppointmentStatus, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, isOperator, isSchedulingDesk } from "./permissions";
 import { clearRvdSession, createRvdSession } from "./session";
 import { systemRouter } from "./_core/systemRouter";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -129,6 +129,10 @@ function assertOperator(role: UserRole) {
   if (!isOperator(role)) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito ao perfil de operador." });
 }
 
+function assertSchedulingDesk(role: UserRole) {
+  if (!isSchedulingDesk(role)) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a quem cuida da agenda." });
+}
+
 function assertAdmin(role: UserRole) {
   if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Ação restrita ao Administrador." });
 }
@@ -194,7 +198,7 @@ async function supplierScopeIds(user: ScopedUser): Promise<number[]> {
 async function getAccessibleAppointment(user: ScopedUser, appointmentId: number) {
   const appointment = await getAppointmentById(appointmentId);
   if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
-  if (!isOperator(user.role) && !isWithinScope(await supplierScopeIds(user), appointment.supplierId)) {
+  if (!isSchedulingDesk(user.role) && !isWithinScope(await supplierScopeIds(user), appointment.supplierId)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode acessar as mensagens deste agendamento." });
   }
   return appointment;
@@ -409,7 +413,7 @@ export const appRouter = router({
       .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional() }).optional())
       .query(async ({ ctx, input }) => {
         const filters: AppointmentFilters = { date: input?.date, status: input?.status as AppointmentStatus | undefined, invoiceNumber: input?.invoiceNumber, supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj };
-        if (!isOperator(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
+        if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
         return listAppointments(filters);
       }),
     history: protectedProcedure
@@ -417,7 +421,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
-        if (!isOperator(ctx.user.role) && !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
+        if (!isSchedulingDesk(ctx.user.role) && !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar o histórico deste agendamento." });
         }
         return listAppointmentHistory(input.appointmentId);
@@ -432,7 +436,7 @@ export const appRouter = router({
         // qualquer perfil interno novo — Portaria e Operação não participam
         // deste fluxo. A regra é a mesma do histórico: a operação de
         // agendamentos, ou o próprio fornecedor da nota.
-        if (!isOperator(ctx.user.role) && !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
+        if (!isSchedulingDesk(ctx.user.role) && !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode emitir este comprovante." });
         }
         if (appointment.status !== "scheduled") {
@@ -556,7 +560,7 @@ export const appRouter = router({
     updateStatus: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), status: z.enum(["scheduled", "received", "completed", "backlog", "rejected"]), rejectionReason: z.string().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        assertOperator(ctx.user.role);
+        if (!canMoveAppointmentStatus(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a quem cuida da agenda." });
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
         if (!canTransitionAppointment(appointment.status, input.status)) {
@@ -567,7 +571,7 @@ export const appRouter = router({
     confirmPreNote: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
-        assertOperator(ctx.user.role);
+        assertSchedulingDesk(ctx.user.role);
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
         if (appointment.preNoteConfirmedAt) return appointment;
@@ -575,7 +579,7 @@ export const appRouter = router({
       }),
     activeForSupplier: protectedProcedure
       .input(z.object({ supplierId: z.number().int().positive() }))
-      .query(async ({ ctx, input }) => { assertOperator(ctx.user.role); return listSupplierActiveAppointments(input.supplierId); }),
+      .query(async ({ ctx, input }) => { assertSchedulingDesk(ctx.user.role); return listSupplierActiveAppointments(input.supplierId); }),
     schedule: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), scheduledFor: z.string().datetime(), acceptedSuggestionId: z.number().int().positive().optional() }))
       .mutation(async ({ ctx, input }) => {
@@ -594,7 +598,7 @@ export const appRouter = router({
     rescue: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
-        assertOperator(ctx.user.role);
+        assertSchedulingDesk(ctx.user.role);
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
         if (!canRescueAppointment(appointment.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Apenas itens rejeitados podem ser resgatados." });
@@ -605,21 +609,31 @@ export const appRouter = router({
     list: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive().optional(), status: z.enum(["pending", "accepted", "declined"]).optional() }).optional())
       .query(async ({ ctx, input }) => {
-        if (input?.appointmentId && !isOperator(ctx.user.role)) {
+        if (input?.appointmentId && !isSchedulingDesk(ctx.user.role)) {
           const appointment = await getAppointmentById(input.appointmentId);
           if (!appointment || !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar sugestões deste agendamento." });
         }
-        return listAppointmentSuggestions({ appointmentId: input?.appointmentId, status: input?.status, supplierIds: isOperator(ctx.user.role) ? undefined : await supplierScopeIds(ctx.user) });
+        return listAppointmentSuggestions({ appointmentId: input?.appointmentId, status: input?.status, supplierIds: isSchedulingDesk(ctx.user.role) ? undefined : await supplierScopeIds(ctx.user) });
       }),
     create: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), suggestedFor: z.string().datetime(), notes: z.string().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        if (!canRequestAppointment(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Somente fornecedores podem enviar sugestões." });
+        if (!canSuggestSchedule(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Este perfil não envia sugestões de data." });
         const appointment = await getAppointmentById(input.appointmentId);
-        if (!appointment || !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode sugerir horário para este agendamento." });
+        if (!appointment) throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode sugerir horário para este agendamento." });
+        // O planejador trabalha a agenda inteira; o fornecedor, só as notas da
+        // própria empresa. Por isso o recorte de escopo continua valendo para
+        // quem não está na mesa de agendamentos.
+        if (!isSchedulingDesk(ctx.user.role) && !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode sugerir horário para este agendamento." });
+        }
         if (!canApplySuggestion(appointment.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Este agendamento não aceita novas sugestões." });
         const suggestedFor = new Date(input.suggestedFor);
         if (Number.isNaN(suggestedFor.getTime()) || suggestedFor.getTime() <= Date.now()) throw new TRPCError({ code: "BAD_REQUEST", message: "Sugira uma data e horário futuros." });
+        // `supplierId` sempre guardou quem escreveu a sugestão, e continua
+        // assim com o planejador. O efeito colateral é bem-vindo: a proposta
+        // dele fica fora do recorte do fornecedor, que não precisa acompanhar
+        // um pedido interno ainda não confirmado.
         return createAppointmentSuggestion({ ...input, supplierId: ctx.user.id, suggestedFor });
       }),
     accept: protectedProcedure
@@ -655,23 +669,23 @@ export const appRouter = router({
       .input(z.object({ appointmentId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         await getAccessibleAppointment(ctx.user, input.appointmentId);
-        await markAppointmentMessagesRead({ appointmentId: input.appointmentId, userId: ctx.user.id, isOperator: isOperator(ctx.user.role) });
+        await markAppointmentMessagesRead({ appointmentId: input.appointmentId, userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) });
         return listAppointmentMessages(input.appointmentId);
       }),
     send: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), body: z.string().trim().min(1, "Digite uma mensagem.").max(1000) }))
       .mutation(async ({ ctx, input }) => {
         await getAccessibleAppointment(ctx.user, input.appointmentId);
-        const id = await createAppointmentMessage({ appointmentId: input.appointmentId, senderId: ctx.user.id, body: input.body.trim(), senderIsOperator: isOperator(ctx.user.role) });
+        const id = await createAppointmentMessage({ appointmentId: input.appointmentId, senderId: ctx.user.id, body: input.body.trim(), senderIsOperator: isSchedulingDesk(ctx.user.role) });
         return { id };
       }),
-    notifications: protectedProcedure.query(({ ctx }) => listUnreadAppointmentMessages({ userId: ctx.user.id, isOperator: isOperator(ctx.user.role) })),
+    notifications: protectedProcedure.query(({ ctx }) => listUnreadAppointmentMessages({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
   }),
   calendar: router({
     list: protectedProcedure
       .input(z.object({ start: z.string().datetime(), end: z.string().datetime() }))
       .query(async ({ ctx, input }) => {
-        assertOperator(ctx.user.role);
+        assertSchedulingDesk(ctx.user.role);
         const start = new Date(input.start);
         const end = new Date(input.end);
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) throw new TRPCError({ code: "BAD_REQUEST", message: "Período inválido." });
@@ -815,7 +829,7 @@ export const appRouter = router({
   staff: router({
     list: adminProcedure.query(async () => listStaffUsers()),
     setRole: adminProcedure
-      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["admin", "operator", "portaria", "operacao"]) }))
+      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["admin", "operator", "portaria", "operacao", "planejador"]) }))
       .mutation(async ({ ctx, input }) => {
         // An administrator changing their own role would drop the only account
         // that can hand the role back.
@@ -842,7 +856,7 @@ export const appRouter = router({
   }),
   analytics: router({
     dashboard: protectedProcedure.input(z.object({ month: z.number().int().min(1).max(12), year: z.number().int().min(2020).max(2100), day: z.number().int().min(1).max(31).optional() })).query(async ({ ctx, input }) => {
-      assertOperator(ctx.user.role);
+      assertSchedulingDesk(ctx.user.role);
       const items = (await listAppointments()).filter(item => item.status !== "backlog");
       return buildDashboardMetrics(items, input);
     }),

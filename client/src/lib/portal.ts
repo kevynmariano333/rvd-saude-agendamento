@@ -1,4 +1,4 @@
-export type PortalRole = "admin" | "operator" | "supplier" | "portaria" | "operacao";
+export type PortalRole = "admin" | "operator" | "supplier" | "portaria" | "operacao" | "planejador";
 export type PortalStatus = "pending" | "scheduled" | "received" | "completed" | "backlog" | "rejected";
 
 export const statusCopy: Record<PortalStatus, string> = {
@@ -30,10 +30,25 @@ export const roleLabel: Record<PortalRole, string> = {
   supplier: "Fornecedor",
   portaria: "Portaria",
   operacao: "Operação",
+  planejador: "Planejador",
 };
 
 export function isPortalOperator(role: PortalRole) {
   return role === "operator" || role === "admin";
+}
+
+/**
+ * A mesa de agendamentos: painel, lista de notas, calendário e relatórios. O
+ * planejador entra aqui junto com o Operador — a diferença aparece na hora de
+ * marcar a data, que continua sendo dele.
+ */
+export function isPortalSchedulingDesk(role: PortalRole) {
+  return isPortalOperator(role) || role === "planejador";
+}
+
+/** Quem planeja propõe a data; quem opera confirma. */
+export function isPortalPlanner(role: PortalRole) {
+  return role === "planejador";
 }
 
 export function isPortalAdmin(role: PortalRole) {
@@ -60,7 +75,7 @@ export function isPortalYard(role: PortalRole) {
  * O administrador responde pelo sistema todo e é o único que vê tudo.
  */
 export function canSeeAttendances(role: PortalRole) {
-  return role !== "supplier";
+  return role !== "supplier" && role !== "planejador";
 }
 
 /** A tela em que cada perfil começa depois de entrar. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSeeAttendances, formatCnpj, getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, homePathFor, isPortalGate, isPortalOperator, isPortalYard } from "./portal";
+import { canSeeAttendances, formatCnpj, getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, homePathFor, isPortalGate, isPortalOperator, isPortalPlanner, isPortalSchedulingDesk, isPortalYard } from "./portal";
 
 describe("momento exibido do agendamento", () => {
   it("prioriza a data e hora reais quando a nota foi recebida", () => {
@@ -74,5 +74,17 @@ describe("separação de responsabilidades entre os perfis", () => {
       expect(canSeeAttendances(role)).toBe(true);
     }
     expect(canSeeAttendances("supplier")).toBe(false);
+    expect(canSeeAttendances("planejador")).toBe(false);
+  });
+
+  it("põe o planejador na mesa de agendamentos e em lugar nenhum além dela", () => {
+    expect(isPortalSchedulingDesk("planejador")).toBe(true);
+    expect(isPortalPlanner("planejador")).toBe(true);
+    // Não é operador: é o que separa sugerir a data de confirmá-la.
+    expect(isPortalOperator("planejador")).toBe(false);
+    expect(isPortalGate("planejador")).toBe(false);
+    expect(isPortalYard("planejador")).toBe(false);
+    // Entra pelo painel, a primeira das quatro telas do perfil.
+    expect(homePathFor("planejador")).toBe("/operador/dashboard");
   });
 });

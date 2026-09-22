@@ -1,6 +1,6 @@
 import { SegmentedControl } from "@/components/PortalKit";
 import { useTheme } from "@/contexts/ThemeContext";
-import { homePathFor, isPortalAdmin, isPortalOperator, type PortalRole } from "@/lib/portal";
+import { homePathFor, isPortalAdmin, isPortalSchedulingDesk, type PortalRole } from "@/lib/portal";
 import LoadingTruck from "@/components/LoadingTruck";
 import { trpc } from "@/lib/trpc";
 import AttendanceStatusBadge from "@/components/AttendanceStatusBadge";
@@ -32,9 +32,9 @@ export default function OperatorOverview() {
   // Trocar de mês pode deixar para trás um dia que lá não existe — 31 vindo de
   // um mês de 31 para setembro. Nesse caso o painel volta ao mês inteiro.
   useEffect(() => { if (day > daysInMonth) setDay(0); }, [day, daysInMonth]);
-  useEffect(() => { if (auth.data && !isPortalOperator(auth.data.role as PortalRole)) setLocation(homePathFor(auth.data.role as PortalRole)); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
+  useEffect(() => { if (auth.data && !isPortalSchedulingDesk(auth.data.role as PortalRole)) setLocation(homePathFor(auth.data.role as PortalRole)); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
   if (auth.isLoading) return <LoadingTruck label="Preparando o dashboard" />;
-  if (!auth.data || !isPortalOperator(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
+  if (!auth.data || !isPortalSchedulingDesk(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
   const data = analytics.data;
   const monthName = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(year, month - 1, 1));
   const yearOptions = Array.from({ length: 5 }, (_, index) => today.getFullYear() - 2 + index);

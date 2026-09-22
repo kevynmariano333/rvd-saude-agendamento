@@ -10,7 +10,10 @@ import {
   varchar,
 } from "drizzle-orm/mysql-core";
 
-export const userRoles = ["admin", "operator", "supplier", "portaria", "operacao"] as const;
+// "planejador" cuida da agenda sem confirmá-la: enxerga o painel, a lista de
+// notas, o calendário e os relatórios, propõe datas ao Operador e acompanha o
+// recebimento até concluir. O pátio e a administração ficam de fora.
+export const userRoles = ["admin", "operator", "supplier", "portaria", "operacao", "planejador"] as const;
 export const appointmentStatuses = ["pending", "scheduled", "received", "completed", "backlog", "rejected"] as const;
 // "importado" marca o histórico trazido de fora do portal (hoje, o acervo do
 // sistema Agiliza). Sem um valor próprio, milhares de notas antigas ficariam

@@ -151,8 +151,14 @@ como passo anterior ao deploy.
 
 ## Perfis e visibilidade
 
-Cinco perfis: `admin`, `operator`, `supplier`, `portaria`, `operacao`.
+Seis perfis: `admin`, `operator`, `supplier`, `portaria`, `operacao`,
+`planejador`.
 
+- **O planejador cuida da agenda sem confirmá-la.** Ele tem as quatro telas de
+  planejamento — painel, agendamentos, calendário e relatórios —, propõe datas
+  ao Operador e acompanha a nota até concluir. Marcar a data é compromisso com
+  o fornecedor e continua sendo do Operador; o pátio e a administração ficam
+  fora do perfil.
 - **Nenhum cadastro entra sozinho.** Todo registro novo nasce pendente e espera
   aprovação de um administrador, inclusive os de operador — a tela de cadastro é
   aberta a qualquer pessoa, e um operador aprovado enxerga a base inteira.

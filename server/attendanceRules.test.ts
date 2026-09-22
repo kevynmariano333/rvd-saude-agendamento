@@ -33,6 +33,8 @@ describe("perfis operacionais", () => {
       expect(canViewAttendances(role)).toBe(true);
     }
     expect(canViewAttendances("supplier")).toBe(false);
+    // O planejador cuida da agenda, não da doca: o pátio fica fora do perfil.
+    expect(canViewAttendances("planejador")).toBe(false);
   });
 });
 

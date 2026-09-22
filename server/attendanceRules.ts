@@ -23,9 +23,13 @@ export function canManageOperation(role: UserRole) {
   return role === "operacao" || role === "operator" || role === "admin";
 }
 
-/** O pátio é interno: o fornecedor nunca o enxerga. */
+/**
+ * O pátio é de quem trabalha nele e de quem responde por ele. Fica fora do
+ * alcance do fornecedor e também do planejador, cujo acesso se encerra no
+ * painel, na lista de notas, no calendário e nos relatórios.
+ */
 export function canViewAttendances(role: UserRole) {
-  return role !== "supplier";
+  return role !== "supplier" && role !== "planejador";
 }
 
 /** Cada classificação carrega os seus subtipos; a LLT não tem nenhum. */

@@ -344,6 +344,10 @@ export async function listAppointmentSuggestions(filters: { appointmentId?: numb
       createdAt: appointmentSuggestions.createdAt,
       supplierName: users.name,
       supplierEmail: users.email,
+      // `supplierId` guarda quem escreveu a sugestão, e agora nem sempre é um
+      // fornecedor: o planejador também propõe datas. O perfil vai junto para
+      // que a tela do Operador diga de quem veio o pedido.
+      createdByRole: users.role,
       serviceType: appointments.serviceType,
       appointmentStatus: appointments.status,
     })

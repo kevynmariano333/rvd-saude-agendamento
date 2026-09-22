@@ -176,6 +176,13 @@
       "when": 1790012341471,
       "tag": "0024_plain_stellaris",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1790036073926,
+      "tag": "0025_tiresome_nightshade",
+      "breakpoints": true
     }
   ]
 }

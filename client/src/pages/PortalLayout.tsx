@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { isPortalAdmin, isPortalGate, isPortalOperator, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
+import { isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
 import { serviceTypeCopy } from "@/lib/attendance";
 import { trpc } from "@/lib/trpc";
 import {
@@ -103,15 +103,19 @@ export default function PortalLayout({
   // a mesma consulta serve o porteiro no fim do turno e o operador no fim do mês.
   const historyNav: NavItem[] = [{ label: "Histórico", path: "/portaria/historico", icon: History }];
 
+  // O planejador para na agenda: as quatro telas de planejamento e nada do
+  // pátio. É o recorte inteiro do perfil.
   const nav: NavItem[] = isAdmin
     ? [...schedulingNav, ...gateNav, ...yardNav, ...historyNav]
     : isOperator
       ? [...schedulingNav, ...yardNav, ...historyNav]
-      : isPortalGate(role)
-        ? [...gateNav, ...historyNav]
-        : isPortalYard(role)
-          ? [...yardNav, ...historyNav]
-          : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }];
+      : isPortalPlanner(role)
+        ? schedulingNav
+        : isPortalGate(role)
+          ? [...gateNav, ...historyNav]
+          : isPortalYard(role)
+            ? [...yardNav, ...historyNav]
+            : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }];
 
   const adminNav: NavItem[] = isAdmin
     ? [

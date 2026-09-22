@@ -436,3 +436,61 @@ describe("nome da conta", () => {
     expect(mocks.updateUserName).toHaveBeenCalledWith({ userId: 12, name: "Outro Nome" });
   });
 });
+
+describe("perfil planejador", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listAppointments.mockResolvedValue([]);
+    mocks.listAppointmentSuggestions.mockResolvedValue([]);
+    mocks.listApprovedCompanyUserIds.mockResolvedValue([]);
+  });
+
+  it("enxerga a agenda inteira, e não só o que ele mesmo enviou", async () => {
+    const caller = appRouter.createCaller(context("planejador"));
+    await caller.appointments.list();
+    // Sem supplierIds no filtro: o recorte por fornecedor não se aplica a ele.
+    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.not.objectContaining({ supplierIds: expect.anything() }));
+  });
+
+  it("sugere uma data em vez de marcá-la", async () => {
+    const amanha = new Date(Date.now() + 86_400_000);
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "pending" });
+    mocks.createAppointmentSuggestion.mockResolvedValue({ id: 3 });
+    const caller = appRouter.createCaller(context("planejador"));
+    await caller.suggestions.create({ appointmentId: 7, suggestedFor: amanha.toISOString() });
+    // A sugestão fica no nome de quem a escreveu, como sempre foi — o que a
+    // mantém fora do recorte do fornecedor até o Operador aceitar.
+    expect(mocks.createAppointmentSuggestion).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 7, supplierId: 24 }));
+  });
+
+  it("não confirma o agendamento nem aceita sugestão", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "pending" });
+    const caller = appRouter.createCaller(context("planejador"));
+    await expect(caller.appointments.schedule({ appointmentId: 7, scheduledFor: new Date(Date.now() + 86_400_000).toISOString() })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.suggestions.accept({ suggestionId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.scheduleAppointment).not.toHaveBeenCalled();
+  });
+
+  it("conclui o recebimento de uma nota já recebida", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "received" });
+    mocks.updateAppointmentStatus.mockResolvedValue({ id: 7, status: "completed" });
+    const caller = appRouter.createCaller(context("planejador"));
+    await caller.appointments.updateStatus({ appointmentId: 7, status: "completed" });
+    expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 7, status: "completed", handledBy: 24 }));
+  });
+
+  it("fica fora do pátio e do recebimento avulso", async () => {
+    const caller = appRouter.createCaller(context("planejador"));
+    await expect(caller.attendances.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.attendances.dayLog()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>1</nNF></ide></infNFe></NFe>').toString("base64");
+    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("não alcança a administração", async () => {
+    const caller = appRouter.createCaller(context("planejador"));
+    await expect(caller.accessRequests.listPending()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.staff.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.manutencao.gerarBackup()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});

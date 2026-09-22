@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canRequestAppointment, canRescueAppointment, canScheduleAppointment, canTransitionAppointment, isOperator } from "./permissions";
+import { canConfirmSchedule, canMoveAppointmentStatus, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, isOperator, isSchedulingDesk } from "./permissions";
 import { buildScopeIds, isWithinScope } from "./supplierScope";
 
 describe("regras de perfil e status", () => {
@@ -44,5 +44,23 @@ describe("escopo por empresa", () => {
     const outra = buildScopeIds(3, [3, 4]);
     expect(isWithinScope(acme, 3)).toBe(false);
     expect(isWithinScope(outra, 1)).toBe(false);
+  });
+});
+
+describe("planejador", () => {
+  it("trabalha a agenda, mas não crava a data", () => {
+    expect(isSchedulingDesk("planejador")).toBe(true);
+    expect(canMoveAppointmentStatus("planejador")).toBe(true);
+    expect(canSuggestSchedule("planejador")).toBe(true);
+    // Agendar é o compromisso com o fornecedor: continua sendo do Operador.
+    expect(canConfirmSchedule("planejador")).toBe(false);
+  });
+
+  it("não se confunde com o operador nem com o fornecedor", () => {
+    expect(isOperator("planejador")).toBe(false);
+    expect(canRequestAppointment("planejador")).toBe(false);
+    expect(isSchedulingDesk("portaria")).toBe(false);
+    expect(isSchedulingDesk("operacao")).toBe(false);
+    expect(isSchedulingDesk("supplier")).toBe(false);
   });
 });
