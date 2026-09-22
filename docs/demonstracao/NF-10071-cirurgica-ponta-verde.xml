@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Nota FICTICIA, criada apenas para demonstrar o portal RVD Saude. -->
+<nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+  <NFe>
+    <infNFe Id="NFe35260911222333000181550010000100711000100719" versao="4.00">
+      <ide>
+        <cUF>35</cUF>
+        <natOp>VENDA DE MERCADORIA</natOp>
+        <mod>55</mod>
+        <serie>1</serie>
+        <nNF>10071</nNF>
+        <dhEmi>2026-09-22T08:14:00-03:00</dhEmi>
+      </ide>
+      <emit>
+        <CNPJ>11222333000181</CNPJ>
+        <xNome>CIRURGICA PONTA VERDE LTDA</xNome>
+      </emit>
+      <dest>
+        <CNPJ>06033403000113</CNPJ>
+        <xNome>RVD SAUDE</xNome>
+      </dest>
+      <det nItem="1">
+        <prod>
+          <cProd>10071A</cProd>
+          <xProd>Luva cirurgica esteril tam 7,5</xProd>
+          <uCom>UN</uCom>
+          <qCom>240.0000</qCom>
+          <vUnCom>52.0000</vUnCom>
+          <vProd>12480.00</vProd>
+          <xPed>4504748409</xPed>
+        </prod>
+      </det>
+      <total>
+        <ICMSTot>
+          <vProd>12480.00</vProd>
+          <vNF>12480.00</vNF>
+        </ICMSTot>
+      </total>
+      <transp>
+        <vol>
+          <qVol>8</qVol>
+          <esp>CAIXA</esp>
+        </vol>
+      </transp>
+    </infNFe>
+  </NFe>
+</nfeProc>

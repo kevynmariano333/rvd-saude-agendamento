@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Nota FICTICIA, criada apenas para demonstrar o portal RVD Saude. -->
+<nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+  <NFe>
+    <infNFe Id="NFe35260922333444000172550010000088421000088429" versao="4.00">
+      <ide>
+        <cUF>35</cUF>
+        <natOp>VENDA DE MERCADORIA</natOp>
+        <mod>55</mod>
+        <serie>1</serie>
+        <nNF>8842</nNF>
+        <dhEmi>2026-09-22T10:41:00-03:00</dhEmi>
+      </ide>
+      <emit>
+        <CNPJ>22333444000172</CNPJ>
+        <xNome>DISTRIBUIDORA VIDA PLENA MEDICAMENTOS LTDA</xNome>
+      </emit>
+      <dest>
+        <CNPJ>06033403000113</CNPJ>
+        <xNome>RVD SAUDE</xNome>
+      </dest>
+      <det nItem="1">
+        <prod>
+          <cProd>8842A</cProd>
+          <xProd>Dipirona sodica 500mg caixa c/ 100</xProd>
+          <uCom>UN</uCom>
+          <qCom>150.0000</qCom>
+          <vUnCom>21.4366</vUnCom>
+          <vProd>3215.50</vProd>
+          <xPed>4504751122</xPed>
+        </prod>
+      </det>
+      <total>
+        <ICMSTot>
+          <vProd>3215.50</vProd>
+          <vNF>3215.50</vNF>
+        </ICMSTot>
+      </total>
+      <transp>
+        <vol>
+          <qVol>3</qVol>
+          <esp>CAIXA</esp>
+        </vol>
+      </transp>
+    </infNFe>
+  </NFe>
+</nfeProc>

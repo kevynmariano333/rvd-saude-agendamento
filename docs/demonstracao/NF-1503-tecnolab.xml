@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Nota FICTICIA, criada apenas para demonstrar o portal RVD Saude. -->
+<nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+  <NFe>
+    <infNFe Id="NFe35260944555666000154550010000015031000015039" versao="4.00">
+      <ide>
+        <cUF>35</cUF>
+        <natOp>VENDA DE MERCADORIA</natOp>
+        <mod>55</mod>
+        <serie>1</serie>
+        <nNF>1503</nNF>
+        <dhEmi>2026-09-20T09:25:00-03:00</dhEmi>
+      </ide>
+      <emit>
+        <CNPJ>44555666000154</CNPJ>
+        <xNome>TECNOLAB EQUIPAMENTOS MEDICOS LTDA</xNome>
+      </emit>
+      <dest>
+        <CNPJ>06033403000113</CNPJ>
+        <xNome>RVD SAUDE</xNome>
+      </dest>
+      <det nItem="1">
+        <prod>
+          <cProd>1503A</cProd>
+          <xProd>Monitor multiparametros de sinais vitais</xProd>
+          <uCom>UN</uCom>
+          <qCom>2.0000</qCom>
+          <vUnCom>22950.0000</vUnCom>
+          <vProd>45900.00</vProd>
+          <xPed>4504763310</xPed>
+        </prod>
+      </det>
+      <total>
+        <ICMSTot>
+          <vProd>45900.00</vProd>
+          <vNF>45900.00</vNF>
+        </ICMSTot>
+      </total>
+      <transp>
+        <vol>
+          <qVol>2</qVol>
+          <esp>CAIXA</esp>
+        </vol>
+      </transp>
+    </infNFe>
+  </NFe>
+</nfeProc>
