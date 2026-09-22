@@ -4,6 +4,8 @@ export type XmlInvoiceDetails = {
   issuedAt: Date | null;
   serviceDescription: string | null;
   supplierName: string | null;
+  /** CNPJ (ou CPF) de quem emitiu a nota. */
+  supplierCnpj: string | null;
   recipientCnpj: string | null;
   purchaseOrder: string | null;
   totalCents: number | null;
@@ -86,6 +88,9 @@ export function parseInvoiceXml(content: Buffer): XmlInvoiceDetails {
   const issueDate = parseXmlDate(readTag(xml, ["dhEmi", "dEmi", "DataEmissao", "DataEmissaoNFe"]));
   const serviceDescription = readTag(xml, ["xProd", "xServ", "Discriminacao", "DescricaoServico"]);
   const supplierName = readScopedTag(xml, "emit", ["xNome", "xFant"]);
+  // O CNPJ do remetente é o do emitente da nota, e não o do login que a enviou:
+  // uma transportadora pode enviar pelo portal a nota de outra empresa.
+  const supplierCnpj = readScopedTag(xml, "emit", ["CNPJ", "CPF"]);
   const recipientCnpj = readScopedTag(xml, "dest", ["CNPJ"]);
   const purchaseOrder = readTag(xml, ["xPed", "nPed", "Pedido", "NumeroPedido"]);
   const items = readScopes(xml, "det").map(scope => ({
@@ -106,6 +111,7 @@ export function parseInvoiceXml(content: Buffer): XmlInvoiceDetails {
     issuedAt: issueDate,
     serviceDescription: serviceDescription?.slice(0, 80) ?? null,
     supplierName: supplierName?.slice(0, 255) ?? null,
+    supplierCnpj: supplierCnpj?.replace(/\D/g, "").slice(0, 20) || null,
     recipientCnpj: recipientCnpj?.replace(/\D/g, "").slice(0, 20) ?? null,
     purchaseOrder: purchaseOrder?.slice(0, 100) ?? null,
     totalCents,

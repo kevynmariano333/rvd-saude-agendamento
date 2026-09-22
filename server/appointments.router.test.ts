@@ -531,7 +531,10 @@ describe("fechamento do recebimento", () => {
     await caller.appointments.updateStatus({ appointmentId: 7, status: "backlog", backlogReasonCode: "DIVERGENCIA_QUANTIDADE", note: "Chegaram 6 de 8." });
     expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({
       status: "backlog", miroNumber: undefined, backlogReasonCode: "DIVERGENCIA_QUANTIDADE",
+      // O histórico ganha a frase inteira; a coluna da nota guarda só a
+      // descrição, senão o relatório repete o rótulo duas vezes.
       eventNote: "Divergência de quantidade: Chegaram 6 de 8.",
+      backlogReason: "Chegaram 6 de 8.",
     }));
   });
 

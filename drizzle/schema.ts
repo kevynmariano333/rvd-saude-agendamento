@@ -127,6 +127,10 @@ export const appointments = mysqlTable(
     invoiceAccessKey: varchar("invoiceAccessKey", { length: 80 }),
     purchaseOrder: varchar("purchaseOrder", { length: 100 }),
     invoiceSupplierName: varchar("invoiceSupplierName", { length: 255 }),
+    // Remetente lido do XML. O CNPJ do login (users.companyCnpj) identifica quem
+    // acessa o portal; este identifica quem emitiu a nota, que é o que o
+    // relatório fiscal precisa e nem sempre é a mesma empresa.
+    invoiceSupplierCnpj: varchar("invoiceSupplierCnpj", { length: 20 }),
     recipientCnpj: varchar("recipientCnpj", { length: 20 }),
     invoiceIssuedAt: datetime("invoiceIssuedAt", { mode: "date" }),
     invoiceTotalCents: int("invoiceTotalCents"),

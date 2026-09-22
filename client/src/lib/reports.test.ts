@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { COLUNAS_DO_BACKLOG, filterBacklogReport, filterReportAppointments, reportColumns, toBacklogReportRows, toConsolidatedReportRows, toDetailedReportRows, type BacklogReportAppointment, type ReportAppointment } from "./reports";
+import { COLUNAS_DO_BACKLOG, cnpjDoRemetente, filterBacklogReport, filterReportAppointments, reportColumns, toBacklogReportRows, toConsolidatedReportRows, toDetailedReportRows, type BacklogReportAppointment, type ReportAppointment } from "./reports";
 
 const nota = (extra: Partial<ReportAppointment>): ReportAppointment => ({
   id: 1, invoiceNumber: "100", supplierName: "Fornecedor RVD", invoiceSupplierName: null,
-  supplierCnpj: "11222333000181", recipientCnpj: "06033403000113", purchaseOrder: "PO-1",
+  invoiceSupplierCnpj: "11222333000181", supplierCnpj: null, recipientCnpj: "06033403000113", purchaseOrder: "PO-1",
   miroNumber: null, invoiceVolumeCount: null, invoiceTotalCents: null,
   serviceType: "Caixa hospitalar", status: "received",
   scheduledFor: "2026-08-10T10:00:00.000Z", receivedAt: "2026-08-10T11:00:00.000Z", ...extra,
@@ -11,7 +11,7 @@ const nota = (extra: Partial<ReportAppointment>): ReportAppointment => ({
 
 const appointments: ReportAppointment[] = [
   nota({ id: 1, miroNumber: "5105101642", invoiceVolumeCount: 8, invoiceTotalCents: 1248000 }),
-  nota({ id: 2, invoiceNumber: "200", supplierName: "Outro fornecedor", supplierCnpj: "99887766000155", recipientCnpj: "43293604002120", purchaseOrder: null, status: "pending", scheduledFor: "2026-08-12T10:00:00.000Z", receivedAt: null }),
+  nota({ id: 2, invoiceNumber: "200", supplierName: "Outro fornecedor", invoiceSupplierCnpj: "99887766000155", supplierCnpj: null, recipientCnpj: "43293604002120", purchaseOrder: null, status: "pending", scheduledFor: "2026-08-12T10:00:00.000Z", receivedAt: null }),
   nota({ id: 3, invoiceNumber: "300", supplierName: "Backlog oculto", supplierCnpj: null, recipientCnpj: null, purchaseOrder: null, status: "backlog", scheduledFor: "2026-08-12T10:00:00.000Z", receivedAt: null }),
 ];
 
@@ -68,7 +68,7 @@ describe("consolidado de relatórios", () => {
 const noBacklog = (extra: Partial<BacklogReportAppointment>): BacklogReportAppointment => ({
   id: 1, createdAt: "2026-09-01T10:00:00.000Z", enteredBacklogAt: "2026-09-08T13:15:00.000Z",
   leftBacklogAt: null, status: "backlog", invoiceNumber: "324055", invoiceSupplierName: "Onco Prod Distr",
-  supplierName: "Onco Prod", supplierCnpj: "04307650003070", miroNumber: null,
+  supplierName: "Onco Prod", supplierCnpj: "04307650003070", loginCnpj: null, miroNumber: null,
   backlogReasonCode: "DIVERGENCIA_PRECO", backlogReason: "Preço da nota acima do pedido.",
   comments: [], ...extra,
 });
@@ -100,8 +100,36 @@ describe("relatório de backlog", () => {
   });
 
   it("acha pelo nome e pelo CNPJ do fornecedor", () => {
-    const linhas = [noBacklog({ id: 1 }), noBacklog({ id: 2, invoiceSupplierName: "Outra", supplierName: "Outra", supplierCnpj: "99887766000155" })];
+    const linhas = [noBacklog({ id: 1 }), noBacklog({ id: 2, invoiceSupplierName: "Outra", supplierName: "Outra", supplierCnpj: "99887766000155", loginCnpj: null })];
     expect(filterBacklogReport(linhas, { supplier: "onco" }).map(l => l.id)).toEqual([1]);
     expect(filterBacklogReport(linhas, { supplier: "99887766" }).map(l => l.id)).toEqual([2]);
+  });
+});
+
+describe("CNPJ do remetente no relatório", () => {
+  it("prefere o CNPJ do XML ao do login", () => {
+    expect(cnpjDoRemetente({ invoiceSupplierCnpj: "98765432000155", supplierCnpj: "11222333000181" })).toBe("98765432000155");
+  });
+
+  it("cai no do login quando a nota não trouxe emitente", () => {
+    expect(cnpjDoRemetente({ invoiceSupplierCnpj: null, supplierCnpj: "11222333000181" })).toBe("11222333000181");
+  });
+
+  it("ignora o CNPJ zerado das contas de teste", () => {
+    // Era ele que aparecia como 00.000.000/0000-00 no relatório.
+    expect(cnpjDoRemetente({ invoiceSupplierCnpj: null, supplierCnpj: "00000000000000" })).toBeNull();
+    expect(cnpjDoRemetente({ invoiceSupplierCnpj: "00000000000000", supplierCnpj: "11222333000181" })).toBe("11222333000181");
+  });
+});
+
+describe("motivo do backlog no relatório", () => {
+  it("não repete o rótulo que ficou gravado na descrição das notas antigas", () => {
+    const [linha] = toBacklogReportRows([noBacklog({ backlogReason: "Divergência de preço: valor acima do pedido." })]);
+    expect(linha.Motivo).toBe("Divergência de preço — valor acima do pedido.");
+  });
+
+  it("junta rótulo e descrição das notas novas", () => {
+    const [linha] = toBacklogReportRows([noBacklog({ backlogReason: "Valor acima do pedido." })]);
+    expect(linha.Motivo).toBe("Divergência de preço — Valor acima do pedido.");
   });
 });

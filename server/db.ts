@@ -180,6 +180,7 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       invoiceAccessKey: appointments.invoiceAccessKey,
       purchaseOrder: appointments.purchaseOrder,
       invoiceSupplierName: appointments.invoiceSupplierName,
+      invoiceSupplierCnpj: appointments.invoiceSupplierCnpj,
       recipientCnpj: appointments.recipientCnpj,
       invoiceIssuedAt: appointments.invoiceIssuedAt,
       invoiceTotalCents: appointments.invoiceTotalCents,
@@ -303,6 +304,7 @@ export async function listAppointmentsBetween(start: Date, end: Date) {
       invoiceAccessKey: appointments.invoiceAccessKey,
       purchaseOrder: appointments.purchaseOrder,
       invoiceSupplierName: appointments.invoiceSupplierName,
+      invoiceSupplierCnpj: appointments.invoiceSupplierCnpj,
       recipientCnpj: appointments.recipientCnpj,
       invoiceIssuedAt: appointments.invoiceIssuedAt,
       rejectionReason: appointments.rejectionReason,
@@ -418,6 +420,7 @@ export async function createManualXmlAppointment(input: {
   invoiceAccessKey: string | null;
   purchaseOrder: string | null;
   invoiceSupplierName: string | null;
+  invoiceSupplierCnpj: string | null;
   recipientCnpj: string | null;
   invoiceIssuedAt: Date | null;
   serviceDescription: string | null;
@@ -445,6 +448,7 @@ export async function createManualXmlAppointment(input: {
       invoiceAccessKey: input.invoiceAccessKey,
       purchaseOrder: input.purchaseOrder,
       invoiceSupplierName: input.invoiceSupplierName,
+      invoiceSupplierCnpj: input.invoiceSupplierCnpj,
       recipientCnpj: input.recipientCnpj,
       invoiceIssuedAt: input.invoiceIssuedAt,
       invoiceTotalCents: input.invoiceTotalCents,
@@ -484,6 +488,8 @@ export async function updateAppointmentStatus(input: {
   miroNumber?: string;
   /** Categoria do motivo, quando a nota vai para o backlog. */
   backlogReasonCode?: string;
+  /** Descrição do que houve. Sem o rótulo do motivo: ele já vem no código. */
+  backlogReason?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
@@ -501,7 +507,7 @@ export async function updateAppointmentStatus(input: {
         // O motivo acompanha a nota até a tratativa; um backlog novo apaga o
         // motivo do backlog anterior, que já não descreve esta ida.
         ...(input.status === "backlog"
-          ? { backlogReasonCode: input.backlogReasonCode ?? null, backlogReason: input.eventNote?.slice(0, 500) ?? null }
+          ? { backlogReasonCode: input.backlogReasonCode ?? null, backlogReason: input.backlogReason?.slice(0, 500) ?? null }
           : {}),
       })
       .where(eq(appointments.id, input.appointmentId));
@@ -597,6 +603,7 @@ export async function createUnscheduledReceipt(input: {
   invoiceAccessKey: string | null;
   purchaseOrder: string | null;
   invoiceSupplierName: string | null;
+  invoiceSupplierCnpj: string | null;
   recipientCnpj: string | null;
   invoiceIssuedAt: Date | null;
   serviceDescription: string | null;
@@ -623,6 +630,7 @@ export async function createUnscheduledReceipt(input: {
       invoiceAccessKey: input.invoiceAccessKey,
       purchaseOrder: input.purchaseOrder,
       invoiceSupplierName: input.invoiceSupplierName,
+      invoiceSupplierCnpj: input.invoiceSupplierCnpj,
       recipientCnpj: input.recipientCnpj,
       invoiceIssuedAt: input.invoiceIssuedAt,
       invoiceTotalCents: input.invoiceTotalCents,
@@ -1138,8 +1146,12 @@ export async function listBacklogReportRows() {
         status: appointments.status,
         invoiceNumber: appointments.invoiceNumber,
         invoiceSupplierName: appointments.invoiceSupplierName,
+        // O remetente da nota vem antes do CNPJ do login, que pode ser de quem
+        // só opera o portal — ou o zerado das contas de teste.
+        invoiceSupplierCnpj: appointments.invoiceSupplierCnpj,
         supplierName: users.name,
-        supplierCnpj: users.companyCnpj,
+        supplierCnpj: appointments.invoiceSupplierCnpj,
+        loginCnpj: users.companyCnpj,
         miroNumber: appointments.miroNumber,
         backlogReasonCode: appointments.backlogReasonCode,
         backlogReason: appointments.backlogReason,

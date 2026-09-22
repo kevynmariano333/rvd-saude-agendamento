@@ -7,6 +7,9 @@ export type ReportAppointment = {
   invoiceNumber: string | null;
   supplierName: string | null;
   invoiceSupplierName: string | null;
+  /** CNPJ do emitente, lido do XML da nota. */
+  invoiceSupplierCnpj: string | null;
+  /** CNPJ cadastrado no login que enviou. Serve de reserva. */
   supplierCnpj: string | null;
   recipientCnpj: string | null;
   purchaseOrder: string | null;
@@ -72,7 +75,7 @@ export function filterReportAppointments(appointments: ReportAppointment[], filt
     if (busca) {
       const nome = `${item.invoiceSupplierName || ""} ${item.supplierName || ""}`.toLocaleLowerCase();
       // O campo diz "nome ou CNPJ", então os dois precisam encontrar a nota.
-      const porCnpj = buscaDigitos.length > 0 && apenasDigitos(item.supplierCnpj).includes(buscaDigitos);
+      const porCnpj = buscaDigitos.length > 0 && (cnpjDoRemetente(item) ?? "").includes(buscaDigitos);
       if (!nome.includes(busca) && !porCnpj) return false;
     }
     if (destinatario && !apenasDigitos(item.recipientCnpj).includes(destinatario)) return false;
@@ -87,6 +90,22 @@ export function formatReportDate(value: Date | string | null) {
 export function formatReportMoney(cents: number | null) {
   if (cents === null) return "—";
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
+}
+
+/**
+ * O CNPJ do remetente.
+ *
+ * Vale o que está no XML, que é quem emitiu a nota. O CNPJ do login entra só
+ * como reserva: ele identifica quem acessa o portal, que pode ser uma
+ * transportadora enviando por outra empresa — ou uma conta de teste com CNPJ
+ * zerado, que foi como isso apareceu no relatório.
+ */
+export function cnpjDoRemetente(item: { invoiceSupplierCnpj: string | null; supplierCnpj: string | null }): string | null {
+  const daNota = apenasDigitos(item.invoiceSupplierCnpj);
+  if (daNota.length >= 11 && !/^0+$/.test(daNota)) return daNota;
+  const doLogin = apenasDigitos(item.supplierCnpj);
+  if (doLogin.length >= 11 && !/^0+$/.test(doLogin)) return doLogin;
+  return null;
 }
 
 /** A unidade que recebeu, pelo nome que a operação usa. */
@@ -119,7 +138,7 @@ export function toConsolidatedReportRows(appointments: ReportAppointment[]): Con
 export function toDetailedReportRows(appointments: ReportAppointment[]): DetailedReportRow[] {
   return appointments.map(item => ({
     ...baseRow(item),
-    "CNPJ fornecedor": apenasDigitos(item.supplierCnpj) ? formatarCnpj(item.supplierCnpj) : "—",
+    "CNPJ fornecedor": cnpjDoRemetente(item) ? formatarCnpj(cnpjDoRemetente(item)) : "—",
     "CNPJ destinatário": apenasDigitos(item.recipientCnpj) ? formatarCnpj(item.recipientCnpj) : "—",
     Volumes: item.invoiceVolumeCount === null ? "—" : String(item.invoiceVolumeCount),
     "Valor total": formatReportMoney(item.invoiceTotalCents),
@@ -136,7 +155,7 @@ export function toDetailedReportRows(appointments: ReportAppointment[]): Detaile
 export function reportColumns(view: "consolidated" | "detailed"): string[] {
   const modelo: ReportAppointment = {
     id: 0, invoiceNumber: null, supplierName: null, invoiceSupplierName: null, supplierCnpj: null,
-    recipientCnpj: null, purchaseOrder: null, miroNumber: null, invoiceVolumeCount: null,
+    invoiceSupplierCnpj: null, recipientCnpj: null, purchaseOrder: null, miroNumber: null, invoiceVolumeCount: null,
     invoiceTotalCents: null, serviceType: "", status: "pending", scheduledFor: new Date(0), receivedAt: null,
   };
   const linha = view === "detailed" ? toDetailedReportRows([modelo])[0] : toConsolidatedReportRows([modelo])[0];
@@ -152,7 +171,9 @@ export type BacklogReportAppointment = {
   invoiceNumber: string | null;
   invoiceSupplierName: string | null;
   supplierName: string | null;
+  /** Já vem do XML da nota; o do login fica em loginCnpj. */
   supplierCnpj: string | null;
+  loginCnpj: string | null;
   miroNumber: string | null;
   backlogReasonCode: string | null;
   backlogReason: string | null;
@@ -186,35 +207,55 @@ export function filterBacklogReport(linhas: BacklogReportAppointment[], filters:
     if (!isWithinDateRange(item.enteredBacklogAt, filters.scheduledStart, filters.scheduledEnd)) return false;
     if (busca) {
       const nome = `${item.invoiceSupplierName || ""} ${item.supplierName || ""}`.toLocaleLowerCase();
-      const porCnpj = buscaDigitos.length > 0 && apenasDigitos(item.supplierCnpj).includes(buscaDigitos);
+      const porCnpj = buscaDigitos.length > 0 && (cnpjDoRemetenteDoBacklog(item) ?? "").includes(buscaDigitos);
       if (!nome.includes(busca) && !porCnpj) return false;
     }
     return true;
   });
 }
 
+function cnpjDoRemetenteDoBacklog(item: BacklogReportAppointment): string | null {
+  return cnpjDoRemetente({ invoiceSupplierCnpj: item.supplierCnpj, supplierCnpj: item.loginCnpj });
+}
+
+/**
+ * Tira o rótulo do começo da descrição.
+ *
+ * Por um tempo a descrição foi gravada já prefixada com o rótulo do motivo, e
+ * essas notas continuam no banco. Sem isto, o relatório repete: "Erro fiscal —
+ * Erro fiscal: erro".
+ */
+function descricaoSemRotulo(rotulo: string, descricao: string | null): string {
+  if (!descricao) return "";
+  const prefixo = `${rotulo}: `;
+  return descricao.startsWith(prefixo) ? descricao.slice(prefixo.length) : descricao;
+}
+
 export function toBacklogReportRows(linhas: BacklogReportAppointment[]): BacklogReportRow[] {
-  return linhas.map(item => ({
+  return linhas.map(item => {
+    const rotulo = rotuloDoMotivo(item.backlogReasonCode);
+    return ({
     "Data de Criação": formatReportDate(item.createdAt),
     "Entrou em Backlog": formatReportDate(item.enteredBacklogAt),
     // Sem saída registrada, a nota ainda está lá — dizer "—" esconderia isso.
     "Saiu do Backlog": item.leftBacklogAt ? formatReportDate(item.leftBacklogAt) : "Em aberto",
     "Status Atual": statusCopy[item.status],
     "Número da Nota": item.invoiceNumber || "—",
-    "CNPJ Fornecedor": apenasDigitos(item.supplierCnpj) ? formatarCnpj(item.supplierCnpj) : "—",
+    "CNPJ Fornecedor": cnpjDoRemetenteDoBacklog(item) ? formatarCnpj(cnpjDoRemetenteDoBacklog(item)) : "—",
     "Nome Fornecedor": item.invoiceSupplierName || item.supplierName || "—",
     "Cód. SAP": item.miroNumber || "—",
-    Motivo: [rotuloDoMotivo(item.backlogReasonCode), item.backlogReason].filter(Boolean).join(" — "),
+    Motivo: [rotulo, descricaoSemRotulo(rotulo, item.backlogReason)].filter(Boolean).join(" — "),
     // Os comentários vão numa célula só, cada um com quem escreveu e quando,
     // separados por " | " para a planilha não quebrar a linha.
     Comentários: item.comments.map(nota => `[${formatReportDate(nota.createdAt)}] ${nota.authorName || "Colaborador"}: ${nota.body.replace(/\s+/g, " ").trim()}`).join(" | "),
-  }));
+  });
+  });
 }
 
 export const COLUNAS_DO_BACKLOG = Object.keys(
   toBacklogReportRows([{
     id: 0, createdAt: new Date(0), enteredBacklogAt: null, leftBacklogAt: null, status: "backlog",
-    invoiceNumber: null, invoiceSupplierName: null, supplierName: null, supplierCnpj: null,
+    invoiceNumber: null, invoiceSupplierName: null, supplierName: null, supplierCnpj: null, loginCnpj: null,
     miroNumber: null, backlogReasonCode: null, backlogReason: null, comments: [],
   }])[0],
 );
