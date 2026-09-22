@@ -54,12 +54,27 @@ para enviar pela tela do fornecedor.
 
 ### Gravar
 
-Windows, sem instalar nada:
+Tudo no mouse, sem atalho de teclado e sem instalar nada.
 
-- **Xbox Game Bar** — `Win+G`, botão de gravar, ou direto `Win+Alt+R` para
-  começar e parar. O arquivo cai em `Vídeos\Capturas`.
-- **PowerPoint** — `Inserir → Gravação de Tela`. Grava e já deixa o vídeo dentro
-  do slide, se a apresentação for em PowerPoint.
+- **PowerPoint** — `Inserir → Gravação de Tela`, seleciona a área, botão
+  vermelho. O botão **Áudio** ali do lado liga o microfone. Para parar, leve o
+  mouse ao topo da tela que a barra de controle reaparece. O vídeo fica dentro
+  do slide; para ter o arquivo, botão direito nele → **Salvar Mídia como**.
+- **Clipchamp** (já vem no Windows 11) — Iniciar → "Clipchamp" →
+  `Gravar e criar → Tela`. Grava tela e microfone, e corta o vídeo ali mesmo.
+- **Ferramenta de Captura** (Windows 11) — Iniciar → "Ferramenta de Captura" →
+  ícone de câmera de vídeo → `Novo` → seleciona a área → Gravar. A mais simples
+  de todas, boa quando a narração vai ser ao vivo.
+- **Xbox Game Bar** — abre pelo menu Iniciar, não precisa do `Win+G`. Em
+  Configurações → Atalhos dá para trocar o `Win+Alt+R` por outra tecla.
+
+> Sem a tecla Win no teclado: Iniciar → **"Teclado Virtual"** abre um teclado na
+> tela, com a tecla Win clicável. Em teclado de Mac ligado no Windows, a tecla
+> **Command** já faz o papel dela.
+
+**Vale considerar gravar sem áudio e narrar ao vivo**, lendo este roteiro. Fica
+mais convincente que narração gravada, você controla o ritmo e responde pergunta
+no meio — e economiza o trabalho de gravar um áudio limpo.
 
 Grave **em blocos**, um por seção deste roteiro. É muito mais fácil regravar 40
 segundos do que 12 minutos, e dá para juntar depois no aplicativo **Fotos** do
