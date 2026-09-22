@@ -6,7 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { formatAppointmentDate } from "@/lib/portal";
 import { rotuloDoDestinatario } from "@shared/recipients";
-import { pedidosDaNota } from "@shared/purchaseOrders";
+import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
+import UrgenciaBadge from "./UrgenciaBadge";
 import { ERRO_MIRO, validarTratativa } from "@shared/tratativa";
 import { rotuloDoMotivo } from "@shared/backlogReasons";
 import { AlertTriangle, ClipboardCheck, MessageSquare, Send } from "lucide-react";
@@ -87,7 +88,7 @@ export default function TratarPendenciaDialog({ appointment, open, onOpenChange,
         <Dado rotulo="Agendamento">{formatAppointmentDate(appointment.scheduledFor)}</Dado>
         <Dado rotulo="Recebimento">{appointment.receivedAt ? formatAppointmentDate(appointment.receivedAt) : "Não registrado"}</Dado>
         <Dado rotulo="Volumes">{appointment.invoiceVolumeCount === null ? "Não informado" : `${appointment.invoiceVolumeCount}`}</Dado>
-        <Dado rotulo="Pedidos">{pedidos.length ? <span className="flex flex-wrap gap-1.5">{pedidos.map(pedido => <span key={pedido} className="rounded-md bg-rvd-plum-pale px-2 py-0.5 text-xs">{pedido}</span>)}</span> : "—"}</Dado>
+        <Dado rotulo="Pedidos">{pedidos.length ? <span className="flex flex-wrap items-center gap-1.5">{pedidos.map(pedido => <span key={pedido} className={`rounded-md px-2 py-0.5 text-xs ${pedidoEhUrgente(pedido) ? "bg-state-stop-bg text-state-stop" : "bg-rvd-plum-pale"}`}>{pedido}</span>)}<UrgenciaBadge purchaseOrder={appointment.purchaseOrder} /></span> : "—"}</Dado>
         <Dado rotulo="Chave de acesso"><span className="break-all font-mono text-xs font-normal text-ink-soft">{appointment.invoiceAccessKey || "Não disponível"}</span></Dado>
       </section>
 

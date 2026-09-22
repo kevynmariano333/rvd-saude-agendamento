@@ -2,7 +2,8 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { canTreatBacklogPortal, formatAppointmentDate, homePathFor, type PortalRole } from "@/lib/portal";
 import { rotuloDoDestinatario } from "@shared/recipients";
-import { pedidosDaNota } from "@shared/purchaseOrders";
+import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
+import UrgenciaBadge from "../components/UrgenciaBadge";
 import { curtoDoMotivo } from "@shared/backlogReasons";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, FileText } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -74,6 +75,7 @@ export default function BacklogPage() {
                 return <tr key={item.id} className="border-t border-line align-top">
                   <td className="px-3 py-4">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-state-wait-bg px-3 py-1 text-xs font-bold uppercase tracking-wide text-state-wait"><AlertTriangle className="size-3.5" />Backlog</span>
+                    <UrgenciaBadge purchaseOrder={item.purchaseOrder} className="mt-1.5 flex w-fit" />
                     <p className="mt-2 inline-flex rounded-md bg-rvd-plum-pale px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">{curtoDoMotivo(item.backlogReasonCode)}</p>
                     <p className="mt-1.5 line-clamp-3 max-w-44 text-xs leading-5 text-ink-soft">{item.backlogReason || "Sem descrição"}</p>
                   </td>
@@ -89,7 +91,7 @@ export default function BacklogPage() {
                   </td>
                   <td className="px-3 py-4">
                     <p className="font-display text-lg font-extrabold text-ink">NF {item.invoiceNumber || "—"}</p>
-                    {pedidos.length ? <div className="mt-1.5 flex flex-col items-start gap-1">{pedidos.map(pedido => <span key={pedido} className="rounded-md bg-rvd-plum-pale px-2.5 py-1 text-xs font-bold text-rvd-plum">{pedido}</span>)}</div> : null}
+                    {pedidos.length ? <div className="mt-1.5 flex flex-col items-start gap-1">{pedidos.map(pedido => <span key={pedido} className={`rounded-md px-2.5 py-1 text-xs font-bold ${pedidoEhUrgente(pedido) ? "bg-state-stop-bg text-state-stop" : "bg-rvd-plum-pale text-rvd-plum"}`}>{pedido}</span>)}</div> : null}
                     {item.invoiceVolumeCount !== null && <p className="mt-1.5 text-xs text-ink-soft">{item.invoiceVolumeCount} {item.invoiceVolumeCount === 1 ? "volume" : "volumes"}</p>}
                   </td>
                   <td className="px-3 py-4">
