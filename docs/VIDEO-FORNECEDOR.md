@@ -1,8 +1,8 @@
 # Vídeo do fornecedor — como criar o acesso e agendar
 
-Gravação do portal rodando, do cadastro até o comprovante. Sem áudio: cada
-passo aparece escrito na barra de baixo, para o vídeo poder ser assistido em
-qualquer lugar e para você poder narrar por cima se quiser.
+Gravação do portal rodando, do cadastro até o comprovante, com narração em
+português. Cada passo também aparece escrito na barra de baixo, para o vídeo
+servir com o som desligado — no celular, no depósito, numa reunião.
 
 ## O que o vídeo mostra
 
@@ -23,35 +23,21 @@ qualquer lugar e para você poder narrar por cima se quiser.
 | 11 | Acompanhamento | O Operador confirma e o status vira **Agendado** |
 | 12 | Acompanhamento | **Comprovante PDF** para o motorista levar |
 
-## Narração, se você quiser falar por cima
+## O que a narração diz
 
-1. "Para agendar uma entrega na RVD Saúde, abra o portal e escolha o acesso de
-   fornecedor."
-2. "Se é a sua primeira vez, clique em novo cadastro."
-3. "Informe a razão social e o CNPJ da sua empresa."
-4. "Depois o e-mail que vai receber os avisos e uma senha de pelo menos seis
-   caracteres."
-5. "Crie a conta. O cadastro fica em análise: a equipe da RVD libera o acesso."
-6. "Com o acesso liberado, entre com o seu e-mail e a sua senha."
-7. "Antes de mais nada, repare no lembrete: a entrega é feita no operador
-   logístico, no endereço que aparece aí — não no hospital."
-8. "Selecione o XML da nota fiscal. O sistema lê o número, o valor e os volumes
-   sozinho."
-9. "Informe o número do pedido de compra. Esse campo é obrigatório: é por ele
-   que a RVD confere o recebimento."
-10. "Se quiser, sugira uma data e um horário. O Operador avalia."
-11. "Envie. A nota entra como em análise."
-12. "Quando o Operador confirma a data, o status muda para agendado e o botão
-    do comprovante aparece. Baixe o PDF e mande junto com o motorista: ele já
-    traz o endereço de entrega e o QR de validação."
-13. "Qualquer dúvida sobre uma nota, use o botão conversar do próprio
-    agendamento."
+O texto está em `docs/narracao-fornecedor.json`, uma frase por passo. É ele que
+dita o ritmo da gravação: cada legenda fica na tela pelo menos o tempo da sua
+frase, então a tela nunca corre na frente da fala. Mudou a frase, mudou o tempo.
+
+Para trocar a voz ou o texto, edite esse arquivo e grave de novo.
 
 ## Como a gravação foi feita
 
 Uma cópia do sistema roda localmente, com banco e armazenamento próprios; o
 navegador é dirigido por um roteiro (`playwright`) que digita, clica e escreve
-as legendas. Os dados são fictícios — a nota é uma das de `docs/demonstracao/`.
+as legendas. A voz é sintetizada offline (`piper`, voz pt-BR), e o áudio entra
+no lugar certo pela linha do tempo que a própria gravação anota. Os dados são
+fictícios — a nota é uma das de `docs/demonstracao/`.
 
 Dois pontos do vídeo acontecem fora da tela do fornecedor, e são feitos direto
 no banco da cópia local para a gravação não sair do ponto de vista dele:

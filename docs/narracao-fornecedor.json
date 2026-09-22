@@ -1,0 +1,19 @@
+[
+  { "id": "abertura", "texto": "Este é o portal de agendamento da RVD Saúde. Em dois minutos, você vai ver como criar o seu acesso de fornecedor e agendar a entrega de uma nota fiscal." },
+  { "id": "passo1", "texto": "Abra o portal e escolha o acesso de fornecedor." },
+  { "id": "passo2", "texto": "Se esta é a sua primeira vez, clique em novo cadastro de fornecedor." },
+  { "id": "passo3", "texto": "Informe a razão social e o CNPJ da sua empresa." },
+  { "id": "passo4", "texto": "Depois, o e-mail que vai receber os avisos, e uma senha de pelo menos seis caracteres." },
+  { "id": "passo5", "texto": "Clique em criar conta de fornecedor." },
+  { "id": "analise", "texto": "O cadastro fica em análise. A equipe da RVD confere os dados e libera o seu acesso." },
+  { "id": "passo6", "texto": "Com o acesso liberado, entre com o seu e-mail e a sua senha." },
+  { "id": "atencao", "texto": "Antes de enviar, repare no lembrete. A entrega é feita no operador logístico, no endereço que aparece aí, e não no hospital." },
+  { "id": "passo7", "texto": "Selecione o arquivo XML da nota fiscal. O sistema lê o número, o valor e os volumes sozinho." },
+  { "id": "passo8", "texto": "Informe o número do pedido de compra. Esse campo é obrigatório: é por ele que a RVD confere o recebimento." },
+  { "id": "passo9", "texto": "Se quiser, sugira uma data e um horário. O operador avalia e confirma." },
+  { "id": "passo10", "texto": "Envie o agendamento." },
+  { "id": "pronto", "texto": "A nota entra como em análise, até o operador confirmar a data." },
+  { "id": "passo11", "texto": "Quando ele confirma, o status muda para agendado." },
+  { "id": "passo12", "texto": "Baixe o comprovante em PDF e mande junto com o motorista. Ele já traz o endereço de entrega e o código de validação." },
+  { "id": "duvidas", "texto": "Qualquer dúvida sobre uma nota, use o botão conversar, do próprio agendamento. Bom agendamento!" }
+]

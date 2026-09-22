@@ -9,12 +9,15 @@
  *   1. um MySQL/MariaDB com o schema aplicado (`pnpm db:push`);
  *   2. um bucket S3 (ou um substituto local que só guarde e devolva arquivos);
  *   3. o app no ar (`pnpm dev`), com DATABASE_URL, JWT_SECRET e as variáveis S3_*;
- *   4. `playwright` instalado e um Chromium em disco.
+ *   4. `playwright` instalado e um Chromium em disco;
+ *   5. `piper` e `ffmpeg` no PATH, e VOZ_PIPER apontando para o .onnx da voz
+ *      em português (sem isso ele grava sem narração).
  *
  *   node scripts/gravar-video-fornecedor.mjs /caminho/da/saida
  *
- * Sai um .webm; para MP4:
- *   ffmpeg -i saida/*.webm -c:v libx264 -crf 23 -pix_fmt yuv420p video.mp4
+ * Sai o MP4 já narrado. A fala vem de docs/narracao-fornecedor.json, e é ela
+ * que dita o ritmo: cada legenda fica na tela pelo menos o tempo da sua frase,
+ * então a imagem nunca corre na frente do áudio.
  *
  * Dois trechos acontecem fora da tela do fornecedor — a aprovação do cadastro e
  * a confirmação da data pelo Operador — e são feitos direto no banco da cópia
@@ -22,7 +25,8 @@
  */
 
 import { chromium } from "playwright";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import mysql from "mysql2/promise";
 
 const SAIDA = process.argv[2];
@@ -33,6 +37,51 @@ const SENHA = "tecnolab2026";
 mkdirSync(SAIDA, { recursive: true });
 
 const espera = ms => new Promise(r => setTimeout(r, ms));
+
+const VOZ = process.env.VOZ_PIPER || "";
+const FALAS = JSON.parse(readFileSync(new URL("../docs/narracao-fornecedor.json", import.meta.url), "utf8"));
+const PASTA_AUDIO = `${SAIDA}/audio`;
+
+/**
+ * Gera o que falta da narração e devolve quanto dura cada frase.
+ *
+ * Sem voz configurada, devolve zero para todas: aí o roteiro cai no tempo
+ * mínimo de cada legenda e o vídeo sai mudo, como antes.
+ */
+function prepararNarracao() {
+  // Sem voz, cada legenda fica um tempo fixo e o vídeo sai mudo.
+  if (!VOZ) return Object.fromEntries(FALAS.map(fala => [fala.id, 2.6]));
+  mkdirSync(PASTA_AUDIO, { recursive: true });
+  const duracoes = {};
+  for (const fala of FALAS) {
+    const arquivo = `${PASTA_AUDIO}/${fala.id}.wav`;
+    if (!existsSync(arquivo)) execFileSync("piper", ["-m", VOZ, "-f", arquivo, "--length-scale", "1.05"], { input: fala.texto });
+    const medida = execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", arquivo], { encoding: "utf8" });
+    duracoes[fala.id] = Number(medida.trim());
+  }
+  return duracoes;
+}
+
+/** Junta vídeo, narração e a hora em que cada frase entra. */
+function montarMp4(webm, linhaDoTempo) {
+  const destino = `${SAIDA}/como-agendar-fornecedor-rvd.mp4`;
+  const video = ["-i", webm];
+  if (!VOZ) {
+    execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...video, "-c:v", "libx264", "-preset", "slow", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-r", "25", destino]);
+    return destino;
+  }
+  const entradas = linhaDoTempo.flatMap(marca => ["-i", `${PASTA_AUDIO}/${marca.id}.wav`]);
+  const atrasos = linhaDoTempo.map((marca, indice) => `[${indice + 1}:a]adelay=${Math.round(marca.inicio)}[f${indice}]`).join(";");
+  const mistura = `${linhaDoTempo.map((_, indice) => `[f${indice}]`).join("")}amix=inputs=${linhaDoTempo.length}:normalize=0:dropout_transition=0,apad[narracao]`;
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...video, ...entradas,
+    "-filter_complex", `${atrasos};${mistura}`, "-map", "0:v", "-map", "[narracao]", "-shortest",
+    "-c:v", "libx264", "-preset", "slow", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
+    "-movflags", "+faststart", "-r", "25", destino]);
+  return destino;
+}
+
+const duracoes = prepararNarracao();
+const linhaDoTempo = [];
 
 // Legenda e cursor desenhados por cima da página: o vídeo não tem áudio, então
 // cada passo precisa estar escrito, e o ponteiro do mouse não é gravado.
@@ -89,10 +138,21 @@ const contexto = await navegador.newContext({
 });
 await contexto.addInitScript(enfeites);
 const pagina = await contexto.newPage();
+// A gravação começa junto com a página: as marcas da linha do tempo são
+// contadas a partir daqui, e é por elas que a narração entra no lugar certo.
+const t0 = Date.now();
 
-async function legenda(passo, texto, pausa = 2800) {
+// A imagem segue a narração, e não o contrário: cada legenda só troca depois
+// que a frase anterior terminou de ser falada.
+let fimDaFala = 0;
+async function legenda(id, passo, texto) {
+  const restante = fimDaFala - Date.now();
+  if (restante > 0) await espera(restante);
   await pagina.evaluate(([p, t]) => window.__rvd.legenda(p, t), [passo, texto]);
-  await espera(pausa);
+  linhaDoTempo.push({ id, inicio: Date.now() - t0 });
+  fimDaFala = Date.now() + duracoes[id] * 1000 + 400;
+  // Um respiro para quem assiste ler a legenda antes de a tela se mexer.
+  await espera(Math.min(1300, duracoes[id] * 1000));
 }
 async function apontar(seletor) {
   const caixa = await pagina.locator(seletor).first().boundingBox();
@@ -132,34 +192,34 @@ async function noBanco(sql, valores) {
 
 await pagina.goto(`${BASE}/`);
 await pagina.waitForLoadState("networkidle");
-await legenda("Portal RVD Saúde", "Como criar o seu acesso e agendar a entrega da nota fiscal", 4000);
+await legenda("abertura", "Portal RVD Saúde", "Como criar o seu acesso e agendar a entrega da nota fiscal");
 
-await legenda("Passo 1", "Abra o portal e escolha o acesso Fornecedor");
+await legenda("passo1", "Passo 1", "Abra o portal e escolha o acesso Fornecedor");
 await clicar("button:has-text('Entrar como fornecedor')");
 await pagina.waitForLoadState("networkidle");
 
-await legenda("Passo 2", "Primeira vez? Clique em “Novo cadastro de fornecedor”");
+await legenda("passo2", "Passo 2", "Primeira vez? Clique em “Novo cadastro de fornecedor”");
 await clicar("button:has-text('Novo cadastro de fornecedor')");
 
-await legenda("Passo 3", "Informe a razão social e o CNPJ da sua empresa");
+await legenda("passo3", "Passo 3", "Informe a razão social e o CNPJ da sua empresa");
 await escrever("#companyName", "Tecnolab Produtos Hospitalares Ltda");
 await escrever("#companyCnpj", "12.345.678/0001-90");
 
-await legenda("Passo 4", "Cadastre o e-mail e crie uma senha de no mínimo 6 caracteres");
+await legenda("passo4", "Passo 4", "Cadastre o e-mail e crie uma senha de no mínimo 6 caracteres");
 await escrever("#email", EMAIL);
 await escrever("#password", SENHA);
 await escrever("#passwordConfirmation", SENHA);
 
-await legenda("Passo 5", "Clique em “Criar conta de fornecedor”");
+await legenda("passo5", "Passo 5", "Clique em “Criar conta de fornecedor”");
 await clicar("button:has-text('Criar conta de fornecedor')");
 await espera(2000);
 
-await legenda("Análise", "O cadastro fica em análise — o Operador libera o seu acesso", 4200);
+await legenda("analise", "Análise", "O cadastro fica em análise — o Operador libera o seu acesso");
 // O Operador aprova em "Acessos". Na gravação isso é feito direto no banco da
 // cópia local, para o vídeo seguir sem sair da tela do fornecedor.
 await noBanco("UPDATE users SET accessStatus = 'approved' WHERE email = ?", [EMAIL]);
 
-await legenda("Passo 6", "Com o acesso liberado, entre com o seu e-mail e a sua senha");
+await legenda("passo6", "Passo 6", "Com o acesso liberado, entre com o seu e-mail e a sua senha");
 await escrever("#email", EMAIL);
 await escrever("#password", SENHA);
 await clicar("button:has-text('Entrar no portal')");
@@ -167,55 +227,61 @@ await pagina.waitForURL(`${BASE}/fornecedor`, { timeout: 20000 });
 await pagina.waitForLoadState("networkidle");
 await espera(1400);
 
-await legenda("Atenção", "A entrega é no operador logístico — confira o endereço no lembrete", 4200);
+await legenda("atencao", "Atenção", "A entrega é no operador logístico — confira o endereço no lembrete");
 await pagina.evaluate(() => window.__rvd.destacar("section.bg-brand div.mt-5.rounded-2xl"));
 await espera(2600);
 await pagina.evaluate(() => window.__rvd.apagar());
 
-await legenda("Passo 7", "Selecione o arquivo XML da nota fiscal");
+await legenda("passo7", "Passo 7", "Selecione o arquivo XML da nota fiscal");
 await apontar("#invoice-xml");
 await pagina.setInputFiles("#invoice-xml", XML);
 await espera(1800);
 
-await legenda("Passo 8", "Informe o número do pedido de compra — é obrigatório");
+await legenda("passo8", "Passo 8", "Informe o número do pedido de compra — é obrigatório");
 await escrever("#purchase-order", "4504748409");
 
-await legenda("Passo 9", "Se quiser, sugira uma data e um horário para o Operador avaliar");
+await legenda("passo9", "Passo 9", "Se quiser, sugira uma data e um horário para o Operador avaliar");
 await preencher("input[type='date']", "2026-09-25");
 await preencher("input[type='time']", "13:00");
 await escrever("textarea", "Carga paletizada, preferimos o periodo da manha.");
 
-await legenda("Passo 10", "Clique em “Enviar agendamento”");
+await legenda("passo10", "Passo 10", "Clique em “Enviar agendamento”");
 await clicar("button:has-text('Enviar agendamento')");
 await espera(2800);
 
 const avisos = await pagina.locator("[data-sonner-toast]").allTextContents();
 if (!avisos.some(aviso => aviso.includes("análise"))) throw new Error(`O envio não foi aceito: ${JSON.stringify(avisos)}`);
 
-await legenda("Pronto!", "A nota entra como “Em análise” até o Operador confirmar a data", 4000);
+await legenda("pronto", "Pronto!", "A nota entra como “Em análise” até o Operador confirmar a data");
 await pagina.mouse.wheel(0, 450);
 await espera(2400);
 
 // O Operador confirma a data do lado dele; no vídeo, direto no banco local.
 await noBanco("UPDATE appointments SET status = 'scheduled', scheduledFor = ? WHERE id = (SELECT id FROM (SELECT MAX(id) AS id FROM appointments) AS ultima)", [new Date("2026-09-25T16:00:00.000Z")]);
 
-await legenda("Passo 11", "Quando o Operador confirma, o status muda para “Agendado”");
+await legenda("passo11", "Passo 11", "Quando o Operador confirma, o status muda para “Agendado”");
 await pagina.reload();
 await pagina.waitForLoadState("networkidle");
 await pagina.mouse.wheel(0, 450);
 await espera(2600);
 
-await legenda("Passo 12", "Baixe o comprovante e entregue junto com a nota ao motorista", 3200);
+await legenda("passo12", "Passo 12", "Baixe o comprovante e entregue junto com a nota ao motorista");
 const baixando = pagina.waitForEvent("download", { timeout: 20000 });
 await clicar("button:has-text('Comprovante PDF')");
 const arquivo = await baixando;
 await arquivo.saveAs(`${SAIDA}/comprovante.pdf`);
 await espera(3000);
 
-await legenda("Dúvidas?", "Use o botão “Conversar” do agendamento para falar com o Operador", 4200);
+await legenda("duvidas", "Dúvidas?", "Use o botão “Conversar” do agendamento para falar com o Operador");
+// Fecha só depois da última frase, senão o vídeo acaba no meio dela.
+const sobra = fimDaFala - Date.now();
+if (sobra > 0) await espera(sobra);
 await pagina.evaluate(() => window.__rvd.esconder());
 await espera(900);
+const video = pagina.video();
 await pagina.close();
 await contexto.close();
 await navegador.close();
-console.log("gravado");
+
+writeFileSync(`${SAIDA}/linha-do-tempo.json`, JSON.stringify(linhaDoTempo, null, 1));
+console.log("gravado:", montarMp4(await video.path(), linhaDoTempo));
