@@ -12,7 +12,7 @@ import PortalLayout from "./PortalLayout";
 
 const initialFilters: ReportFilters = { status: "all" };
 const statusOptions = [
-  ["all", "Todos"], ["pending", "Pendente"], ["scheduled", "Agendado"], ["received", "Recebido"], ["completed", "Concluído"], ["rejected", "Rejeitado"],
+  ["all", "Todos"], ["pending", "Pendente"], ["scheduled", "Agendado"], ["received", "Recebido"], ["completed", "Concluído"], ["backlog", "Backlog"], ["rejected", "Rejeitado"],
 ] as const;
 
 export default function ReportsPage() {

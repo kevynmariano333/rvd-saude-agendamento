@@ -12,14 +12,21 @@ const nota = (extra: Partial<ReportAppointment>): ReportAppointment => ({
 const appointments: ReportAppointment[] = [
   nota({ id: 1, miroNumber: "5105101642", invoiceVolumeCount: 8, invoiceTotalCents: 1248000 }),
   nota({ id: 2, invoiceNumber: "200", supplierName: "Outro fornecedor", invoiceSupplierCnpj: "99887766000155", supplierCnpj: null, recipientCnpj: "43293604002120", purchaseOrder: null, status: "pending", scheduledFor: "2026-08-12T10:00:00.000Z", receivedAt: null }),
-  nota({ id: 3, invoiceNumber: "300", supplierName: "Backlog oculto", supplierCnpj: null, recipientCnpj: null, purchaseOrder: null, status: "backlog", scheduledFor: "2026-08-12T10:00:00.000Z", receivedAt: null }),
+  nota({ id: 3, invoiceNumber: "300", supplierName: "Nota em backlog", invoiceSupplierCnpj: "55444333000122", supplierCnpj: null, recipientCnpj: null, purchaseOrder: null, status: "backlog", scheduledFor: "2026-08-12T10:00:00.000Z", receivedAt: null }),
 ];
 
 describe("consolidado de relatórios", () => {
-  it("oculta backlog e aplica filtros de fornecedor e período", () => {
+  it("aplica filtros de fornecedor e período", () => {
     const linhas = filterReportAppointments(appointments, { scheduledStart: "2026-08-09", scheduledEnd: "2026-08-11", supplier: "rvd" });
     expect(linhas.map(item => item.id)).toEqual([1]);
-    expect(filterReportAppointments(appointments, {}).map(item => item.id)).toEqual([1, 2]);
+    expect(filterReportAppointments(appointments, {}).map(item => item.id)).toEqual([1, 2, 3]);
+  });
+
+  it("lista a nota em backlog, que também é uma nota lançada", () => {
+    // O relatório escondia o backlog, e escolher esse status no filtro não
+    // trazia nada: a nota travada sumia do histórico em vez de aparecer nele.
+    expect(filterReportAppointments(appointments, { status: "backlog" }).map(item => item.id)).toEqual([3]);
+    expect(filterReportAppointments(appointments, { status: "pending" }).map(item => item.id)).toEqual([2]);
   });
 
   it("encontra pelo CNPJ do fornecedor, que é o que o campo promete", () => {

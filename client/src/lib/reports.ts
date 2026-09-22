@@ -27,7 +27,7 @@ export type ReportFilters = {
   scheduledEnd?: string;
   receivedStart?: string;
   receivedEnd?: string;
-  status?: Exclude<PortalStatus, "backlog"> | "all";
+  status?: PortalStatus | "all";
   supplier?: string;
   recipientCnpj?: string;
 };
@@ -68,7 +68,6 @@ export function filterReportAppointments(appointments: ReportAppointment[], filt
   // O filtro de destinatário aceita a sigla da unidade, como na tela de agenda.
   const destinatario = filters.recipientCnpj ? apenasDigitos(filtroDeDestinatario(filters.recipientCnpj)) : "";
   return appointments.filter(item => {
-    if (item.status === "backlog") return false;
     if (filters.status && filters.status !== "all" && item.status !== filters.status) return false;
     if (!isWithinDateRange(item.scheduledFor, filters.scheduledStart, filters.scheduledEnd)) return false;
     if (!isWithinDateRange(item.receivedAt, filters.receivedStart, filters.receivedEnd)) return false;
