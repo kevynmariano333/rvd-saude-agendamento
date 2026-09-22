@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { canTreatBacklogPortal, isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
+import { canSeeGateHistory, canTreatBacklogPortal, isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
 import { serviceTypeCopy } from "@/lib/attendance";
 import { trpc } from "@/lib/trpc";
 import {
@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ClipboardList,
   DoorOpen,
-  History,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -126,16 +125,25 @@ export default function PortalLayout({
   const backlogNav: NavItem[] = [{ label: "Backlog", path: "/operador/backlog", icon: AlertTriangle, badge: backlogCount }];
   const gateNav: NavItem[] = [{ label: "Portaria", path: "/portaria", icon: DoorOpen }];
   const yardNav: NavItem[] = [{ label: "Operação", path: "/operacao", icon: PackageCheck, badge: releaseCount }];
-  // O histórico do portão é de quem trabalha nele e de quem responde por ele:
-  // a mesma consulta serve o porteiro no fim do turno e o operador no fim do mês.
-  const historyNav: NavItem[] = [{ label: "Histórico", path: "/portaria/historico", icon: History }];
+  // Para quem enxerga mais de uma tela do pátio, elas entram num menu só. Oito
+  // itens soltos na barra atropelavam o nome de quem está logado, e quem precisa
+  // do pátio o dia inteiro é a Portaria e a Operação — que continuam com a sua
+  // tela direto, sem menu nenhum.
+  const patioFilhos = [
+    ...(isAdmin || isPortalGate(role) ? [{ label: "Portaria", path: "/portaria" }] : []),
+    ...(isPortalYard(role) ? [{ label: "Operação", path: "/operacao" }] : []),
+    ...(canSeeGateHistory(role) ? [{ label: "Histórico", path: "/portaria/historico" }] : []),
+  ];
+  const patioNav: NavItem[] = patioFilhos.length
+    ? [{ label: "Pátio", path: patioFilhos[0].path, icon: PackageCheck, badge: releaseCount, filhos: patioFilhos }]
+    : [];
 
   // O planejador para na agenda: as quatro telas de planejamento e nada do
   // pátio. É o recorte inteiro do perfil.
   const nav: NavItem[] = isAdmin
-    ? [...schedulingNav, ...backlogNav, ...gateNav, ...yardNav, ...historyNav]
+    ? [...schedulingNav, ...backlogNav, ...patioNav]
     : isOperator
-      ? [...schedulingNav, ...yardNav, ...historyNav]
+      ? [...schedulingNav, ...patioNav]
       : isPortalPlanner(role)
         ? [...schedulingNav, ...backlogNav]
         : // A Portaria tem uma tela só: quem está no portão não navega pelo
@@ -206,8 +214,8 @@ export default function PortalLayout({
             </span>
           </button>
 
-          <nav className="hidden min-w-0 flex-1 items-center justify-center lg:flex">
-            <div className="flex items-center gap-0.5">
+          <nav className="hidden min-w-0 flex-1 items-center justify-center xl:flex">
+            <div className="flex items-center">
               {nav.map(item => {
                 const active = item.filhos ? item.filhos.some(filho => location === filho.path) : location === item.path;
                 const Icon = item.icon;
@@ -218,12 +226,17 @@ export default function PortalLayout({
                       <button
                         onClick={() => setMenuAberto(atual => (atual === item.path ? null : item.path))}
                         aria-expanded={aberto}
-                        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition ${
+                        className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-bold transition ${
                           active ? "bg-rvd-plum-pale/50 text-rvd-plum" : "text-ink-soft hover:bg-canvas hover:text-ink"
                         }`}
                       >
                         <Icon className="size-4" />
                         {item.label}
+                        {item.badge ? (
+                          <span className="flex min-w-[18px] items-center justify-center rounded-full bg-state-stop px-1.5 py-0.5 text-[10px] font-extrabold text-white">
+                            {item.badge > 9 ? "9+" : item.badge}
+                          </span>
+                        ) : null}
                         <ChevronDown className={`size-3.5 transition ${aberto ? "rotate-180" : ""}`} />
                       </button>
                       {aberto && (
@@ -250,7 +263,7 @@ export default function PortalLayout({
                     key={item.path}
                     onClick={() => go(item.path)}
                     aria-current={active ? "page" : undefined}
-                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition ${
+                    className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-bold transition ${
                       active ? "bg-rvd-plum-pale/50 text-rvd-plum" : "text-ink-soft hover:bg-canvas hover:text-ink"
                     }`}
                   >
@@ -270,7 +283,7 @@ export default function PortalLayout({
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             <button
               onClick={() => setMobileOpen(value => !value)}
-              className="rounded-lg border border-line p-2 text-ink-soft lg:hidden"
+              className="rounded-lg border border-line p-2 text-ink-soft xl:hidden"
               aria-label="Abrir navegação"
             >
               {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -304,7 +317,7 @@ export default function PortalLayout({
               <span className="flex size-8 items-center justify-center rounded-lg bg-rvd-plum-pale/60 text-rvd-plum">
                 <UserRound className="size-4" />
               </span>
-              <span className="hidden max-w-36 sm:block">
+              <span className="hidden max-w-24 sm:block 2xl:max-w-36">
                 <span className="block truncate text-sm font-bold text-ink">{user.name || "Acesso RVD"}</span>
                 <span className="block text-[10px] font-bold uppercase tracking-wide text-ink-faint">
                   {roleLabel[role]}
@@ -316,7 +329,7 @@ export default function PortalLayout({
         </div>
 
         {mobileOpen && (
-          <div className="border-t border-line bg-surface px-5 py-3 lg:hidden">
+          <div className="border-t border-line bg-surface px-5 py-3 xl:hidden">
             <nav className="flex flex-wrap gap-2">
               {[...nav, ...adminNav].flatMap(item => (item.filhos ? item.filhos.map(filho => ({ ...item, label: filho.label, path: filho.path, filhos: undefined })) : [item])).map(item => {
                 const Icon = item.icon;
