@@ -28,6 +28,7 @@ import { chromium } from "playwright";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import mysql from "mysql2/promise";
+import { medirLegendas } from "./tempos-das-legendas.mjs";
 
 const SAIDA = process.argv[2];
 const BASE = "http://127.0.0.1:3000";
@@ -70,9 +71,12 @@ function montarMp4(webm, linhaDoTempo) {
     execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...video, "-c:v", "libx264", "-preset", "slow", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-r", "25", destino]);
     return destino;
   }
-  const entradas = linhaDoTempo.flatMap(marca => ["-i", `${PASTA_AUDIO}/${marca.id}.wav`]);
-  const atrasos = linhaDoTempo.map((marca, indice) => `[${indice + 1}:a]adelay=${Math.round(marca.inicio)}[f${indice}]`).join(";");
-  const mistura = `${linhaDoTempo.map((_, indice) => `[f${indice}]`).join("")}amix=inputs=${linhaDoTempo.length}:normalize=0:dropout_transition=0,apad[narracao]`;
+  // Os tempos da gravação não servem para colocar a fala: o vídeo sai esticado.
+  // Vale onde cada legenda aparece dentro do arquivo.
+  const tempos = medirLegendas(webm, linhaDoTempo);
+  const entradas = tempos.flatMap(marca => ["-i", `${PASTA_AUDIO}/${marca.id}.wav`]);
+  const atrasos = tempos.map((marca, indice) => `[${indice + 1}:a]adelay=${Math.round(marca.video * 1000)}[f${indice}]`).join(";");
+  const mistura = `${tempos.map((_, indice) => `[f${indice}]`).join("")}amix=inputs=${tempos.length}:normalize=0:dropout_transition=0,apad[narracao]`;
   execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...video, ...entradas,
     "-filter_complex", `${atrasos};${mistura}`, "-map", "0:v", "-map", "[narracao]", "-shortest",
     "-c:v", "libx264", "-preset", "slow", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",

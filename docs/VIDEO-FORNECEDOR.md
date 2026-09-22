@@ -45,3 +45,23 @@ a aprovação do cadastro e a confirmação da data pelo Operador.
 
 O roteiro da gravação está em `scripts/gravar-video-fornecedor.mjs`, com as
 instruções de como rodá-lo — é por ele que o vídeo se refaz quando a tela mudar.
+
+## Também em PDF e PowerPoint
+
+O mesmo passo a passo existe como guia para mandar por e-mail, onde o vídeo não
+passa como anexo. As telas dele não são quadros do vídeo — são capturas do
+sistema rodando, elemento por elemento, para o texto continuar legível impresso:
+
+```
+node scripts/guia-fornecedor/capturar-telas.mjs capturas/
+node scripts/guia-fornecedor/montar-guia.mjs capturas/ guia.pptx
+soffice --headless --convert-to pdf guia.pptx
+```
+
+## Por que o áudio não segue o relógio da gravação
+
+O navegador entrega os quadros no ritmo que consegue, e o arquivo sai esticado:
+uma legenda marcada aos 83 segundos de gravação aparece aos 90 do vídeo. Colocar
+a fala pelos tempos da gravação atrasa a voz cada vez mais até o fim.
+`scripts/tempos-das-legendas.mjs` mede, no próprio vídeo, quando a faixa da
+legenda muda, e é por esses tempos que a narração entra.
