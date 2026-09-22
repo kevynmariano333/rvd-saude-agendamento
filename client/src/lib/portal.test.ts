@@ -101,9 +101,10 @@ describe("tratativa do backlog", () => {
 });
 
 describe("histórico do portão na tela", () => {
-  it("fica fora da Portaria e do fornecedor", () => {
-    expect(canSeeGateHistory("operacao")).toBe(true);
+  it("fica fora do portão, da doca e do fornecedor", () => {
+    expect(canSeeGateHistory("operator")).toBe(true);
     expect(canSeeGateHistory("admin")).toBe(true);
+    expect(canSeeGateHistory("operacao")).toBe(false);
     expect(canSeeGateHistory("portaria")).toBe(false);
     expect(canSeeGateHistory("supplier")).toBe(false);
     expect(canSeeGateHistory("planejador")).toBe(false);

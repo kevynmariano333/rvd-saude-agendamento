@@ -142,8 +142,9 @@ export default function PortalLayout({
           // sistema no meio do turno.
           isPortalGate(role)
           ? gateNav
-          : isPortalYard(role)
-            ? [...yardNav, ...historyNav]
+          : // A Operação também: a doca é uma tela só, como o portão.
+            isPortalYard(role)
+            ? yardNav
             : [{ label: "Meus agendamentos", path: "/fornecedor", icon: ClipboardList }];
 
   const adminNav: NavItem[] = isAdmin

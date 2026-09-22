@@ -542,31 +542,34 @@ describe("histórico do portão por período", () => {
   });
 
   it("consulta o período pedido", async () => {
-    await appRouter.createCaller(context("operacao")).attendances.report({ from: "2026-09-01", to: "2026-09-30" });
+    await appRouter.createCaller(context("operator")).attendances.report({ from: "2026-09-01", to: "2026-09-30" });
     expect(mocks.listAttendancesInRange).toHaveBeenCalledWith("2026-09-01", "2026-09-30");
   });
 
   it("recusa um período de trás para frente", async () => {
     await expect(
-      appRouter.createCaller(context("operacao")).attendances.report({ from: "2026-09-30", to: "2026-09-01" })
+      appRouter.createCaller(context("operator")).attendances.report({ from: "2026-09-30", to: "2026-09-01" })
     ).rejects.toThrow(/data inicial/i);
     expect(mocks.listAttendancesInRange).not.toHaveBeenCalled();
   });
 
   it("recusa uma data fora do formato", async () => {
     await expect(
-      appRouter.createCaller(context("operacao")).attendances.report({ from: "01/09/2026", to: "2026-09-30" })
+      appRouter.createCaller(context("operator")).attendances.report({ from: "01/09/2026", to: "2026-09-30" })
     ).rejects.toThrow();
     expect(mocks.listAttendancesInRange).not.toHaveBeenCalled();
   });
 
   it("abre para quem responde pelo pátio e fecha para o resto", async () => {
     const periodo = { from: "2026-09-01", to: "2026-09-30" };
-    for (const role of ["operacao", "operator", "admin"] as const) {
+    for (const role of ["operator", "admin"] as const) {
       await expect(appRouter.createCaller(context(role)).attendances.report(periodo)).resolves.toEqual([]);
     }
-    // A Portaria trabalha o turno na própria tela; o acervo não é dela.
-    await expect(appRouter.createCaller(context("portaria")).attendances.report(periodo)).rejects.toThrow(/histórico do portão/i);
+    // Portaria e Operação trabalham o turno nas próprias telas; o acervo não é
+    // de nenhuma das duas.
+    for (const role of ["portaria", "operacao"] as const) {
+      await expect(appRouter.createCaller(context(role)).attendances.report(periodo)).rejects.toThrow(/histórico do portão/i);
+    }
     await expect(appRouter.createCaller(context("supplier", 12)).attendances.report(periodo)).rejects.toThrow(
       /histórico do portão/i
     );
@@ -601,10 +604,8 @@ describe("RG do motorista", () => {
       expect((await caller.attendances.list({}))[0].driverDocument).toBeNull();
       expect((await caller.attendances.dayLog())[0].driverDocument).toBeNull();
     }
-    for (const role of ["operacao", "operator"] as const) {
-      const report = await appRouter.createCaller(context(role)).attendances.report({ from: "2026-09-01", to: "2026-09-30" });
-      expect(report[0].driverDocument).toBeNull();
-    }
+    const report = await appRouter.createCaller(context("operator")).attendances.report({ from: "2026-09-01", to: "2026-09-30" });
+    expect(report[0].driverDocument).toBeNull();
   });
 
   // Esconder o RG não pode custar o resto da linha: o portão continua

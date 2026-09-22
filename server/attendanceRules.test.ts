@@ -136,18 +136,19 @@ describe("fluxo operacional", () => {
 });
 
 describe("histórico do portão", () => {
-  it("é de quem responde pelo pátio, não de quem está no portão", () => {
-    expect(canViewGateHistory("operacao")).toBe(true);
+  it("é de quem responde pelo conjunto, não de quem trabalha o turno", () => {
     expect(canViewGateHistory("operator")).toBe(true);
     expect(canViewGateHistory("admin")).toBe(true);
-    // A Portaria tem uma tela só: registrar a chegada e decidir a entrada.
+    // Portaria e Operação têm uma tela cada: registrar, decidir, conduzir.
     expect(canViewGateHistory("portaria")).toBe(false);
+    expect(canViewGateHistory("operacao")).toBe(false);
     expect(canViewGateHistory("planejador")).toBe(false);
     expect(canViewGateHistory("supplier")).toBe(false);
   });
 
-  it("não tira da Portaria a própria tela", () => {
-    // Ela continua precisando da fila do portão para trabalhar o turno.
+  it("não tira de nenhuma das duas a própria tela", () => {
+    // Elas continuam precisando da fila do pátio para trabalhar o turno.
     expect(canViewAttendances("portaria")).toBe(true);
+    expect(canViewAttendances("operacao")).toBe(true);
   });
 });

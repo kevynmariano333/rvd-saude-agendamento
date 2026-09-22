@@ -90,12 +90,12 @@ export function canSeeAttendances(role: PortalRole) {
 /**
  * Quem consulta o histórico do portão.
  *
- * A Portaria tem uma tela só, de propósito: quem está no portão registra a
- * chegada e decide a entrada, e não precisa — nem deve — navegar pelo resto do
- * sistema no meio do turno.
+ * Portaria e Operação têm uma tela cada, de propósito: quem está no portão ou
+ * na doca trabalha o turno ali e não navega pelo sistema no meio do serviço.
+ * O acervo é de quem responde pelo conjunto.
  */
 export function canSeeGateHistory(role: PortalRole) {
-  return role === "operacao" || role === "operator" || role === "admin";
+  return role === "operator" || role === "admin";
 }
 
 /** A tela em que cada perfil começa depois de entrar. */

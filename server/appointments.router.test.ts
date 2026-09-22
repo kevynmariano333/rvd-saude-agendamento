@@ -641,9 +641,9 @@ describe("alcance da Portaria", () => {
     await expect(caller.attendances.list()).resolves.toEqual([]);
   });
 
-  it("abre o histórico para a Operação e o Operador", async () => {
+  it("abre o histórico para o Operador e o Administrador", async () => {
     mocks.listAttendancesInRange.mockResolvedValue([]);
-    for (const perfil of ["operacao", "operator", "admin"] as const) {
+    for (const perfil of ["operator", "admin"] as const) {
       const caller = appRouter.createCaller(context(perfil));
       await expect(caller.attendances.report({ from: "2026-09-01", to: "2026-09-30" })).resolves.toEqual([]);
     }
