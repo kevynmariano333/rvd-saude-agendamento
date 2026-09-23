@@ -19,7 +19,9 @@ export const appointmentStatuses = ["pending", "scheduled", "received", "complet
 // sistema Agiliza). Sem um valor próprio, milhares de notas antigas ficariam
 // indistinguíveis da operação do dia a dia na tela do operador e nos números do
 // painel — com ele, dá para reconhecer a procedência e filtrar.
-export const appointmentSources = ["portal", "manual_xml", "importado"] as const;
+// "servico" é a nota de serviço: entra sem XML, registrada pela operação a
+// partir do que o prestador mandou (às vezes só um PDF).
+export const appointmentSources = ["portal", "manual_xml", "importado", "servico"] as const;
 export const suggestionStatuses = ["pending", "accepted", "declined"] as const;
 // A supplier login is approved on sight when it is the first for its CNPJ, and
 // held for an operator's decision when it joins a company that already exists.

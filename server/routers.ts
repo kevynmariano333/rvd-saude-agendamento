@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
+  appointmentSources,
   appointmentStatuses,
   attendanceClassificationDetails,
   attendanceClassifications,
@@ -82,7 +83,7 @@ import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, re
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
-import { countAppointmentsByStatus, listReportRows } from "./db";
+import { countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
 import { gerarBackup } from "./backup";
 import { decodificarCsv, importarAcervo } from "./agilizaImport";
 import { situacaoDasMigracoes } from "./_core/migrations";
@@ -431,9 +432,15 @@ export const appRouter = router({
         return { valid: true as const, invoiceNumber: appointment.invoiceNumber, scheduledFor };
       }),
     list: protectedProcedure
-      .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional(), limit: z.number().int().positive().max(500).optional(), offset: z.number().int().min(0).optional() }).optional())
+      .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional(), recipientCnpjs: z.array(z.string().max(40)).max(20).optional(), source: z.enum(appointmentSources).optional(), limit: z.number().int().positive().max(500).optional(), offset: z.number().int().min(0).optional() }).optional())
       .query(async ({ ctx, input }) => {
-        const filters: AppointmentFilters = { limit: input?.limit, offset: input?.offset, date: input?.date, status: input?.status as AppointmentStatus | undefined, invoiceNumber: input?.invoiceNumber, supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj };
+        const filters: AppointmentFilters = {
+          limit: input?.limit,
+          offset: input?.offset,
+          // Pendente, agendado e backlog são fila: o mais próximo primeiro.
+          // Recebido, concluído e rejeitado são histórico: o mais recente primeiro.
+          futuroPrimeiro: !input?.status || input.status === "pending" || input.status === "scheduled" || input.status === "backlog",
+          date: input?.date, status: input?.status as AppointmentStatus | undefined, source: input?.source, invoiceNumber: input?.invoiceNumber, supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj, recipientCnpjs: input?.recipientCnpjs };
         if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
         return listAppointments(filters);
       }),
@@ -452,6 +459,58 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar este agendamento." });
         }
         return appointment;
+      }),
+    /** Os fornecedores já cadastrados, para escolher ao registrar uma nota de serviço. */
+    fornecedores: protectedProcedure.query(async ({ ctx }) => {
+      assertSchedulingDesk(ctx.user.role);
+      return listSupplierOptions();
+    }),
+    /**
+     * Registra uma nota de serviço: sem XML, com o PDF quando houver.
+     *
+     * Serviço não emite XML de produto, e hoje essas notas ficavam de fora do
+     * portal — combinadas por e-mail e conferidas de memória. Aqui elas entram
+     * na mesma agenda, com pedido de compra e data, e passam pelo mesmo
+     * recebimento.
+     */
+    createServiceNote: protectedProcedure
+      .input(
+        z.object({
+          supplierId: z.number().int().positive(),
+          recipientCnpj: z.string().min(14).max(20),
+          invoiceNumber: z.string().trim().min(1).max(100),
+          scheduledFor: z.string().datetime({ offset: true }),
+          purchaseOrders: z.array(z.string().trim()).min(1, "Informe ao menos um pedido."),
+          documentBase64: z.string().max(12_000_000).nullish(),
+          documentFileName: z.string().max(255).nullish(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        assertSchedulingDesk(ctx.user.role);
+        const pedidos = input.purchaseOrders.map(pedido => pedido.replace(/\D/g, "")).filter(Boolean);
+        if (!pedidos.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe ao menos um pedido de compra." });
+        // Dez dígitos é o formato do pedido no ERP; um número curto aqui vira
+        // uma nota que ninguém consegue conferir depois.
+        const invalido = pedidos.find(pedido => pedido.length !== 10);
+        if (invalido) throw new TRPCError({ code: "BAD_REQUEST", message: `O pedido ${invalido} não tem 10 dígitos.` });
+
+        let documento: { key: string; url: string } | null = null;
+        if (input.documentBase64 && input.documentFileName) {
+          const conteudo = Buffer.from(input.documentBase64, "base64");
+          documento = await storagePut(`notas-servico/${ctx.user.id}/${input.documentFileName}`, conteudo, "application/pdf");
+        }
+
+        return createServiceNoteAppointment({
+          supplierId: input.supplierId,
+          invoiceNumber: input.invoiceNumber,
+          recipientCnpj: input.recipientCnpj.replace(/\D/g, ""),
+          scheduledFor: new Date(input.scheduledFor),
+          purchaseOrder: pedidos.join(", "),
+          documentStorageKey: documento?.key ?? null,
+          documentUrl: documento?.url ?? null,
+          documentFileName: input.documentFileName ?? null,
+          createdById: ctx.user.id,
+        });
       }),
     /** Quantas notas há em cada situação, contadas no banco e não no navegador. */
     counts: protectedProcedure.query(async ({ ctx }) => {
@@ -861,6 +920,7 @@ export const appRouter = router({
           status: statusSchema.optional(),
           supplier: z.string().max(255).optional(),
           recipientCnpj: z.string().max(40).optional(),
+          recipientCnpjs: z.array(z.string().max(40)).max(20).optional(),
           limite: z.number().int().positive().max(5000).optional(),
         }).optional()
       )
@@ -874,6 +934,7 @@ export const appRouter = router({
           status: input?.status as AppointmentStatus | undefined,
           supplier: input?.supplier,
           recipientCnpj: input?.recipientCnpj,
+          recipientCnpjs: input?.recipientCnpjs,
           limite: input?.limite ?? 3000,
         });
       }),

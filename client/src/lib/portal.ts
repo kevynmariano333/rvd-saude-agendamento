@@ -10,7 +10,7 @@ export const statusCopy: Record<PortalStatus, string> = {
   rejected: "Rejeitado",
 };
 
-export type PortalSource = "portal" | "manual_xml" | "importado";
+export type PortalSource = "portal" | "manual_xml" | "importado" | "servico";
 
 /**
  * A procedência aparece logo abaixo do número da nota. O histórico importado
@@ -22,6 +22,7 @@ export const sourceCopy: Record<PortalSource, string> = {
   portal: "Portal",
   manual_xml: "XML",
   importado: "Importado",
+  servico: "Serviço",
 };
 
 export const roleLabel: Record<PortalRole, string> = {

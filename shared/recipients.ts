@@ -15,12 +15,65 @@ export type Unidade = {
   nome: string;
   /** Como o nome cabe na coluna da tabela, que é estreita. */
   curto: string;
+  /** O cliente dono da unidade. As unidades de um grupo são filtradas juntas. */
+  grupo: string;
 };
 
 export const UNIDADES: Unidade[] = [
-  { cnpj: "06033403000113", sigla: "HSH", nome: "Hospital", curto: "HOSPITAL" },
-  { cnpj: "43293604002120", sigla: "MSH", nome: "Maternidade", curto: "MATERN." },
+  { cnpj: "06033403000113", sigla: "HSH", nome: "Hospital", curto: "HOSPITAL", grupo: "Amil" },
+  { cnpj: "43293604002120", sigla: "MSH", nome: "Maternidade", curto: "MATERN.", grupo: "Amil" },
 ];
+
+/** Os grupos na ordem em que apareceram, cada um com as suas unidades. */
+export function gruposDeUnidades(): { grupo: string; unidades: Unidade[] }[] {
+  const porGrupo: { grupo: string; unidades: Unidade[] }[] = [];
+  for (const unidade of UNIDADES) {
+    const existente = porGrupo.find(item => item.grupo === unidade.grupo);
+    if (existente) existente.unidades.push(unidade);
+    else porGrupo.push({ grupo: unidade.grupo, unidades: [unidade] });
+  }
+  return porGrupo;
+}
+
+/** O valor do seletor quando ninguém escolheu destinatário nenhum. */
+export const DESTINATARIO_TODOS = "todos";
+
+/**
+ * O que o seletor de destinatário guarda.
+ *
+ * Um valor é "todos", "grupo:<nome>" ou "cnpj:<dígitos>". Guardar o grupo pelo
+ * nome, e não pela lista de CNPJs, faz a escolha continuar valendo no dia em
+ * que uma unidade nova entrar no grupo.
+ */
+export function valorDoGrupo(grupo: string): string {
+  return `grupo:${grupo}`;
+}
+
+export function valorDaUnidade(cnpj: string): string {
+  return `cnpj:${apenasDigitos(cnpj)}`;
+}
+
+/**
+ * Os CNPJs que uma escolha do seletor representa.
+ *
+ * "todos" não vira lista nenhuma — vira ausência de filtro, que é diferente de
+ * uma lista vazia (essa não casaria com nada).
+ */
+export function cnpjsDoDestinatario(valor: string | null | undefined): string[] | undefined {
+  if (!valor || valor === DESTINATARIO_TODOS) return undefined;
+  if (valor.startsWith("grupo:")) {
+    const grupo = valor.slice("grupo:".length);
+    const unidades = UNIDADES.filter(unidade => unidade.grupo === grupo);
+    return unidades.length ? unidades.map(unidade => unidade.cnpj) : undefined;
+  }
+  if (valor.startsWith("cnpj:")) {
+    const digitos = apenasDigitos(valor.slice("cnpj:".length));
+    return digitos ? [digitos] : undefined;
+  }
+  // Um filtro antigo, digitado à mão, continua valendo como estava.
+  const texto = filtroDeDestinatario(valor);
+  return texto ? [texto] : undefined;
+}
 
 export function apenasDigitos(valor: string | null | undefined): string {
   return (valor ?? "").replace(/\D/g, "");

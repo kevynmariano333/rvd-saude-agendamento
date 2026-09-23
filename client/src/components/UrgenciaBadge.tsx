@@ -14,7 +14,7 @@ export default function UrgenciaBadge({ purchaseOrder, className = "" }: { purch
   return (
     <span
       title="Pedido de compra urgente"
-      className={`inline-flex items-center gap-1 rounded-md bg-state-stop px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white ${className}`}
+      className={`rvd-piscando inline-flex items-center gap-1 rounded-md bg-state-stop px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white ${className}`}
     >
       <AlertTriangle className="size-3" />
       Urgente

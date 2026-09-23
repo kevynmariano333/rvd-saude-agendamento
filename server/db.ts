@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, isNull, like, lte, ne, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, lte, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { customAlphabet, nanoid } from "nanoid";
 import {
@@ -10,6 +10,7 @@ import {
   attendanceEvents,
   attendances,
   passwordResetTokens,
+  type AppointmentSource,
   type AppointmentStatus,
   type AttendanceClassification,
   type AttendanceClassificationDetail,
@@ -125,6 +126,10 @@ export async function touchUserSignIn(id: number) {
 }
 
 export type AppointmentFilters = {
+  /** De onde a nota veio: portal, XML manual, acervo importado ou nota de serviço. */
+  source?: AppointmentSource;
+  /** Fila do que ainda vai acontecer: o mais próximo primeiro. */
+  futuroPrimeiro?: boolean;
   /** Quantas linhas trazer. Sem isto a tela recebia a tabela inteira. */
   limit?: number;
   offset?: number;
@@ -136,6 +141,8 @@ export type AppointmentFilters = {
   invoiceNumber?: string;
   supplierName?: string;
   recipientCnpj?: string;
+  /** Uma escolha de grupo vira vários CNPJs; qualquer um deles serve. */
+  recipientCnpjs?: string[];
 };
 
 /**
@@ -158,12 +165,15 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
     conditions.push(inArray(appointments.supplierId, filters.supplierIds));
   }
   if (filters.status) conditions.push(eq(appointments.status, filters.status));
+  if (filters.source) conditions.push(eq(appointments.source, filters.source));
   if (filters.invoiceNumber) conditions.push(like(appointments.invoiceNumber, `%${filters.invoiceNumber.trim()}%`));
   if (filters.supplierName) {
     const supplierName = `%${filters.supplierName.trim()}%`;
     conditions.push(or(like(users.name, supplierName), like(appointments.invoiceSupplierName, supplierName)));
   }
-  if (filters.recipientCnpj) conditions.push(like(appointments.recipientCnpj, `%${normalizeCnpj(filters.recipientCnpj)}%`));
+  const cnpjsDestinatario = filters.recipientCnpjs?.map(normalizeCnpj).filter(Boolean) ?? [];
+  if (cnpjsDestinatario.length) conditions.push(or(...cnpjsDestinatario.map(cnpj => like(appointments.recipientCnpj, `%${cnpj}%`))));
+  else if (filters.recipientCnpj) conditions.push(like(appointments.recipientCnpj, `%${normalizeCnpj(filters.recipientCnpj)}%`));
   if (filters.date) {
     const range = getSaoPauloDayRange(filters.date);
     if (range) conditions.push(gte(appointments.scheduledFor, range.start), lte(appointments.scheduledFor, range.end));
@@ -213,7 +223,15 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
     .innerJoin(users, eq(appointments.supplierId, users.id));
 
   const filtered = conditions.length ? query.where(and(...conditions)) : query;
-  const ordenada = filtered.orderBy(desc(appointments.scheduledFor));
+  // Urgente primeiro dentro do mesmo dia: pedido que começa com 4000 é urgência,
+  // e quem está montando o dia precisa vê-la antes do resto daquele dia.
+  const urgentePrimeiro = sql`CASE WHEN ${appointments.purchaseOrder} REGEXP '(^|[^0-9])4000' THEN 0 ELSE 1 END`;
+  // O que ainda vai acontecer é lido do mais próximo para o mais distante — é a
+  // fila do dia. O que já aconteceu é lido do mais recente para trás, que é
+  // como se procura no histórico.
+  const ordenada = filters.futuroPrimeiro
+    ? filtered.orderBy(sql`DATE(${appointments.scheduledFor}) ASC`, urgentePrimeiro, asc(appointments.scheduledFor))
+    : filtered.orderBy(sql`DATE(${appointments.scheduledFor}) DESC`, urgentePrimeiro, desc(appointments.scheduledFor));
   return filters.limit ? ordenada.limit(filters.limit).offset(filters.offset ?? 0) : ordenada;
 }
 
@@ -237,6 +255,12 @@ export async function countAppointmentsByStatus(filters: AppointmentFilters = {}
   const linhas = await (conditions.length ? consulta.where(and(...conditions)) : consulta).groupBy(appointments.status);
   const porStatus: Record<string, number> = {};
   for (const linha of linhas) porStatus[linha.status] = Number(linha.total);
+
+  // Nota agendada cuja hora já passou e que ninguém recebeu: é o caminhão que
+  // não chegou. A tela pisca a aba quando este número não é zero.
+  const atraso = [...conditions, eq(appointments.status, "scheduled"), lt(appointments.scheduledFor, new Date())];
+  const atrasadas = await db.select({ total: count() }).from(appointments).where(and(...atraso));
+  porStatus.atrasadas = Number(atrasadas[0]?.total ?? 0);
   return porStatus;
 }
 
@@ -1259,6 +1283,8 @@ export async function listReportRows(filtros: {
   status?: AppointmentStatus;
   supplier?: string;
   recipientCnpj?: string;
+  /** Uma escolha de grupo vira vários CNPJs; qualquer um deles serve. */
+  recipientCnpjs?: string[];
   limite: number;
 }) {
   const db = await getDb();
@@ -1274,7 +1300,9 @@ export async function listReportRows(filtros: {
   const fimRecebimento = getSaoPauloDayRange(filtros.receivedEnd ?? "");
   if (inicioRecebimento) condicoes.push(gte(appointments.receivedAt, inicioRecebimento.start));
   if (fimRecebimento) condicoes.push(lte(appointments.receivedAt, fimRecebimento.end));
-  if (filtros.recipientCnpj) condicoes.push(like(appointments.recipientCnpj, `%${normalizeCnpj(filtros.recipientCnpj)}%`));
+  const cnpjsDoFiltro = filtros.recipientCnpjs?.map(normalizeCnpj).filter(Boolean) ?? [];
+  if (cnpjsDoFiltro.length) condicoes.push(or(...cnpjsDoFiltro.map(cnpj => like(appointments.recipientCnpj, `%${cnpj}%`))));
+  else if (filtros.recipientCnpj) condicoes.push(like(appointments.recipientCnpj, `%${normalizeCnpj(filtros.recipientCnpj)}%`));
   if (filtros.supplier) {
     // O campo promete "nome ou CNPJ": o texto vai contra os dois nomes, e os
     // dígitos contra os dois CNPJs.
@@ -1311,4 +1339,75 @@ export async function listReportRows(filtros: {
     onde ? contagem.where(onde) : contagem,
   ]);
   return { linhas, total: Number(totais[0]?.total ?? 0) };
+}
+
+/**
+ * A nota de serviço: entra sem XML, registrada pela operação.
+ *
+ * Serviço não emite nota com XML de produto — vem um PDF, às vezes nem isso —,
+ * e mesmo assim precisa de agendamento, de pedido de compra e de recebimento
+ * como qualquer outra. Fica na mesma tabela das demais, com a origem marcada,
+ * para aparecer na mesma agenda e no mesmo relatório.
+ */
+export async function createServiceNoteAppointment(input: {
+  supplierId: number;
+  invoiceNumber: string;
+  recipientCnpj: string;
+  scheduledFor: Date;
+  purchaseOrder: string;
+  documentStorageKey: string | null;
+  documentUrl: string | null;
+  documentFileName: string | null;
+  createdById: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const fornecedor = await getUserById(input.supplierId);
+  if (!fornecedor) throw new Error("Fornecedor não encontrado.");
+
+  const resultado = await db.transaction(async tx => {
+    const inserido = await tx.insert(appointments).values({
+      supplierId: input.supplierId,
+      serviceType: `Nota de serviço ${input.invoiceNumber}`.slice(0, 80),
+      scheduledFor: input.scheduledFor,
+      notes: "Nota de serviço registrada pela operação, sem XML.",
+      source: "servico",
+      invoiceNumber: input.invoiceNumber,
+      purchaseOrder: input.purchaseOrder,
+      invoiceSupplierName: fornecedor.companyName ?? fornecedor.name,
+      // O CNPJ vem do cadastro do fornecedor: é o que a tela promete ao dizer
+      // "o CNPJ é puxado do cadastro".
+      invoiceSupplierCnpj: fornecedor.companyCnpj,
+      recipientCnpj: input.recipientCnpj,
+      xmlStorageKey: input.documentStorageKey,
+      xmlUrl: input.documentUrl,
+      xmlFileName: input.documentFileName,
+      status: "scheduled",
+      handledBy: input.createdById,
+    });
+    const appointmentId = Number(inserido[0].insertId);
+    await tx.insert(appointmentStatusHistory).values([
+      { appointmentId, previousStatus: null, nextStatus: "pending", handledBy: input.createdById, eventNote: "Nota de serviço registrada pela operação." },
+      { appointmentId, previousStatus: "pending", nextStatus: "scheduled", handledBy: input.createdById, eventNote: "Data combinada no registro da nota de serviço.", nextScheduledFor: input.scheduledFor },
+    ]);
+    return appointmentId;
+  });
+  return getAppointmentById(resultado);
+}
+
+/**
+ * Fornecedores aprovados, para a operação escolher ao registrar uma nota.
+ *
+ * Só o que a escolha precisa: quem é e qual o CNPJ. Uma nota de serviço é
+ * pendurada numa empresa que já existe no portal, e não num nome digitado à
+ * mão — do contrário a mesma empresa apareceria com três grafias no relatório.
+ */
+export async function listSupplierOptions() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({ id: users.id, name: users.name, companyName: users.companyName, companyCnpj: users.companyCnpj })
+    .from(users)
+    .where(and(eq(users.role, "supplier"), eq(users.accessStatus, "approved")))
+    .orderBy(users.companyName);
 }

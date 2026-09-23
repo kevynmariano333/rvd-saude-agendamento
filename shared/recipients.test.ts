@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filtroDeDestinatario, formatarCnpj, rotuloDoDestinatario, unidadePorCnpj } from "./recipients";
+import { cnpjsDoDestinatario, filtroDeDestinatario, formatarCnpj, gruposDeUnidades, rotuloDoDestinatario, unidadePorCnpj, valorDaUnidade, valorDoGrupo } from "./recipients";
 
 describe("destinatário da nota", () => {
   it("guarda o CNPJ no tooltip, que é o que o sistema realmente usa", () => {
@@ -47,5 +47,37 @@ describe("filtro de destinatário", () => {
     expect(filtroDeDestinatario("06.033")).toBe("06.033");
     expect(filtroDeDestinatario("12345678")).toBe("12345678");
     expect(filtroDeDestinatario("   ")).toBe("");
+  });
+});
+
+describe("seletor de destinatário por grupo", () => {
+  it("junta as unidades do mesmo cliente em um grupo só", () => {
+    const grupos = gruposDeUnidades();
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].grupo).toBe("Amil");
+    expect(grupos[0].unidades.map(unidade => unidade.sigla)).toEqual(["HSH", "MSH"]);
+  });
+
+  it("escolher o grupo filtra por todas as unidades dele", () => {
+    expect(cnpjsDoDestinatario(valorDoGrupo("Amil"))).toEqual(["06033403000113", "43293604002120"]);
+  });
+
+  it("escolher uma unidade filtra só por ela", () => {
+    expect(cnpjsDoDestinatario(valorDaUnidade("06.033.403/0001-13"))).toEqual(["06033403000113"]);
+  });
+
+  it("\"todos\" é ausência de filtro, não uma lista vazia — que não casaria com nada", () => {
+    expect(cnpjsDoDestinatario("todos")).toBeUndefined();
+    expect(cnpjsDoDestinatario("")).toBeUndefined();
+    expect(cnpjsDoDestinatario(null)).toBeUndefined();
+  });
+
+  it("um filtro antigo, digitado à mão, continua valendo", () => {
+    expect(cnpjsDoDestinatario("HSH")).toEqual(["06033403000113"]);
+    expect(cnpjsDoDestinatario("06.033")).toEqual(["06.033"]);
+  });
+
+  it("um grupo que não existe não vira lista vazia, que esconderia tudo", () => {
+    expect(cnpjsDoDestinatario(valorDoGrupo("Inexistente"))).toBeUndefined();
   });
 });
