@@ -936,6 +936,7 @@ export const appRouter = router({
      */
     estadoDoSistema: adminProcedure.query(async () => {
       const migracoes = await situacaoDasMigracoes();
+      const contas = politicaDasContasDeTeste();
       return {
         // O Railway injeta estas variáveis no container a cada deploy.
         commit: (process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 7) || null,
@@ -945,6 +946,10 @@ export const appRouter = router({
         migracoesRegistradas: migracoes.registradas,
         migracoesEsperadas: migracoes.esperadas,
         notasNoBanco: await contarAgendamentos(),
+        // O que o servidor que está no ar entende sobre as contas de teste.
+        // Sem isto, descobrir por que elas não entram é tentativa e erro na
+        // tela de login, que é o pior lugar para investigar qualquer coisa.
+        contasDeTeste: { ligadas: contas.ligadas, motivo: contas.ligadas ? null : contas.motivo },
       };
     }),
     /**

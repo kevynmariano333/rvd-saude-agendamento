@@ -35,6 +35,17 @@ export default function EstadoDoSistemaCard() {
           <span className="rounded-full bg-sunken px-4 py-2 text-xs font-bold text-rvd-plum">
             Notas no banco: {estado.data?.notasNoBanco ? estado.data.notasNoBanco.total : "—"}
           </span>
+          {/* O que o servidor no ar entende sobre as contas de teste. Descobrir
+              isso tentando entrar é o pior jeito: a tela de login não pode
+              dizer o motivo sem contar demais a quem não deveria saber. */}
+          {estado.data?.contasDeTeste && (
+            <span
+              title={estado.data.contasDeTeste.ligadas ? "Entram com a senha de SENHA_CONTAS_TESTE" : (estado.data.contasDeTeste.motivo ?? undefined)}
+              className={`rounded-full px-4 py-2 text-xs font-bold ${estado.data.contasDeTeste.ligadas ? "bg-state-go-bg text-state-go" : "bg-sunken text-rvd-plum"}`}
+            >
+              Contas de teste: {estado.data.contasDeTeste.ligadas ? "ligadas" : `desligadas — ${estado.data.contasDeTeste.motivo}`}
+            </span>
+          )}
         </div>
       </div>
     </section>
