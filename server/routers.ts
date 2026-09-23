@@ -81,8 +81,10 @@ import { createAppointmentValidationToken, readAppointmentValidationToken } from
 import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
+import { contarAgendamentos } from "./db";
 import { gerarBackup } from "./backup";
 import { decodificarCsv, importarAcervo } from "./agilizaImport";
+import { situacaoDasMigracoes } from "./_core/migrations";
 
 /** Uma importação de acervo por vez em todo o servidor. Ver a rota abaixo. */
 let importacaoEmCurso = false;
@@ -723,6 +725,27 @@ export const appRouter = router({
   manutencao: router({
     // Só administrador: o arquivo gerado contém a base inteira.
     gerarBackup: adminProcedure.mutation(async () => gerarBackup()),
+    /**
+     * O que está no ar, em números conferíveis.
+     *
+     * "Atualizei e não mudou nada" é impossível de responder de fora: não dá
+     * para saber se o deploy entrou, se o banco acompanhou, ou se a tela é
+     * outra. Aqui o próprio sistema diz qual commit está rodando, desde quando,
+     * e quantas migrações o banco tem — e aí a pergunta vira uma conferência.
+     */
+    estadoDoSistema: adminProcedure.query(async () => {
+      const migracoes = await situacaoDasMigracoes();
+      return {
+        // O Railway injeta estas variáveis no container a cada deploy.
+        commit: (process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 7) || null,
+        branch: process.env.RAILWAY_GIT_BRANCH || null,
+        mensagemDoCommit: (process.env.RAILWAY_GIT_COMMIT_MESSAGE || "").split("\n")[0] || null,
+        subidoHaSegundos: Math.round(process.uptime()),
+        migracoesRegistradas: migracoes.registradas,
+        migracoesEsperadas: migracoes.esperadas,
+        notasNoBanco: await contarAgendamentos(),
+      };
+    }),
     /**
      * Importa o acervo do sistema anterior a partir dos CSVs exportados de lá.
      *

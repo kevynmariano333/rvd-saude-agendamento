@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, like, lte, ne, or } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNull, like, lte, ne, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { customAlphabet, nanoid } from "nanoid";
 import {
@@ -1190,4 +1190,23 @@ export async function listBacklogReportRows() {
         .map(observacao => ({ authorName: observacao.authorName, body: observacao.body, createdAt: observacao.createdAt })),
     };
   });
+}
+
+/**
+ * Quantas notas existem, por situação.
+ *
+ * Serve à conferência do administrador: depois de um deploy ou de uma
+ * importação, é o número que diz se o que entrou está mesmo lá.
+ */
+export async function contarAgendamentos() {
+  const db = await getDb();
+  if (!db) return null;
+  const linhas = await db.select({ status: appointments.status, total: count() }).from(appointments).groupBy(appointments.status);
+  const porStatus: Record<string, number> = {};
+  let total = 0;
+  for (const linha of linhas) {
+    porStatus[linha.status] = Number(linha.total);
+    total += Number(linha.total);
+  }
+  return { total, porStatus };
 }

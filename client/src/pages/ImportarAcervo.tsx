@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { homePathFor, type PortalRole } from "@/lib/portal";
-import { AlertTriangle, CheckCircle2, Database, FileSpreadsheet, ListChecks, Play, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Database, FileSpreadsheet, GitCommitHorizontal, ListChecks, Play, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -119,6 +119,8 @@ export default function ImportarAcervo() {
   const [preparando, setPreparando] = useState(false);
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
 
+  const estado = trpc.manutencao.estadoDoSistema.useQuery(undefined, { enabled: ehAdmin, refetchInterval: 30000 });
+
   const importar = trpc.manutencao.importarAcervo.useMutation({
     onSuccess: dados => {
       setRelatorio(dados as Relatorio);
@@ -170,7 +172,34 @@ export default function ImportarAcervo() {
         </div>
       </section>
 
-      <div className="mt-7 grid gap-4 lg:grid-cols-3">
+      <section className="mt-7 rounded-3xl bg-sunken p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="rounded-xl bg-rvd-plum-pale p-2.5 text-rvd-plum"><GitCommitHorizontal className="size-5" /></span>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-ink-faint">O que está no ar agora</p>
+              <p className="mt-0.5 text-sm font-bold text-ink">
+                {estado.isLoading
+                  ? "Consultando o servidor..."
+                  : estado.data
+                    ? `Versão ${estado.data.commit ?? "não informada pelo provedor"}${estado.data.branch ? ` · ${estado.data.branch}` : ""} · no ar há ${Math.max(1, Math.round(estado.data.subidoHaSegundos / 60))} min`
+                    : "Não foi possível consultar."}
+              </p>
+              {estado.data?.mensagemDoCommit && <p className="mt-0.5 max-w-2xl truncate text-xs text-ink-soft">{estado.data.mensagemDoCommit}</p>}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-surface px-4 py-2 text-xs font-bold text-rvd-plum">
+              Migrações: {estado.data ? `${estado.data.migracoesRegistradas ?? "?"} de ${estado.data.migracoesEsperadas ?? "?"}` : "—"}
+            </span>
+            <span className="rounded-full bg-surface px-4 py-2 text-xs font-bold text-rvd-plum">
+              Notas no banco: {estado.data?.notasNoBanco ? estado.data.notasNoBanco.total : "—"}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <CampoDeArquivo id="csv-consolidado" titulo="Consolidado" obrigatorio descricao="Uma linha por nota: datas, status, pedido, fornecedor e destino." arquivo={consolidado} onChange={setConsolidado} />
         <CampoDeArquivo id="csv-detalhado" titulo="Detalhado" descricao="Uma linha por item: descrição, código do material no SAP, quantidade e valores." arquivo={detalhado} onChange={setDetalhado} />
         <CampoDeArquivo id="csv-backlog" titulo="Backlog" descricao="Uma linha por episódio: motivo, entrada, saída e comentários da equipe." arquivo={backlog} onChange={setBacklog} />
