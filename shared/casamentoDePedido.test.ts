@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { casarItensComPedido, type ItemDaNota, type ItemDoPedido } from "./casamentoDePedido";
+import { casarItensComPedido, pedidoDeCadaLinhaDaNota, type ItemDaNota, type ItemDoPedido } from "./casamentoDePedido";
 
 /** O caso real: a nota do coletor contra o pedido 4504872329. */
 const notaDoColetor: ItemDaNota[] = [
@@ -60,5 +60,43 @@ describe("casar a nota com o item do pedido", () => {
     expect(casarItensComPedido(incompleta, pedido4504872329)).toEqual([]);
     expect(casarItensComPedido(notaDoColetor, [])).toEqual([]);
     expect(casarItensComPedido([], pedido4504872329)).toEqual([]);
+  });
+});
+
+describe("o código SAP de cada linha da nota", () => {
+  const comCodigo: (ItemDoPedido & { sapCode: string | null })[] = [
+    { item: "10", description: "KIT BANHO LEITO INTIMO ISOTEX", orderedQuantity: "1500.000", unitPriceCents: 276, sapCode: "2000040957" },
+    { item: "20", description: "KIT BANHO LEITO ISOTEX", orderedQuantity: "1050.000", unitPriceCents: 400, sapCode: "2000040958" },
+  ];
+
+  it("dá a cada linha o código do material com o mesmo preço", () => {
+    const nota: ItemDaNota[] = [
+      { description: "KIT ISOTEX - LENCOS D-PANTENOL", quantity: 1500, unitPriceCents: 276 },
+      { description: "KIT ISOTEX - LENCOS DE PELE", quantity: 1050, unitPriceCents: 400 },
+    ];
+    expect(pedidoDeCadaLinhaDaNota(nota, comCodigo).map(item => item?.sapCode ?? null)).toEqual(["2000040957", "2000040958"]);
+  });
+
+  it("desempata pela quantidade quando dois itens têm o mesmo preço", () => {
+    const empate: (ItemDoPedido & { sapCode: string | null })[] = [
+      { item: "10", description: "A", orderedQuantity: "10.000", unitPriceCents: 500, sapCode: "111" },
+      { item: "20", description: "B", orderedQuantity: "30.000", unitPriceCents: 500, sapCode: "222" },
+    ];
+    const nota: ItemDaNota[] = [{ description: "QUALQUER", quantity: 30, unitPriceCents: 500 }];
+    expect(pedidoDeCadaLinhaDaNota(nota, empate)[0]?.sapCode).toBe("222");
+  });
+
+  it("não mapeia quando nem o preço nem a quantidade desempatam", () => {
+    const empate: (ItemDoPedido & { sapCode: string | null })[] = [
+      { item: "10", description: "A", orderedQuantity: "10.000", unitPriceCents: 500, sapCode: "111" },
+      { item: "20", description: "B", orderedQuantity: "10.000", unitPriceCents: 500, sapCode: "222" },
+    ];
+    const nota: ItemDaNota[] = [{ description: "QUALQUER", quantity: 10, unitPriceCents: 500 }];
+    expect(pedidoDeCadaLinhaDaNota(nota, empate)[0]).toBeNull();
+  });
+
+  it("não inventa código para a linha que não está no pedido", () => {
+    const nota: ItemDaNota[] = [{ description: "RHOPHYLAC 300 MCG", quantity: 5, unitPriceCents: 24330 }];
+    expect(pedidoDeCadaLinhaDaNota(nota, comCodigo)[0]).toBeNull();
   });
 });

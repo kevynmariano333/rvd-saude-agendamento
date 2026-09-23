@@ -99,3 +99,30 @@ export function casarItensComPedido<T extends ItemDoPedido>(itensDaNota: ItemDaN
   const porAmbos = casados.filter(casamento => casamento.motivo === "preço e quantidade");
   return porAmbos.length ? porAmbos : casados;
 }
+
+/**
+ * A linha do pedido que corresponde a cada linha da nota, uma a uma.
+ *
+ * O casamento acima responde "quais itens do pedido esta nota entrega". Este
+ * responde a pergunta da tela de itens: "de onde veio o código SAP desta
+ * linha". São perguntas diferentes — uma nota com dois materiais precisa de um
+ * código para cada linha, e não de um conjunto sem dono.
+ *
+ * Só o preço unitário identifica: é o valor negociado daquele material naquele
+ * pedido. Quando dois itens do pedido têm o mesmo preço, a quantidade desempata;
+ * se nem ela desempatar, a linha fica sem código. "Não mapeado" é honesto;
+ * escrever o código do material errado ao lado da descrição certa não é.
+ */
+export function pedidoDeCadaLinhaDaNota<T extends ItemDoPedido>(itensDaNota: ItemDaNota[], itensDoPedido: T[]): (T | null)[] {
+  return itensDaNota.map(daNota => {
+    const preco = comoNumero(daNota.unitPriceCents);
+    if (preco === null) return null;
+    const mesmoPreco = itensDoPedido.filter(doPedido => comoNumero(doPedido.unitPriceCents) === preco);
+    if (mesmoPreco.length === 1) return mesmoPreco[0];
+    if (!mesmoPreco.length) return null;
+    const quantidade = comoNumero(daNota.quantity);
+    if (quantidade === null) return null;
+    const mesmaQuantidade = mesmoPreco.filter(doPedido => comoNumero(doPedido.orderedQuantity) === quantidade);
+    return mesmaQuantidade.length === 1 ? mesmaQuantidade[0] : null;
+  });
+}
