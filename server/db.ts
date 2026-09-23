@@ -125,6 +125,9 @@ export async function touchUserSignIn(id: number) {
 }
 
 export type AppointmentFilters = {
+  /** Quantas linhas trazer. Sem isto a tela recebia a tabela inteira. */
+  limit?: number;
+  offset?: number;
   /** Owners whose appointments the caller may see; empty means no access. */
   supplierIds?: number[];
   supplierId?: number;
@@ -135,6 +138,13 @@ export type AppointmentFilters = {
   recipientCnpj?: string;
 };
 
+/**
+ * A lista das notas, sem o que só o detalhamento usa.
+ *
+ * Os itens de cada nota (invoiceItemsJson) ficaram de fora: eram 39% do peso da
+ * resposta, e nenhuma tela de lista mostra item nenhum. Quem abre uma nota
+ * busca a nota inteira por id, uma de cada vez.
+ */
 export async function listAppointments(filters: AppointmentFilters = {}) {
   const db = await getDb();
   if (!db) return [];
@@ -184,7 +194,6 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       recipientCnpj: appointments.recipientCnpj,
       invoiceIssuedAt: appointments.invoiceIssuedAt,
       invoiceTotalCents: appointments.invoiceTotalCents,
-      invoiceItemsJson: appointments.invoiceItemsJson,
       invoiceVolumeCount: appointments.invoiceVolumeCount,
       receivedAt: appointments.receivedAt,
       miroNumber: appointments.miroNumber,
@@ -204,7 +213,31 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
     .innerJoin(users, eq(appointments.supplierId, users.id));
 
   const filtered = conditions.length ? query.where(and(...conditions)) : query;
-  return filtered.orderBy(desc(appointments.scheduledFor));
+  const ordenada = filtered.orderBy(desc(appointments.scheduledFor));
+  return filters.limit ? ordenada.limit(filters.limit).offset(filters.offset ?? 0) : ordenada;
+}
+
+/**
+ * Quantas notas existem em cada situação, contadas no banco.
+ *
+ * A tela do operador contava no navegador, e para isso baixava a tabela inteira
+ * só para saber que existem 3.738 concluídas. Um GROUP BY responde o mesmo em
+ * alguns bytes.
+ */
+export async function countAppointmentsByStatus(filters: AppointmentFilters = {}) {
+  const db = await getDb();
+  if (!db) return {} as Record<string, number>;
+  const conditions = [];
+  if (filters.supplierId) conditions.push(eq(appointments.supplierId, filters.supplierId));
+  if (filters.supplierIds) {
+    if (!filters.supplierIds.length) return {} as Record<string, number>;
+    conditions.push(inArray(appointments.supplierId, filters.supplierIds));
+  }
+  const consulta = db.select({ status: appointments.status, total: count() }).from(appointments);
+  const linhas = await (conditions.length ? consulta.where(and(...conditions)) : consulta).groupBy(appointments.status);
+  const porStatus: Record<string, number> = {};
+  for (const linha of linhas) porStatus[linha.status] = Number(linha.total);
+  return porStatus;
 }
 
 export async function getAppointmentById(id: number) {
@@ -1209,4 +1242,73 @@ export async function contarAgendamentos() {
     total += Number(linha.total);
   }
   return { total, porStatus };
+}
+
+/**
+ * As notas do relatório: só as colunas que ele mostra, já filtradas no banco.
+ *
+ * A tela baixava a tabela inteira e filtrava no navegador. Com o acervo dentro
+ * do sistema isso virou treze megabytes por abertura. Aqui o banco filtra e
+ * devolve quinze campos curtos; o total diz quantas ficaram fora do teto.
+ */
+export async function listReportRows(filtros: {
+  scheduledStart?: string;
+  scheduledEnd?: string;
+  receivedStart?: string;
+  receivedEnd?: string;
+  status?: AppointmentStatus;
+  supplier?: string;
+  recipientCnpj?: string;
+  limite: number;
+}) {
+  const db = await getDb();
+  if (!db) return { linhas: [], total: 0 };
+
+  const condicoes = [];
+  if (filtros.status) condicoes.push(eq(appointments.status, filtros.status));
+  const inicioAgenda = getSaoPauloDayRange(filtros.scheduledStart ?? "");
+  const fimAgenda = getSaoPauloDayRange(filtros.scheduledEnd ?? "");
+  if (inicioAgenda) condicoes.push(gte(appointments.scheduledFor, inicioAgenda.start));
+  if (fimAgenda) condicoes.push(lte(appointments.scheduledFor, fimAgenda.end));
+  const inicioRecebimento = getSaoPauloDayRange(filtros.receivedStart ?? "");
+  const fimRecebimento = getSaoPauloDayRange(filtros.receivedEnd ?? "");
+  if (inicioRecebimento) condicoes.push(gte(appointments.receivedAt, inicioRecebimento.start));
+  if (fimRecebimento) condicoes.push(lte(appointments.receivedAt, fimRecebimento.end));
+  if (filtros.recipientCnpj) condicoes.push(like(appointments.recipientCnpj, `%${normalizeCnpj(filtros.recipientCnpj)}%`));
+  if (filtros.supplier) {
+    // O campo promete "nome ou CNPJ": o texto vai contra os dois nomes, e os
+    // dígitos contra os dois CNPJs.
+    const texto = `%${filtros.supplier.trim()}%`;
+    const digitos = normalizeCnpj(filtros.supplier);
+    const alternativas = [like(users.name, texto), like(appointments.invoiceSupplierName, texto)];
+    if (digitos) alternativas.push(like(appointments.invoiceSupplierCnpj, `%${digitos}%`), like(users.companyCnpj, `%${digitos}%`));
+    condicoes.push(or(...alternativas));
+  }
+
+  const onde = condicoes.length ? and(...condicoes) : undefined;
+  const colunas = {
+    id: appointments.id,
+    invoiceNumber: appointments.invoiceNumber,
+    supplierName: users.name,
+    invoiceSupplierName: appointments.invoiceSupplierName,
+    invoiceSupplierCnpj: appointments.invoiceSupplierCnpj,
+    supplierCnpj: users.companyCnpj,
+    recipientCnpj: appointments.recipientCnpj,
+    purchaseOrder: appointments.purchaseOrder,
+    miroNumber: appointments.miroNumber,
+    invoiceVolumeCount: appointments.invoiceVolumeCount,
+    invoiceTotalCents: appointments.invoiceTotalCents,
+    serviceType: appointments.serviceType,
+    status: appointments.status,
+    scheduledFor: appointments.scheduledFor,
+    receivedAt: appointments.receivedAt,
+  };
+
+  const base = db.select(colunas).from(appointments).innerJoin(users, eq(appointments.supplierId, users.id));
+  const contagem = db.select({ total: count() }).from(appointments).innerJoin(users, eq(appointments.supplierId, users.id));
+  const [linhas, totais] = await Promise.all([
+    (onde ? base.where(onde) : base).orderBy(desc(appointments.scheduledFor)).limit(filtros.limite),
+    onde ? contagem.where(onde) : contagem,
+  ]);
+  return { linhas, total: Number(totais[0]?.total ?? 0) };
 }

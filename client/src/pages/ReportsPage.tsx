@@ -2,7 +2,8 @@ import { homePathFor, isPortalSchedulingDesk, type PortalRole } from "@/lib/port
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { COLUNAS_DO_BACKLOG, filterBacklogReport, filterReportAppointments, reportColumns, toBacklogReportRows, toConsolidatedReportRows, toDetailedReportRows, type ReportFilters } from "@/lib/reports";
+import { COLUNAS_DO_BACKLOG, filterBacklogReport, reportColumns, toBacklogReportRows, toConsolidatedReportRows, toDetailedReportRows, type ReportFilters } from "@/lib/reports";
+import { filtroDeDestinatario } from "@shared/recipients";
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, CalendarRange, ClipboardList, Download, FileSpreadsheet, Filter, RefreshCw, Search, TableProperties, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -18,7 +19,6 @@ const statusOptions = [
 export default function ReportsPage() {
   const [location, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
-  const appointments = trpc.appointments.list.useQuery();
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
   const [filters, setFilters] = useState<ReportFilters>(initialFilters);
   // A visão vem da rota: "Relatórios" é um menu com duas consultas, e cada uma
@@ -27,9 +27,24 @@ export default function ReportsPage() {
   const ehBacklog = location.startsWith("/operador/relatorios/backlog");
   const [visaoDeNotas, setVisaoDeNotas] = useState<"consolidated" | "detailed">("consolidated");
   const view: "consolidated" | "detailed" | "backlog" = ehBacklog ? "backlog" : visaoDeNotas;
+  // O servidor filtra e devolve só as colunas do relatório. Antes a tela
+  // baixava a tabela inteira a cada abertura para filtrar no navegador.
+  const consultaDeNotas = useMemo(() => ({
+    scheduledStart: filters.scheduledStart || undefined,
+    scheduledEnd: filters.scheduledEnd || undefined,
+    receivedStart: filters.receivedStart || undefined,
+    receivedEnd: filters.receivedEnd || undefined,
+    status: filters.status && filters.status !== "all" ? filters.status : undefined,
+    supplier: filters.supplier?.trim() || undefined,
+    recipientCnpj: filters.recipientCnpj ? filtroDeDestinatario(filters.recipientCnpj) : undefined,
+  }), [filters]);
+  const appointments = trpc.reports.notas.useQuery(consultaDeNotas, { enabled: !ehBacklog, placeholderData: anterior => anterior });
   const backlogReport = trpc.reports.backlog.useQuery(undefined, { enabled: ehBacklog });
   useEffect(() => { if (auth.data && !isPortalSchedulingDesk(auth.data.role as PortalRole)) setLocation(homePathFor(auth.data.role as PortalRole)); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
-  const filtered = useMemo(() => filterReportAppointments(appointments.data ?? [], filters), [appointments.data, filters]);
+  // Já vem filtrado do banco; a tela só conta o que chegou e avisa quando o
+  // teto cortou alguma coisa.
+  const filtered = useMemo(() => appointments.data?.linhas ?? [], [appointments.data]);
+  const totalNoBanco = appointments.data?.total ?? 0;
   const backlogFiltrado = useMemo(() => filterBacklogReport(backlogReport.data ?? [], filters), [backlogReport.data, filters]);
   const rows = useMemo<Record<string, string>[]>(() => {
     if (view === "backlog") return toBacklogReportRows(backlogFiltrado);
@@ -37,7 +52,7 @@ export default function ReportsPage() {
   }, [backlogFiltrado, filtered, view]);
   const colunas = useMemo(() => (view === "backlog" ? COLUNAS_DO_BACKLOG : reportColumns(view)), [view]);
   const tituloDaVisao = view === "backlog" ? "Backlog" : view === "detailed" ? "Detalhado" : "Consolidado";
-  const carregando = view === "backlog" ? backlogReport.isLoading : appointments.isLoading;
+  const carregando = view === "backlog" ? backlogReport.isLoading : appointments.isFetching && !appointments.data;
   const setFilter = <K extends keyof ReportFilters>(key: K, value: ReportFilters[K]) => setFilters(current => ({ ...current, [key]: value }));
   const exportExcel = () => {
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -55,7 +70,7 @@ export default function ReportsPage() {
 
     <section className="mt-7 rounded-3xl bg-sunken p-5 sm:p-7"><div className="flex items-center gap-2"><Filter className="size-5 text-rvd-plum" /><p className="text-sm font-bold uppercase tracking-[0.14em] text-ink-faint">Filtros</p></div><div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3"><FilterDate label={view === "backlog" ? "Entrou em backlog: início" : "Agendamento: início"} value={filters.scheduledStart || ""} onChange={value => setFilter("scheduledStart", value)} /><FilterDate label={view === "backlog" ? "Entrou em backlog: fim" : "Agendamento: fim"} value={filters.scheduledEnd || ""} onChange={value => setFilter("scheduledEnd", value)} /><FilterSelect label="Status" value={filters.status || "all"} onChange={value => setFilter("status", value as ReportFilters["status"])} options={statusOptions} /><FilterText label="Fornecedor (nome ou CNPJ)" value={filters.supplier || ""} onChange={value => setFilter("supplier", value)} placeholder="Buscar fornecedor..." /><FilterText label="Destinatário" value={filters.recipientCnpj || ""} onChange={value => setFilter("recipientCnpj", value)} placeholder="HSH, MSH ou o CNPJ" /><div className="flex items-end"><Button onClick={() => setFilters(initialFilters)} variant="ghost" className="h-11 text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Limpar filtros</Button></div></div></section>
 
-    <section className="mt-7 overflow-hidden panel"><div className="flex flex-col gap-3 border-b border-line px-5 py-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold uppercase tracking-[0.14em] text-ink-faint">{tituloDaVisao}</p><h2 className="mt-1 font-display text-xl font-extrabold text-ink">Notas e recebimentos</h2></div><span className="inline-flex w-fit items-center gap-2 rounded-full bg-rvd-plum-pale px-3 py-1.5 text-xs font-bold text-rvd-plum"><Truck className="size-3.5" />{rows.length} notas encontradas</span></div>{carregando ? <div className="py-16 text-center font-bold text-rvd-plum">Carregando {tituloDaVisao.toLowerCase()}...</div> : <div className="overflow-x-auto"><table className="w-full text-left"><thead className="bg-sunken"><tr className="text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{colunas.map(coluna => <th key={coluna} className="px-4 py-4 align-bottom">{coluna}</th>)}</tr></thead><tbody>{rows.length ? rows.map((linha, indice) => <tr key={`${linha["Nota fiscal"]}-${indice}`} className="border-t border-line text-sm text-ink-soft">{colunas.map(coluna => <td key={coluna} className="px-4 py-4"><ReportCell coluna={coluna} valor={linha[coluna]} /></td>)}</tr>) : <tr><td colSpan={colunas.length} className="px-5 py-16 text-center"><Search className="mx-auto size-6 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhuma nota encontrada</p><p className="mt-1 text-sm text-ink-soft">Ajuste os filtros para consultar o relatório.</p></td></tr>}</tbody></table></div>}</section>
+    <section className="mt-7 overflow-hidden panel"><div className="flex flex-col gap-3 border-b border-line px-5 py-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold uppercase tracking-[0.14em] text-ink-faint">{tituloDaVisao}</p><h2 className="mt-1 font-display text-xl font-extrabold text-ink">Notas e recebimentos</h2></div><span className="inline-flex w-fit items-center gap-2 rounded-full bg-rvd-plum-pale px-3 py-1.5 text-xs font-bold text-rvd-plum"><Truck className="size-3.5" />{view !== "backlog" && totalNoBanco > rows.length ? `${rows.length} de ${totalNoBanco} notas` : `${rows.length} notas encontradas`}</span></div>{carregando ? <div className="py-16 text-center font-bold text-rvd-plum">Carregando {tituloDaVisao.toLowerCase()}...</div> : <div className="overflow-x-auto"><table className="w-full text-left"><thead className="bg-sunken"><tr className="text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{colunas.map(coluna => <th key={coluna} className="px-4 py-4 align-bottom">{coluna}</th>)}</tr></thead><tbody>{rows.length ? rows.map((linha, indice) => <tr key={`${linha["Nota fiscal"]}-${indice}`} className="border-t border-line text-sm text-ink-soft">{colunas.map(coluna => <td key={coluna} className="px-4 py-4"><ReportCell coluna={coluna} valor={linha[coluna]} /></td>)}</tr>) : <tr><td colSpan={colunas.length} className="px-5 py-16 text-center"><Search className="mx-auto size-6 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhuma nota encontrada</p><p className="mt-1 text-sm text-ink-soft">Ajuste os filtros para consultar o relatório.</p></td></tr>}</tbody></table></div>}</section>
   </PortalLayout>;
 }
 

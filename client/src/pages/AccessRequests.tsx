@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import PortalLayout from "./PortalLayout";
 import BackupCard from "../components/BackupCard";
+import EstadoDoSistemaCard from "../components/EstadoDoSistemaCard";
 
 type PendingRequest = {
   id: number;
@@ -220,7 +221,8 @@ export default function AccessRequests() {
           )}
         </Panel>
 
-        <BackupCard />
+        <EstadoDoSistemaCard />
+      <BackupCard />
       </div>
     </PortalLayout>
   );

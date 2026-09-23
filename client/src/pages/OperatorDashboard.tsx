@@ -18,7 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import AppointmentDateHistoryDialog from "../components/AppointmentDateHistoryDialog";
-import AppointmentChatDialog from "../components/AppointmentChatDialog";
+import AppointmentChatDialog, { type ChatAppointment } from "../components/AppointmentChatDialog";
 import AppointmentDetailsDialog, { type AppointmentDetail } from "../components/AppointmentDetailsDialog";
 import LoadingTruck from "../components/LoadingTruck";
 import UnscheduledReceiptDialog from "../components/UnscheduledReceiptDialog";
@@ -36,6 +36,9 @@ function todayValue() { return formatSaoPauloDateKey(); }
 function tomorrowValue() { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); return formatSaoPauloDateKey(tomorrow); }
 function datePart(value: Date | string) { return new Date(value).toLocaleDateString("en-CA"); }
 
+/** Quantas linhas a tabela pede por vez. */
+const PAGINA = 100;
+
 export default function OperatorDashboard() {
   const [location, setLocation] = useLocation();
   const utils = trpc.useUtils();
@@ -52,7 +55,9 @@ export default function OperatorDashboard() {
   const [details, setDetails] = useState<Appointment | null>(null);
   const [dateHistory, setDateHistory] = useState<Appointment | null>(null);
   const [preNoteTarget, setPreNoteTarget] = useState<Appointment | null>(null);
-  const [chatTarget, setChatTarget] = useState<Appointment | null>(null);
+  // A conversa é aberta por uma linha da lista ou por link direto, e o que
+  // ela precisa cabe em quatro campos.
+  const [chatTarget, setChatTarget] = useState<ChatAppointment | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(() => new URLSearchParams(window.location.search).get("modal") === "receipt");
   const [scheduleDate, setScheduleDate] = useState(todayValue());
   const [scheduleTime, setScheduleTime] = useState("09:00");
@@ -67,9 +72,17 @@ export default function OperatorDashboard() {
   const [suggestTime, setSuggestTime] = useState("");
   const [suggestNotes, setSuggestNotes] = useState("");
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
-  const listInput = useMemo(() => ({ date: date || dailyFilterDate || tomorrowFilterDate || undefined, status: activeStatus === "all" ? undefined : activeStatus, invoiceNumber: invoiceNumber || undefined, supplierName: supplierName || undefined, recipientCnpj: filtroDeDestinatario(recipientCnpj) || undefined }), [activeStatus, dailyFilterDate, date, invoiceNumber, recipientCnpj, supplierName, tomorrowFilterDate]);
+  // A tabela mostra um punhado de linhas por vez. Sem teto, cada abertura
+  // trazia as milhares de notas do acervo para exibir as primeiras cinquenta.
+  const [limite, setLimite] = useState(PAGINA);
+  const listInput = useMemo(() => ({ limit: limite, date: date || dailyFilterDate || tomorrowFilterDate || undefined, status: activeStatus === "all" ? undefined : activeStatus, invoiceNumber: invoiceNumber || undefined, supplierName: supplierName || undefined, recipientCnpj: filtroDeDestinatario(recipientCnpj) || undefined }), [activeStatus, dailyFilterDate, date, invoiceNumber, limite, recipientCnpj, supplierName, tomorrowFilterDate]);
+  // Trocar de aba ou de filtro recomeça a contagem: a página 3 de uma busca não
+  // é a página 3 da seguinte.
+  useEffect(() => { setLimite(PAGINA); }, [activeStatus, dailyFilterDate, date, invoiceNumber, recipientCnpj, supplierName, tomorrowFilterDate]);
   const agenda = trpc.appointments.list.useQuery(listInput);
-  const allAgenda = trpc.appointments.list.useQuery();
+  // As contagens das abas vêm contadas do banco. Antes a tela baixava a tabela
+  // inteira só para exibir sete números.
+  const contagens = trpc.appointments.counts.useQuery();
   const activeSupplier = trpc.appointments.activeForSupplier.useQuery({ supplierId: selected?.supplierId ?? 1 }, { enabled: Boolean(selected) });
   const pendingSuggestions = trpc.suggestions.list.useQuery({ appointmentId: selected?.id ?? 1, status: "pending" }, { enabled: Boolean(selected) });
   const updateStatus = trpc.appointments.updateStatus.useMutation({ onSuccess: () => { toast.success("Status atualizado."); setFinalizeTarget(null); utils.appointments.list.invalidate(); utils.calendar.list.invalidate(); }, onError: error => toast.error(error.message) });
@@ -79,17 +92,26 @@ export default function OperatorDashboard() {
   const confirmPreNote = trpc.appointments.confirmPreNote.useMutation({ onSuccess: () => { toast.success("Pré-nota confirmada com sucesso."); setPreNoteTarget(null); utils.appointments.list.invalidate(); }, onError: error => toast.error(error.message) });
 
   useEffect(() => { if (auth.data && !isPortalSchedulingDesk(auth.data.role as PortalRole)) setLocation(homePathFor(auth.data.role as PortalRole)); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
+  // Abrir a conversa por link (?chat=123) busca aquela nota, e não a tabela
+  // inteira para procurar dentro dela.
+  const notaDoLink = Number(new URLSearchParams(window.location.search).get("chat")) || 0;
+  const notaPedidaPeloLink = trpc.appointments.byId.useQuery({ appointmentId: notaDoLink }, { enabled: notaDoLink > 0 });
   useEffect(() => {
-    const requestedId = Number(new URLSearchParams(window.location.search).get("chat"));
-    if (!requestedId) return;
-    const appointment = allAgenda.data?.find(item => item.id === requestedId);
-    if (appointment) setChatTarget(appointment);
-  }, [allAgenda.data, location]);
+    const nota = notaPedidaPeloLink.data;
+    if (!nota) return;
+    setChatTarget({ id: nota.id, invoiceNumber: nota.invoiceNumber, serviceType: nota.serviceType, invoiceSupplierName: nota.invoiceSupplierName });
+  }, [notaPedidaPeloLink.data, location]);
   const shortcutDate = dailyFilterDate || tomorrowFilterDate;
   // O backlog é o que travou e precisa voltar para a fila. Continua fora das
   // outras abas para não inflar a contagem do dia, mas agora tem a sua.
   const visibleAgenda = useMemo(() => agenda.data?.filter(item => (activeStatus === "backlog" || item.status !== "backlog") && (!shortcutDate || isScheduledForDate(item.scheduledFor, shortcutDate))) ?? [], [activeStatus, agenda.data, shortcutDate]);
-  const counters = useMemo(() => ({ all: allAgenda.data?.filter(item => item.status !== "backlog").length ?? 0, pending: allAgenda.data?.filter(item => item.status === "pending").length ?? 0, scheduled: allAgenda.data?.filter(item => item.status === "scheduled").length ?? 0, received: allAgenda.data?.filter(item => item.status === "received").length ?? 0, completed: allAgenda.data?.filter(item => item.status === "completed").length ?? 0, backlog: allAgenda.data?.filter(item => item.status === "backlog").length ?? 0, rejected: allAgenda.data?.filter(item => item.status === "rejected").length ?? 0 }), [allAgenda.data]);
+  const counters = useMemo(() => {
+    const porStatus: Record<string, number> = contagens.data ?? {};
+    const de = (status: string) => porStatus[status] ?? 0;
+    // "Todos" é tudo menos o backlog, que tem aba e fila próprias.
+    const total = Object.entries(porStatus).reduce((soma, [status, quantidade]) => (status === "backlog" ? soma : soma + quantidade), 0);
+    return { all: total, pending: de("pending"), scheduled: de("scheduled"), received: de("received"), completed: de("completed"), backlog: de("backlog"), rejected: de("rejected") };
+  }, [contagens.data]);
   const isTodayFilterApplied = Boolean(dailyFilterDate);
   const isTomorrowFilterApplied = Boolean(tomorrowFilterDate);
   const dayShortcut: "todos" | "hoje" | "amanha" = isTodayFilterApplied
@@ -145,7 +167,7 @@ export default function OperatorDashboard() {
       {filtersOpen && <div className="mb-6 panel p-5"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><FilterField label="Número da nota" value={invoiceNumber} onChange={setInvoiceNumber} placeholder="NF-e..." /><FilterField label="Nome do fornecedor" value={supplierName} onChange={setSupplierName} placeholder="Parte do nome..." /><FilterField label="Destinatário" value={recipientCnpj} onChange={setRecipientCnpj} placeholder="HSH, MSH ou o CNPJ" /><div><Label className="text-xs font-bold uppercase tracking-wide text-rvd-plum">Data inicial</Label><Input type="date" value={date} onChange={event => { setDate(event.target.value); setDailyFilterDate(null); setTomorrowFilterDate(null); }} className="mt-2 border-line text-rvd-plum" /></div></div><Button onClick={clearFilters} variant="ghost" className="mt-5 px-0 text-rvd-plum hover:bg-transparent hover:text-rvd-plum"><X className="size-4" />Limpar filtros</Button></div>}
       <div className="flex flex-wrap justify-center gap-2">{tabs.map(tab => { const Icon = tab.icon; const count = counters[tab.id]; const active = activeStatus === tab.id; const showsCounter = tab.id === "pending" || tab.id === "scheduled"; return <button key={tab.id} onClick={() => setActiveStatus(tab.id)} className={`relative inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${active ? "border-rvd-plum bg-brand text-white" : "border-line bg-surface text-rvd-plum hover:bg-rvd-plum-pale"}`}><Icon className="size-3.5" />{tab.label}{showsCounter && count > 0 && <span className={`-right-2 -top-2 absolute flex size-5 items-center justify-center rounded-full text-[10px] font-extrabold ${active ? "bg-rvd-blue text-rvd-plum" : "bg-brand text-white"}`}>{count}</span>}</button>; })}</div>
     </section>
-      <section className="mt-6 overflow-hidden panel"><div className="overflow-x-auto"><table className="w-full min-w-[1060px] text-left"><thead className="bg-sunken"><tr className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint"><th className="px-3 py-4">Status</th><th className="px-3 py-4">Fornecedor</th><th className="px-3 py-4">Destinatário</th><th className="px-3 py-4">Nota fiscal</th><th className="px-3 py-4">Pedido</th><th className="px-3 py-4">{activeStatus === "rejected" ? "Motivo da recusa" : activeStatus === "pending" ? "Confirmação" : activeStatus === "received" ? "Recebimento" : "Agendamento"}</th><th className="px-3 py-4 text-right">Ações</th></tr></thead><tbody>{agenda.isLoading ? <tr><td colSpan={7} className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando agendamentos...</td></tr> : visibleAgenda.length ? visibleAgenda.map(item => <AppointmentRow key={item.id} item={item} activeStatus={activeStatus} canConfirm={podeConfirmar} onFinalize={() => openFinalize(item)} onDetails={() => setDetails(item)} onHistory={() => setDateHistory(item)} onChat={() => setChatTarget(item)} onPreNote={() => item.preNoteConfirmedAt ? toast.info("Pré-nota já confirmada.") : setPreNoteTarget(item)} onSchedule={() => openSchedule(item)} onUpdate={(status, reason) => updateStatus.mutate({ appointmentId: item.id, status, rejectionReason: reason })} onRescue={() => rescue.mutate({ appointmentId: item.id })} />) : <tr><td colSpan={7} className="px-4 py-16 text-center"><Search className="mx-auto size-7 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhum agendamento encontrado</p><p className="mt-1 text-sm text-ink-soft">Ajuste os filtros ou selecione outra aba de status.</p></td></tr>}</tbody></table></div></section>
+      <section className="mt-6 overflow-hidden panel"><div className="overflow-x-auto"><table className="w-full min-w-[1060px] text-left"><thead className="bg-sunken"><tr className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint"><th className="px-3 py-4">Status</th><th className="px-3 py-4">Fornecedor</th><th className="px-3 py-4">Destinatário</th><th className="px-3 py-4">Nota fiscal</th><th className="px-3 py-4">Pedido</th><th className="px-3 py-4">{activeStatus === "rejected" ? "Motivo da recusa" : activeStatus === "pending" ? "Confirmação" : activeStatus === "received" ? "Recebimento" : "Agendamento"}</th><th className="px-3 py-4 text-right">Ações</th></tr></thead><tbody>{agenda.isLoading ? <tr><td colSpan={7} className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando agendamentos...</td></tr> : visibleAgenda.length ? visibleAgenda.map(item => <AppointmentRow key={item.id} item={item} activeStatus={activeStatus} canConfirm={podeConfirmar} onFinalize={() => openFinalize(item)} onDetails={() => setDetails(item)} onHistory={() => setDateHistory(item)} onChat={() => setChatTarget(item)} onPreNote={() => item.preNoteConfirmedAt ? toast.info("Pré-nota já confirmada.") : setPreNoteTarget(item)} onSchedule={() => openSchedule(item)} onUpdate={(status, reason) => updateStatus.mutate({ appointmentId: item.id, status, rejectionReason: reason })} onRescue={() => rescue.mutate({ appointmentId: item.id })} />) : <tr><td colSpan={7} className="px-4 py-16 text-center"><Search className="mx-auto size-7 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhum agendamento encontrado</p><p className="mt-1 text-sm text-ink-soft">Ajuste os filtros ou selecione outra aba de status.</p></td></tr>}</tbody></table></div>{visibleAgenda.length >= limite && <div className="border-t border-line px-4 py-4 text-center"><Button onClick={() => setLimite(atual => atual + PAGINA)} variant="ghost" className="h-10 rounded-xl border border-line font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Carregar mais {PAGINA} · mostrando {visibleAgenda.length} de {counters[activeStatus === "all" ? "all" : activeStatus] ?? visibleAgenda.length}</Button></div>}</section>
     <FinalizeDialog item={finalizeTarget} open={Boolean(finalizeTarget)} onOpenChange={open => !open && setFinalizeTarget(null)} mode={finalizeMode} onMode={setFinalizeMode} miro={miro} onMiro={setMiro} note={finalizeNote} onNote={setFinalizeNote} reason={finalizeReason} onReason={setFinalizeReason} onConfirm={confirmFinalize} loading={updateStatus.isPending} />
     <SuggestDialog item={suggestTarget} open={Boolean(suggestTarget)} onOpenChange={open => !open && setSuggestTarget(null)} date={suggestDate} time={suggestTime} notes={suggestNotes} onDate={setSuggestDate} onTime={setSuggestTime} onNotes={setSuggestNotes} onConfirm={confirmSuggestion} loading={createSuggestion.isPending} />
     <ScheduleDialog item={selected} open={Boolean(selected)} onOpenChange={open => !open && setSelected(null)} date={scheduleDate} time={scheduleTime} onDate={setScheduleDate} onTime={setScheduleTime} onConfirm={confirmSchedule} loading={schedule.isPending} activeAppointments={activeSupplier.data?.filter(item => item.id !== selected?.id) ?? []} suggestions={pendingSuggestions.data ?? []} acceptedSuggestionId={acceptedSuggestionId} onAcceptSuggestion={acceptSuggestion} />

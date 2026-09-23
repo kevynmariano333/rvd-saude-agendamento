@@ -82,6 +82,7 @@ import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, re
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
+import { countAppointmentsByStatus, listReportRows } from "./db";
 import { gerarBackup } from "./backup";
 import { decodificarCsv, importarAcervo } from "./agilizaImport";
 import { situacaoDasMigracoes } from "./_core/migrations";
@@ -430,12 +431,34 @@ export const appRouter = router({
         return { valid: true as const, invoiceNumber: appointment.invoiceNumber, scheduledFor };
       }),
     list: protectedProcedure
-      .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional() }).optional())
+      .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional(), limit: z.number().int().positive().max(500).optional(), offset: z.number().int().min(0).optional() }).optional())
       .query(async ({ ctx, input }) => {
-        const filters: AppointmentFilters = { date: input?.date, status: input?.status as AppointmentStatus | undefined, invoiceNumber: input?.invoiceNumber, supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj };
+        const filters: AppointmentFilters = { limit: input?.limit, offset: input?.offset, date: input?.date, status: input?.status as AppointmentStatus | undefined, invoiceNumber: input?.invoiceNumber, supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj };
         if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
         return listAppointments(filters);
       }),
+    /**
+     * Uma nota inteira, para quem abriu o detalhamento.
+     *
+     * A lista deixou de carregar os itens de cada nota — eram 39% do peso da
+     * resposta para um dado que só aparece quando alguém abre uma nota.
+     */
+    byId: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+        if (!isSchedulingDesk(ctx.user.role) && !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar este agendamento." });
+        }
+        return appointment;
+      }),
+    /** Quantas notas há em cada situação, contadas no banco e não no navegador. */
+    counts: protectedProcedure.query(async ({ ctx }) => {
+      const filters: AppointmentFilters = {};
+      if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
+      return countAppointmentsByStatus(filters);
+    }),
     history: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
@@ -821,6 +844,39 @@ export const appRouter = router({
     notifications: protectedProcedure.query(({ ctx }) => listUnreadAppointmentMessages({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
   }),
   reports: router({
+    /**
+     * As notas do relatório, filtradas no banco.
+     *
+     * O teto existe para a tela não receber a tabela inteira quando alguém
+     * limpa os filtros; o total diz quantas ficaram de fora, e a tela mostra
+     * isso em vez de fingir que são todas.
+     */
+    notas: protectedProcedure
+      .input(
+        z.object({
+          scheduledStart: z.string().optional(),
+          scheduledEnd: z.string().optional(),
+          receivedStart: z.string().optional(),
+          receivedEnd: z.string().optional(),
+          status: statusSchema.optional(),
+          supplier: z.string().max(255).optional(),
+          recipientCnpj: z.string().max(40).optional(),
+          limite: z.number().int().positive().max(5000).optional(),
+        }).optional()
+      )
+      .query(async ({ ctx, input }) => {
+        assertSchedulingDesk(ctx.user.role);
+        return listReportRows({
+          scheduledStart: input?.scheduledStart,
+          scheduledEnd: input?.scheduledEnd,
+          receivedStart: input?.receivedStart,
+          receivedEnd: input?.receivedEnd,
+          status: input?.status as AppointmentStatus | undefined,
+          supplier: input?.supplier,
+          recipientCnpj: input?.recipientCnpj,
+          limite: input?.limite ?? 3000,
+        });
+      }),
     // O relatório de backlog junta o que está na nota com o que só existe no
     // histórico — quando entrou, quando saiu — e com as observações internas.
     // Por isso é montado aqui, e não a partir da lista de agendamentos.

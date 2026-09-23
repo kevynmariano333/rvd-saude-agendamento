@@ -1,5 +1,5 @@
 import { type PortalStatus, statusCopy } from "./portal";
-import { apenasDigitos, filtroDeDestinatario, formatarCnpj, unidadePorCnpj } from "@shared/recipients";
+import { apenasDigitos, formatarCnpj, unidadePorCnpj } from "@shared/recipients";
 import { rotuloDoMotivo } from "@shared/backlogReasons";
 
 export type ReportAppointment = {
@@ -59,27 +59,6 @@ function isWithinDateRange(value: Date | string | null, start?: string, end?: st
   if (start && date < new Date(`${start}T00:00:00`)) return false;
   if (end && date > new Date(`${end}T23:59:59.999`)) return false;
   return true;
-}
-
-export function filterReportAppointments(appointments: ReportAppointment[], filters: ReportFilters) {
-  const busca = filters.supplier?.trim().toLocaleLowerCase() ?? "";
-  // Um CNPJ digitado vem com ponto e barra; o que está guardado, não.
-  const buscaDigitos = apenasDigitos(busca);
-  // O filtro de destinatário aceita a sigla da unidade, como na tela de agenda.
-  const destinatario = filters.recipientCnpj ? apenasDigitos(filtroDeDestinatario(filters.recipientCnpj)) : "";
-  return appointments.filter(item => {
-    if (filters.status && filters.status !== "all" && item.status !== filters.status) return false;
-    if (!isWithinDateRange(item.scheduledFor, filters.scheduledStart, filters.scheduledEnd)) return false;
-    if (!isWithinDateRange(item.receivedAt, filters.receivedStart, filters.receivedEnd)) return false;
-    if (busca) {
-      const nome = `${item.invoiceSupplierName || ""} ${item.supplierName || ""}`.toLocaleLowerCase();
-      // O campo diz "nome ou CNPJ", então os dois precisam encontrar a nota.
-      const porCnpj = buscaDigitos.length > 0 && (cnpjDoRemetente(item) ?? "").includes(buscaDigitos);
-      if (!nome.includes(busca) && !porCnpj) return false;
-    }
-    if (destinatario && !apenasDigitos(item.recipientCnpj).includes(destinatario)) return false;
-    return true;
-  });
 }
 
 export function formatReportDate(value: Date | string | null) {

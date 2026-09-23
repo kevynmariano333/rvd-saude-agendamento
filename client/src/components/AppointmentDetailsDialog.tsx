@@ -8,7 +8,7 @@ import UrgenciaBadge from "./UrgenciaBadge";
 import { descricaoDoEvento, tomDoEvento, type StatusDaNota } from "@shared/historicoDaNota";
 import { trpc } from "@/lib/trpc";
 
-export type AppointmentDetail = { id: number; supplierId: number; supplierName: string | null; supplierEmail: string | null; serviceType: string; scheduledFor: Date; notes: string | null; source: PortalSource; preNoteConfirmedAt: Date | null; preNoteConfirmedBy: number | null; xmlUrl: string | null; xmlFileName: string | null; invoiceNumber: string | null; invoiceAccessKey: string | null; purchaseOrder: string | null; invoiceSupplierName: string | null; invoiceSupplierCnpj: string | null; supplierCnpj: string | null; recipientCnpj: string | null; invoiceIssuedAt: Date | null; invoiceTotalCents: number | null; invoiceItemsJson: string | null; invoiceVolumeCount: number | null; receivedAt: Date | null; miroNumber: string | null; quotationNumber: string | null; memorizedOrder: string | null; hisEntryDocument: string | null; hisExitDocument: string | null; backlogReasonCode: string | null; backlogReason: string | null; treatedAt: Date | null; rejectionReason: string | null; status: PortalStatus; createdAt: Date; updatedAt: Date };
+export type AppointmentDetail = { id: number; supplierId: number; supplierName: string | null; supplierEmail: string | null; serviceType: string; scheduledFor: Date; notes: string | null; source: PortalSource; preNoteConfirmedAt: Date | null; preNoteConfirmedBy: number | null; xmlUrl: string | null; xmlFileName: string | null; invoiceNumber: string | null; invoiceAccessKey: string | null; purchaseOrder: string | null; invoiceSupplierName: string | null; invoiceSupplierCnpj: string | null; supplierCnpj: string | null; recipientCnpj: string | null; invoiceIssuedAt: Date | null; invoiceTotalCents: number | null; invoiceVolumeCount: number | null; receivedAt: Date | null; miroNumber: string | null; quotationNumber: string | null; memorizedOrder: string | null; hisEntryDocument: string | null; hisExitDocument: string | null; backlogReasonCode: string | null; backlogReason: string | null; treatedAt: Date | null; rejectionReason: string | null; status: PortalStatus; createdAt: Date; updatedAt: Date };
 
 const statusStyle: Record<PortalStatus, string> = { pending: "bg-rvd-blue-pale text-rvd-plum", scheduled: "bg-rvd-plum-pale text-rvd-plum", received: "bg-rvd-lilac-blue text-rvd-plum", completed: "bg-rvd-blue text-rvd-plum", backlog: "bg-rvd-plum-pale text-rvd-plum", rejected: "bg-rvd-lilac-blue text-rvd-plum" };
 const dateLabel = (value: Date) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(new Date(value));
@@ -24,6 +24,9 @@ export default function AppointmentDetailsDialog({ appointment, open, onOpenChan
   // Todo hook antes de qualquer saída antecipada. Um useQuery depois do return
   // muda a quantidade de hooks entre renderizações e derruba a tela inteira.
   const historico = trpc.appointments.history.useQuery({ appointmentId: appointment?.id ?? 0 }, { enabled: open && Boolean(appointment) });
+  // Os itens são o dado mais pesado da nota e só interessam aqui dentro:
+  // chegam quando alguém abre esta janela, e não antes, para todas as notas.
+  const notaCompleta = trpc.appointments.byId.useQuery({ appointmentId: appointment?.id ?? 0 }, { enabled: open && Boolean(appointment) });
   if (!appointment) return null;
   const displaySupplier = appointment.invoiceSupplierName || appointment.supplierName || "Fornecedor não informado";
   const unidadeDaNota = unidadePorCnpj(appointment.recipientCnpj);
@@ -32,7 +35,7 @@ export default function AppointmentDetailsDialog({ appointment, open, onOpenChan
   const shownAt = received ? appointment.receivedAt! : appointment.scheduledFor;
   const dateHeading = received ? "Data de recebimento" : "Data agendada";
   const timeHeading = received ? "Hora do recebimento" : "Horário";
-  const invoiceItems = readInvoiceItems(appointment.invoiceItemsJson);
+  const invoiceItems = readInvoiceItems(notaCompleta.data?.invoiceItemsJson ?? null);
   // Nota trazida do sistema anterior não tem XML: dizer que o valor saiu de um
   // manda a operação procurar um arquivo que não existe.
   const daImportacao = appointment.source === "importado";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COLUNAS_DO_BACKLOG, cnpjDoRemetente, filterBacklogReport, filterReportAppointments, reportColumns, toBacklogReportRows, toConsolidatedReportRows, toDetailedReportRows, type BacklogReportAppointment, type ReportAppointment } from "./reports";
+import { COLUNAS_DO_BACKLOG, cnpjDoRemetente, filterBacklogReport, reportColumns, toBacklogReportRows, toConsolidatedReportRows, toDetailedReportRows, type BacklogReportAppointment, type ReportAppointment } from "./reports";
 
 const nota = (extra: Partial<ReportAppointment>): ReportAppointment => ({
   id: 1, invoiceNumber: "100", supplierName: "Fornecedor RVD", invoiceSupplierName: null,
@@ -16,31 +16,9 @@ const appointments: ReportAppointment[] = [
 ];
 
 describe("consolidado de relatórios", () => {
-  it("aplica filtros de fornecedor e período", () => {
-    const linhas = filterReportAppointments(appointments, { scheduledStart: "2026-08-09", scheduledEnd: "2026-08-11", supplier: "rvd" });
-    expect(linhas.map(item => item.id)).toEqual([1]);
-    expect(filterReportAppointments(appointments, {}).map(item => item.id)).toEqual([1, 2, 3]);
-  });
 
-  it("lista a nota em backlog, que também é uma nota lançada", () => {
-    // O relatório escondia o backlog, e escolher esse status no filtro não
-    // trazia nada: a nota travada sumia do histórico em vez de aparecer nele.
-    expect(filterReportAppointments(appointments, { status: "backlog" }).map(item => item.id)).toEqual([3]);
-    expect(filterReportAppointments(appointments, { status: "pending" }).map(item => item.id)).toEqual([2]);
-  });
 
-  it("encontra pelo CNPJ do fornecedor, que é o que o campo promete", () => {
-    // O campo diz "nome ou CNPJ"; antes só o nome encontrava a nota.
-    expect(filterReportAppointments(appointments, { supplier: "11222333000181" }).map(item => item.id)).toEqual([1]);
-    expect(filterReportAppointments(appointments, { supplier: "11.222.333/0001-81" }).map(item => item.id)).toEqual([1]);
-    expect(filterReportAppointments(appointments, { supplier: "99887766" }).map(item => item.id)).toEqual([2]);
-  });
 
-  it("filtra o destinatário pela sigla da unidade, como na tela de agendamentos", () => {
-    expect(filterReportAppointments(appointments, { recipientCnpj: "HSH" }).map(item => item.id)).toEqual([1]);
-    expect(filterReportAppointments(appointments, { recipientCnpj: "MSH" }).map(item => item.id)).toEqual([2]);
-    expect(filterReportAppointments(appointments, { recipientCnpj: "06.033" }).map(item => item.id)).toEqual([1]);
-  });
 
   it("nomeia a unidade e carrega o MIRO na linha consolidada", () => {
     const [primeira] = toConsolidatedReportRows([appointments[0]]);
