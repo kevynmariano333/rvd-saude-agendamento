@@ -53,18 +53,24 @@ Stack recomendada (gratuita para começar):
 usuário IAM com acesso a ele, use a região real da AWS em `S3_REGION` e
 deixe `S3_ENDPOINT` em branco.)
 
-## 4. Crie as tabelas do banco (uma única vez)
+## 4. As tabelas do banco (automático)
 
-Depois que `DATABASE_URL` estiver configurada e o serviço tiver feito o
-primeiro deploy, abra um shell contra esse serviço (Railway → serviço do
-app → **... → Run command**, ou pelo CLI `railway run`) e execute:
+Não há passo manual. Com `DATABASE_URL` configurada, o próprio servidor aplica
+as migrações pendentes toda vez que sobe — na primeira vez isso cria todas as
+tabelas; nas seguintes, aplica só o que faltar. No log do deploy aparece:
 
 ```
-pnpm db:push
+[Migrações] 30 migração(ões) aplicada(s). Total no banco: 30.
+[Migrações] Banco já estava em dia (30 aplicadas).
 ```
 
-Isso cria todas as tabelas (usuários, agendamentos, mensagens, portaria etc.) no
-banco novo.
+Se a migração falhar, o servidor não sobe e o deploy é marcado como falho de
+propósito: assim o Railway mantém no ar a versão anterior, que funciona, em vez
+de publicar uma que lê colunas inexistentes. O erro aparece no log com a
+mensagem do banco.
+
+O comando `pnpm db:push` continua existindo para o desenvolvimento local, onde
+ele também gera a migração a partir de mudanças no schema.
 
 ## 5. Acesse o app
 

@@ -24,8 +24,7 @@ import {
   UserCheck,
   UserRound,
   X,
-  type LucideIcon,
-} from "lucide-react";
+  type LucideIcon, DatabaseBackup} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useTheme, type ThemeChoice } from "../contexts/ThemeContext";
@@ -159,6 +158,7 @@ export default function PortalLayout({
     ? [
         { label: "Acessos", path: "/operador/acessos", icon: UserCheck },
         { label: "Administrar notas", path: "/operador/notas", icon: ShieldCheck },
+        { label: "Importar acervo", path: "/operador/importar", icon: DatabaseBackup },
       ]
     : [];
 

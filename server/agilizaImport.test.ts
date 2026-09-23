@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MOTIVOS_DE_BACKLOG } from "../shared/backlogReasons";
-import { canTransitionAppointment } from "../server/permissions";
-import { lerComentarios, lerDataSaoPaulo, lerDinheiroEmCentavos, montarEventos, MOTIVOS_DO_AGILIZA, STATUS_AGILIZA, type EpisodioDeBacklog, type LinhaValidada } from "./importar-agiliza";
+import { canTransitionAppointment } from "./permissions";
+import { decodificarCsv, lerComentarios, lerDataSaoPaulo, lerDinheiroEmCentavos, montarEventos, MOTIVOS_DO_AGILIZA, STATUS_AGILIZA, type EpisodioDeBacklog, type LinhaValidada } from "./agilizaImport";
 import type { AppointmentStatus } from "../drizzle/schema";
 
 const linha = (extra: Partial<LinhaValidada> = {}): LinhaValidada => ({
@@ -26,6 +26,20 @@ const episodio = (extra: Partial<EpisodioDeBacklog> = {}): EpisodioDeBacklog => 
   saiuEm: lerDataSaoPaulo("04/09/2026, 18:00:00")!,
   comentarios: [],
   ...extra,
+});
+
+describe("codificação do arquivo enviado", () => {
+  it("lê UTF-8 sem mexer", () => {
+    const base64 = Buffer.from("Divergência de preço", "utf8").toString("base64");
+    expect(decodificarCsv(base64)).toBe("Divergência de preço");
+  });
+
+  it("cai para Windows-1252 quando os bytes não são UTF-8", () => {
+    // É o que sai do Excel brasileiro: sem esta volta, "Divergência" chega como
+    // "Diverg\uFFFDncia" e o motivo entra corrompido no banco.
+    const base64 = Buffer.from("Divergência de preço", "latin1").toString("base64");
+    expect(decodificarCsv(base64)).toBe("Divergência de preço");
+  });
 });
 
 describe("dinheiro e datas do acervo", () => {

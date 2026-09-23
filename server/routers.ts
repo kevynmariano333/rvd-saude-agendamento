@@ -82,6 +82,10 @@ import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, re
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { gerarBackup } from "./backup";
+import { decodificarCsv, importarAcervo } from "./agilizaImport";
+
+/** Uma importação de acervo por vez em todo o servidor. Ver a rota abaixo. */
+let importacaoEmCurso = false;
 import { normalizePurchaseOrder } from "./purchaseOrder";
 import { MIRO_DIGITS, normalizeMiroNumber } from "../shared/miro";
 import { buildDashboardMetrics } from "./dashboardMetrics";
@@ -719,6 +723,49 @@ export const appRouter = router({
   manutencao: router({
     // Só administrador: o arquivo gerado contém a base inteira.
     gerarBackup: adminProcedure.mutation(async () => gerarBackup()),
+    /**
+     * Importa o acervo do sistema anterior a partir dos CSVs exportados de lá.
+     *
+     * Existe como rota, e não só como script, porque script exige console do
+     * provedor — e o que exige console não é feito. Sem "confirmar" é só
+     * simulação: lê, valida e conta, sem gravar. A carga é idempotente por
+     * nota, então uma requisição que estoure o tempo pode ser repetida sem
+     * duplicar nada.
+     */
+    importarAcervo: adminProcedure
+      .input(
+        z.object({
+          // O teto acompanha o precedente do envio de XML: recusa limpa do zod
+          // em vez de estourar a memória do servidor com um arquivo absurdo.
+          consolidado: z.string().min(1, "Envie o relatório consolidado.").max(12_000_000, "O relatório consolidado passa do tamanho aceito."),
+          detalhado: z.string().max(12_000_000, "O relatório detalhado passa do tamanho aceito.").nullish(),
+          backlog: z.string().max(12_000_000, "O relatório de backlog passa do tamanho aceito.").nullish(),
+          confirmar: z.boolean().default(false),
+        })
+      )
+      .mutation(async ({ input }) => {
+        // Uma de cada vez. A idempotência da carga é ler-antes-de-escrever, e
+        // não um índice único no banco: se o navegador perder a resposta de uma
+        // gravação demorada e o administrador clicar de novo, duas execuções
+        // simultâneas leriam "ainda não existe" para a mesma nota e gravariam
+        // as duas.
+        if (importacaoEmCurso) {
+          throw new TRPCError({ code: "CONFLICT", message: "Já existe uma importação em andamento. Espere ela terminar." });
+        }
+        importacaoEmCurso = true;
+        try {
+          return await importarAcervo(
+            {
+              consolidado: decodificarCsv(input.consolidado),
+              detalhado: input.detalhado ? decodificarCsv(input.detalhado) : null,
+              backlog: input.backlog ? decodificarCsv(input.backlog) : null,
+            },
+            { confirmar: input.confirmar }
+          );
+        } finally {
+          importacaoEmCurso = false;
+        }
+      }),
   }),
   accessRequests: router({
     listPending: adminProcedure.query(async () => listPendingAccessRequests()),

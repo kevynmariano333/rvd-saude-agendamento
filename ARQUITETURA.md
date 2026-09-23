@@ -22,7 +22,7 @@ chegada_registrada → entrada_aprovada    → atendimento_iniciado
 
 **Operação/pátio** — acompanha o caminhão dentro da empresa até a saída.
 
-Tamanho aproximado: 19 mil linhas, 17 telas, 46 endpoints, 8 tabelas, 198
+Tamanho aproximado: 19 mil linhas, 18 telas, 47 endpoints, 9 tabelas, 321
 testes automatizados.
 
 ## Onde cada coisa está hospedada
@@ -133,7 +133,7 @@ sistema para ser lido.
 
 ## Banco de dados
 
-Oito tabelas, 24 migrações versionadas em `drizzle/`:
+9 tabelas, 30 migrações versionadas em `drizzle/`:
 
 | Tabela | Conteúdo |
 |---|---|
@@ -141,13 +141,21 @@ Oito tabelas, 24 migrações versionadas em `drizzle/`:
 | `appointments` | as notas e seu estado |
 | `appointmentStatusHistory` | toda transição de status, com autor |
 | `appointmentSuggestions` | horários propostos pelo fornecedor |
-| `appointmentMessages` | conversa por nota |
+| `appointmentMessages` | conversa por nota, visível ao fornecedor |
+| `appointmentInternalNotes` | anotações que só a equipe vê |
 | `passwordResetTokens` | tokens de recuperação, só o hash |
 | `attendances` | atendimentos da portaria |
 | `attendanceEvents` | eventos de cada atendimento |
 
-As migrações são aplicadas pelo comando `pnpm db:push`, configurado no Railway
-como passo anterior ao deploy.
+As migrações são aplicadas pelo próprio servidor, quando ele sobe
+(`server/_core/migrations.ts`, chamado antes de o Express abrir a porta). É a
+mesma conta que o `drizzle-kit migrate` faz — a tabela `__drizzle_migrations`
+diz o que já entrou —, mas pela biblioteca que já vai junto em produção.
+
+Depender de alguém rodar `pnpm db:push` no console do provedor não funcionava:
+o código novo subia, o banco ficava na versão velha e a tela que lia a coluna
+nova quebrava. Uma migração que falha derruba a subida de propósito, para o
+provedor manter no ar a versão anterior em vez de publicar uma quebrada.
 
 ## Perfis e visibilidade
 

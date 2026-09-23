@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { logStorageConfig, probeStorage } from "./s3Client";
 import { ENV } from "./env";
+import { migrarNaSubida } from "./migrations";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -51,6 +52,10 @@ function assertSessionSecret() {
 
 async function startServer() {
   assertSessionSecret();
+  // Antes de atender qualquer requisição: o banco precisa estar na versão que
+  // este código espera. Subir com o banco atrasado publica telas que quebram
+  // ao ler uma coluna que ainda não existe.
+  await migrarNaSubida();
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
@@ -92,4 +97,11 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+startServer().catch(erro => {
+  // Sair com erro, e não só imprimir: um processo que termina com código 0 sem
+  // ter aberto porta nenhuma parece subida bem-sucedida para o provedor, que
+  // então tira do ar a versão que estava funcionando. Falhar alto mantém a
+  // anterior no ar até o problema ser resolvido.
+  console.error("[Servidor] Falhou ao subir:", erro);
+  process.exit(1);
+});
