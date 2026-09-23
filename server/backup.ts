@@ -10,7 +10,7 @@
 // é perder o provedor.
 
 import { gzipSync } from "node:zlib";
-import { getDb } from "./db";
+import { getDb, registrarFalhaDeBackup, registrarFimDeBackup, registrarInicioDeBackup } from "./db";
 import { storagePut } from "./storage";
 
 export type ResumoBackup = {
@@ -73,4 +73,26 @@ export async function gerarBackup(agora: Date = new Date()): Promise<ResumoBacku
     totalLinhas: resumoTabelas.reduce((soma, t) => soma + t.linhas, 0),
     tamanhoBytes: comprimido.length,
   };
+}
+
+/**
+ * O backup com o registro da tentativa em volta.
+ *
+ * É por aqui que passam os dois caminhos — o botão do administrador e o
+ * agendamento da madrugada —, para que os dois apareçam na mesma lista. Sem
+ * isso, o backup automático seria invisível: rodaria (ou deixaria de rodar) sem
+ * ninguém ter como saber.
+ */
+export async function executarBackup(origem: "automatico" | "manual", agora: Date = new Date()): Promise<ResumoBackup> {
+  const id = await registrarInicioDeBackup(origem);
+  try {
+    const resumo = await gerarBackup(agora);
+    await registrarFimDeBackup(id, { chave: resumo.chave, linhas: resumo.totalLinhas, bytes: resumo.tamanhoBytes });
+    return resumo;
+  } catch (erro) {
+    // A falha é gravada e relançada: quem clicou precisa ver o erro na tela, e
+    // quem for olhar amanhã precisa achar o registro.
+    await registrarFalhaDeBackup(id, erro).catch(() => {});
+    throw erro;
+  }
 }

@@ -24,6 +24,7 @@ import {
   users,
   companies,
   purchaseOrderItems,
+  backupRuns,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { normalizeCnpj } from "./fiscalFilters";
@@ -1905,4 +1906,58 @@ export async function situacaoDosPedidos() {
     emAberto: Number(linha?.emAberto ?? 0),
     atualizadoEm: linha?.atualizadoEm ? new Date(linha.atualizadoEm) : null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Backups
+// ---------------------------------------------------------------------------
+
+/**
+ * A tentativa fica gravada antes de começar, e não depois de terminar.
+ *
+ * Backup que morre no meio — o processo reiniciou, o bucket recusou — não
+ * deixaria rastro nenhum se o registro só fosse gravado no fim. Aí a tela diria
+ * "último backup: anteontem" sem explicar o que houve ontem.
+ */
+export async function registrarInicioDeBackup(origem: "automatico" | "manual"): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [resultado] = await db.insert(backupRuns).values({ origin: origem, startedAt: new Date() });
+  return (resultado as unknown as { insertId: number }).insertId ?? null;
+}
+
+export async function registrarFimDeBackup(id: number | null, dados: { chave: string; linhas: number; bytes: number }): Promise<void> {
+  const db = await getDb();
+  if (!db || id === null) return;
+  await db
+    .update(backupRuns)
+    .set({ finishedAt: new Date(), storageKey: dados.chave, rowCount: dados.linhas, sizeBytes: dados.bytes })
+    .where(eq(backupRuns.id, id));
+}
+
+export async function registrarFalhaDeBackup(id: number | null, erro: unknown): Promise<void> {
+  const db = await getDb();
+  if (!db || id === null) return;
+  const mensagem = (erro instanceof Error ? erro.message : String(erro)).slice(0, 500);
+  await db.update(backupRuns).set({ error: mensagem }).where(eq(backupRuns.id, id));
+}
+
+/** O último backup que chegou ao fim. É o que diz se a proteção está viva. */
+export async function ultimoBackupConcluido() {
+  const db = await getDb();
+  if (!db) return null;
+  const linhas = await db
+    .select()
+    .from(backupRuns)
+    .where(isNotNull(backupRuns.finishedAt))
+    .orderBy(desc(backupRuns.finishedAt))
+    .limit(1);
+  return linhas[0] ?? null;
+}
+
+/** As últimas tentativas, com falhas e tudo, para a tela de manutenção. */
+export async function ultimasTentativasDeBackup(quantas = 5) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(backupRuns).orderBy(desc(backupRuns.startedAt)).limit(quantas);
 }

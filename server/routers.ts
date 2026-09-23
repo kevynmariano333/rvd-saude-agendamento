@@ -98,8 +98,9 @@ import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, re
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
+import { ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
 import { countAppointments, countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
-import { gerarBackup } from "./backup";
+import { executarBackup } from "./backup";
 import { decodificarCsv, importarAcervo } from "./agilizaImport";
 import { lerPedidosDoSap } from "./pedidosSap";
 import { pedidosDaNota as numerosDosPedidos } from "../shared/purchaseOrders";
@@ -994,7 +995,12 @@ export const appRouter = router({
   }),
   manutencao: router({
     // Só administrador: o arquivo gerado contém a base inteira.
-    gerarBackup: adminProcedure.mutation(async () => gerarBackup()),
+    gerarBackup: adminProcedure.mutation(async () => executarBackup("manual")),
+    /** O que a tela mostra para provar que a cópia da madrugada está saindo. */
+    situacaoDoBackup: adminProcedure.query(async () => ({
+      ultimo: await ultimoBackupConcluido(),
+      tentativas: await ultimasTentativasDeBackup(5),
+    })),
     /**
      * O que está no ar, em números conferíveis.
      *

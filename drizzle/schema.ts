@@ -400,6 +400,32 @@ export const attendanceEvents = mysqlTable(
   table => [index("attendance_events_attendance_idx").on(table.attendanceId, table.createdAt)]
 );
 
+/**
+ * Cada backup que foi tentado, com o que saiu dele.
+ *
+ * O backup passou a rodar sozinho de madrugada, e backup automático sem
+ * registro é pior que não ter: ninguém descobre que parou de funcionar até
+ * precisar dele. Guardar a tentativa — inclusive a que falhou, com o erro —
+ * é o que permite a tela dizer "o último backup foi hoje às 03:00" e o
+ * agendador saber que hoje já rodou depois de um deploy.
+ */
+export const backupRuns = mysqlTable("backupRuns", {
+  id: int("id").autoincrement().primaryKey(),
+  /** "automatico" ou "manual": quem pediu. */
+  origin: varchar("origin", { length: 20 }).notNull(),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  /** Nulo enquanto não terminou, e quando terminou falhando. */
+  finishedAt: timestamp("finishedAt"),
+  /** A chave no bucket, para achar o arquivo. */
+  storageKey: varchar("storageKey", { length: 512 }),
+  rowCount: int("rowCount"),
+  sizeBytes: int("sizeBytes"),
+  /** O que deu errado, quando deu. Curto: o log guarda a pilha. */
+  error: varchar("error", { length: 500 }),
+});
+
+export type BackupRun = typeof backupRuns.$inferSelect;
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Appointment = typeof appointments.$inferSelect;

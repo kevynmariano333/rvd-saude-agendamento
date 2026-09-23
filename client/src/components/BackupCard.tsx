@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { DatabaseBackup, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Clock, DatabaseBackup, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -12,8 +12,51 @@ type Resumo = {
   tabelas: { tabela: string; linhas: number }[];
 };
 
+const quando = (valor: Date | string) =>
+  new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(valor));
+
+/** Dois dias sem cópia é hora de alguém olhar, não de confiar no silêncio. */
+const LIMITE_DE_ATRASO_MS = 48 * 60 * 60 * 1000;
+
 /**
- * Backup do banco a um clique.
+ * A prova de que a cópia da madrugada está saindo.
+ *
+ * Backup automático sem esta linha é pior do que não ter: quem administra passa
+ * a acreditar que está protegido, e só descobre que parou de rodar no dia em
+ * que precisar restaurar.
+ */
+function SituacaoDoBackup({ ultimo, falha }: { ultimo: { finishedAt: Date | string | null; origin: string; rowCount: number | null } | null; falha: string | null }) {
+  if (falha) {
+    return (
+      <p className="flex items-start gap-2 text-[13px] font-bold text-state-stop">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+        <span>A última tentativa falhou: {falha}</span>
+      </p>
+    );
+  }
+  if (!ultimo?.finishedAt) {
+    return (
+      <p className="flex items-center gap-2 text-[13px] text-ink-soft">
+        <Clock className="size-4 shrink-0" />
+        Nenhuma cópia gravada ainda. A primeira sai na próxima madrugada.
+      </p>
+    );
+  }
+  const atrasado = Date.now() - new Date(ultimo.finishedAt).getTime() > LIMITE_DE_ATRASO_MS;
+  return (
+    <p className={`flex items-start gap-2 text-[13px] font-bold ${atrasado ? "text-state-stop" : "text-state-go"}`}>
+      {atrasado ? <AlertTriangle className="mt-0.5 size-4 shrink-0" /> : <ShieldCheck className="mt-0.5 size-4 shrink-0" />}
+      <span>
+        Última cópia: {quando(ultimo.finishedAt)} ({ultimo.origin})
+        {ultimo.rowCount === null ? "" : ` · ${ultimo.rowCount.toLocaleString("pt-BR")} registros`}
+        {atrasado ? " — passou de dois dias, vale conferir." : ""}
+      </span>
+    </p>
+  );
+}
+
+/**
+ * Backup do banco: sozinho todo dia, e a um clique quando precisar.
  *
  * O caminho normal — painel do provedor ou mysqldump — depende de permissões e
  * de programas que quem administra o sistema não tem. Um backup que exige tudo
@@ -22,14 +65,26 @@ type Resumo = {
  */
 export default function BackupCard() {
   const [resumo, setResumo] = useState<Resumo | null>(null);
+  const situacao = trpc.manutencao.situacaoDoBackup.useQuery();
+  const utils = trpc.useUtils();
 
   const backup = trpc.manutencao.gerarBackup.useMutation({
     onSuccess: dados => {
       setResumo(dados);
+      void utils.manutencao.situacaoDoBackup.invalidate();
       toast.success("Backup gravado no armazenamento.");
     },
-    onError: erro => toast.error(erro.message),
+    onError: erro => {
+      void utils.manutencao.situacaoDoBackup.invalidate();
+      toast.error(erro.message);
+    },
   });
+
+  // A falha só vale como aviso enquanto for mais recente que a última cópia:
+  // depois de um backup bem-sucedido, o erro de ontem virou história.
+  const tentativas = situacao.data?.tentativas ?? [];
+  const ultimaTentativa = tentativas[0];
+  const falhaAtual = ultimaTentativa?.error && !ultimaTentativa.finishedAt ? ultimaTentativa.error : null;
 
   const mb = resumo ? (resumo.tamanhoBytes / 1024 / 1024).toFixed(2) : null;
 
@@ -44,10 +99,13 @@ export default function BackupCard() {
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-faint">Manutenção</p>
             <h2 className="mt-1 font-display text-xl font-extrabold text-ink">Backup do banco</h2>
             <p className="mt-2 max-w-xl text-sm leading-6 text-ink-soft">
-              Grava uma cópia de todas as tabelas no armazenamento de arquivos, que fica em outro
-              provedor. Vale fazer antes de qualquer operação grande — e de vez em quando, sem
-              motivo nenhum.
+              Uma cópia de todas as tabelas vai para o armazenamento de arquivos, que fica em
+              outro provedor. Isso acontece sozinho todo dia de madrugada; o botão ao lado serve
+              para gerar uma agora, antes de alguma operação grande.
             </p>
+            <div className="mt-3">
+              <SituacaoDoBackup ultimo={situacao.data?.ultimo ?? null} falha={falhaAtual} />
+            </div>
           </div>
         </div>
         <Button

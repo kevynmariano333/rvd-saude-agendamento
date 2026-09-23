@@ -5,13 +5,14 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
-import { logStorageConfig, probeStorage } from "./s3Client";
+import { isS3Configured, logStorageConfig, probeStorage } from "./s3Client";
 import { ENV } from "./env";
 import { migrarNaSubida } from "./migrations";
 import { estadoDasContasDeTeste, MINIMO_DA_SENHA_DE_TESTE } from "../contasDeTeste";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { ligarBackupAutomatico } from "../agendadorDeBackup";
 import { ajustarTemposDoServidor, desligarComCalma, limitarCorpoAnonimo, protegerProcesso, registrarSaude, tratadorDeErros } from "./resiliencia";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -88,6 +89,24 @@ function avisarContasDeTeste() {
   }
 }
 
+/**
+ * O backup automático só faz sentido com os dois lados no lugar: um banco para
+ * copiar e um bucket para onde mandar a cópia. Sem um deles, dizer no log é
+ * melhor do que tentar de dez em dez minutos e encher o log de erro.
+ */
+function ligarBackupSeDerParaGuardar() {
+  if (!process.env.DATABASE_URL) {
+    console.log("[Backup] automático desligado: sem DATABASE_URL.");
+    return;
+  }
+  if (!isS3Configured()) {
+    console.log("[Backup] automático desligado: o armazenamento de arquivos não está configurado.");
+    return;
+  }
+  ligarBackupAutomatico();
+  console.log("[Backup] automático ligado: uma cópia por dia, de madrugada.");
+}
+
 async function startServer() {
   // Antes de tudo: a partir daqui, um erro solto não derruba mais o processo.
   protegerProcesso();
@@ -160,6 +179,7 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    ligarBackupSeDerParaGuardar();
   });
 }
 
