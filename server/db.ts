@@ -1204,6 +1204,36 @@ export async function listStaffUsers() {
  * fornecedor não muda de perfil — ele é fornecedor —, o que se decide é se
  * entra ou não, e por qual CNPJ ele enxerga as notas.
  */
+/**
+ * A razão social de um CNPJ que o portal já conhece.
+ *
+ * Duas fontes, nesta ordem: uma conta de fornecedor já cadastrada com esse CNPJ
+ * e, se não houver, o nome que veio nas notas dele — o acervo tem 132
+ * fornecedores que nunca criaram login, e são justamente os que vão se
+ * cadastrar. Só o nome sai daqui: é dado público da Receita, e nada além disso
+ * ajudaria quem estivesse pescando.
+ */
+export async function razaoSocialConhecida(cnpj: string): Promise<string | null> {
+  const db = await getDb();
+  const digitos = normalizeCnpj(cnpj);
+  if (!db || digitos.length !== 14) return null;
+
+  const daConta = await db
+    .select({ nome: users.companyName })
+    .from(users)
+    .where(and(eq(users.companyCnpj, digitos), isNotNull(users.companyName)))
+    .limit(1);
+  if (daConta[0]?.nome) return daConta[0].nome;
+
+  const daNota = await db
+    .select({ nome: appointments.invoiceSupplierName })
+    .from(appointments)
+    .where(and(eq(appointments.invoiceSupplierCnpj, digitos), isNotNull(appointments.invoiceSupplierName)))
+    .orderBy(desc(appointments.createdAt))
+    .limit(1);
+  return daNota[0]?.nome ?? null;
+}
+
 export async function listSupplierAccounts() {
   const db = await getDb();
   if (!db) return [];

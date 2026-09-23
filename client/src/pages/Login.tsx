@@ -8,7 +8,7 @@ import {
 } from "@/lib/accessProfiles";
 import { homePathFor, type PortalRole } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, ChevronRight, Home as HomeIcon, LockKeyhole, Mail, UserPlus } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronRight, Home as HomeIcon, LockKeyhole, Mail, UserPlus } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
@@ -91,12 +91,26 @@ export default function Login() {
   const routeProfile = parseAccessProfile(params.profile);
   const [profile, setProfile] = useState<AccessProfile>(routeProfile ?? "supplier");
   const [mode, setMode] = useState<"login" | "register">("login");
+  const registrandoFornecedor = mode === "register" && profile === "supplier";
   const [companyName, setCompanyName] = useState("");
   const [companyCnpj, setCompanyCnpj] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const auth = trpc.auth.me.useQuery();
+  // O CNPJ só é consultado quando está completo: metade de um CNPJ não
+  // identifica ninguém, e cada consulta sem resposta conta no freio do servidor.
+  const cnpjLimpo = companyCnpj.replace(/\D/g, "");
+  const empresa = trpc.auth.empresaPorCnpj.useQuery(
+    { cnpj: cnpjLimpo },
+    { enabled: registrandoFornecedor && cnpjLimpo.length === 14, retry: false },
+  );
+  const razaoSocialAchada = empresa.data?.razaoSocial ?? null;
+  // Achou: o nome vem preenchido e a pessoa segue para o e-mail. Se ela quiser
+  // corrigir, o campo continua editável — o que veio das notas pode estar velho.
+  useEffect(() => {
+    if (razaoSocialAchada) setCompanyName(atual => (atual.trim() ? atual : razaoSocialAchada));
+  }, [razaoSocialAchada]);
   const login = trpc.auth.login.useMutation({
     onSuccess: user => setLocation(homePathFor(user.role as PortalRole)),
     onError: error => toast.error(error.message),
@@ -128,6 +142,7 @@ export default function Login() {
   function selectProfile(nextProfile: AccessProfile) {
     setProfile(nextProfile);
     setCompanyCnpj("");
+    setCompanyName("");
   }
 
   function submit(event: FormEvent) {
@@ -205,6 +220,29 @@ export default function Login() {
             <form onSubmit={submit} className="mt-7 space-y-5">
               {registering ? (
                 <>
+                  {/* O CNPJ vem primeiro: é ele que identifica a empresa, e com
+                      ele o resto do cadastro pode vir pronto. */}
+                  {profile === "supplier" && (
+                    <div className="grid gap-1.5">
+                      <label htmlFor="companyCnpj" className="text-xs font-bold uppercase tracking-[0.08em] text-ink-soft">
+                        CNPJ da empresa
+                      </label>
+                      <input
+                        id="companyCnpj"
+                        required
+                        inputMode="numeric"
+                        value={companyCnpj}
+                        onChange={event => setCompanyCnpj(event.target.value)}
+                        placeholder="00.000.000/0000-00"
+                        className={fieldClass}
+                      />
+                      {cnpjLimpo.length > 0 && cnpjLimpo.length < 14 && <p className="text-[11px] text-ink-faint">Faltam {14 - cnpjLimpo.length} dígito(s).</p>}
+                      {empresa.isFetching && <p className="text-[11px] text-ink-faint">Procurando a empresa...</p>}
+                      {cnpjLimpo.length === 14 && !empresa.isFetching && (razaoSocialAchada
+                        ? <p className="inline-flex items-center gap-1.5 text-[11px] font-bold text-state-go"><CheckCircle2 className="size-3.5" />Empresa encontrada. Confira o nome abaixo e siga para o e-mail.</p>
+                        : <p className="text-[11px] text-ink-faint">Não achamos esse CNPJ por aqui. Preencha a razão social abaixo.</p>)}
+                    </div>
+                  )}
                   <div className="grid gap-1.5">
                     <label htmlFor="companyName" className="text-xs font-bold uppercase tracking-[0.08em] text-ink-soft">
                       {profile === "supplier" ? "Nome da empresa / razão social" : "Nome completo"}
@@ -218,22 +256,6 @@ export default function Login() {
                       className={fieldClass}
                     />
                   </div>
-                  {profile === "supplier" && (
-                    <div className="grid gap-1.5">
-                      <label htmlFor="companyCnpj" className="text-xs font-bold uppercase tracking-[0.08em] text-ink-soft">
-                        CNPJ
-                      </label>
-                      <input
-                        id="companyCnpj"
-                        required
-                        inputMode="numeric"
-                        value={companyCnpj}
-                        onChange={event => setCompanyCnpj(event.target.value)}
-                        placeholder="00.000.000/0000-00"
-                        className={fieldClass}
-                      />
-                    </div>
-                  )}
                 </>
               ) : (
                 <ChosenAccess profile={profile} fromRoute={Boolean(routeProfile)} onSelect={selectProfile} />

@@ -71,6 +71,7 @@ import {
   listAttendancesInRange,
   listStaffUsers,
   listSupplierAccounts,
+  razaoSocialConhecida,
   setUserRole,
 } from "./db";
 import { supplierNameRule } from "../shared/attendanceFields";
@@ -356,6 +357,29 @@ export const appRouter = router({
         limparFalhas(chavesDoFreio);
         await createRvdSession(ctx.res, user);
         return publicUser(user);
+      }),
+    /**
+     * O nome do fornecedor a partir do CNPJ, no cadastro.
+     *
+     * Poupa digitar a razão social — e, mais do que isso, faz o cadastro novo
+     * cair no mesmo CNPJ das notas que já existem, em vez de numa grafia
+     * ligeiramente diferente que deixaria a conta sem enxergar o próprio
+     * histórico.
+     *
+     * A consulta é pública por necessidade: quem se cadastra ainda não tem
+     * conta. Para não virar uma sonda de "quem fornece para a RVD", ela só
+     * responde a CNPJ completo e conta cada busca sem resposta no mesmo freio
+     * do login: oito seguidas fecham a porta por dez minutos.
+     */
+    empresaPorCnpj: publicProcedure
+      .input(z.object({ cnpj: z.string().min(14).max(20) }))
+      .query(async ({ ctx, input }) => {
+        const chave = [`cnpj:${ctx.req.ip ?? "desconhecido"}`];
+        if (segundosDeEspera(chave) > 0) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Muitas consultas seguidas. Preencha os dados à mão." });
+        const razaoSocial = await razaoSocialConhecida(input.cnpj);
+        if (razaoSocial) limparFalhas(chave);
+        else registrarFalha(chave);
+        return { razaoSocial };
       }),
     registerSupplier: publicProcedure
       .input(z.object({ companyName: z.string().trim().min(2, "Informe a razão social.").max(255), companyCnpj: z.string().min(14, "Informe o CNPJ.").max(20), email: z.string().email("Informe um e-mail válido."), password: z.string().min(6, "A senha deve conter pelo menos 6 caracteres.") }))
