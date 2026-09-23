@@ -687,6 +687,47 @@ export async function updateAppointmentStatus(input: {
   return getAppointmentById(input.appointmentId);
 }
 
+/**
+ * Devolve uma nota concluída ao começo da fila.
+ *
+ * É correção de erro humano: alguém concluiu a nota errada, ou lançou um MIRO
+ * que não era dela. Voltar para "pendente" desfaz tudo o que a conclusão
+ * afirmou — o recebimento, o MIRO e a pré-nota —, porque deixar qualquer um
+ * deles seria a nota dizer que foi lançada no SAP enquanto espera agendamento.
+ * O que ela tinha fica escrito no histórico, que é o que sobra para auditar.
+ */
+export async function reabrirComoPendente(input: {
+  appointmentId: number;
+  previousStatus: AppointmentStatus;
+  handledBy: number;
+  eventNote: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.transaction(async tx => {
+    await tx
+      .update(appointments)
+      .set({
+        status: "pending",
+        receivedAt: null,
+        miroNumber: null,
+        preNoteConfirmedAt: null,
+        preNoteConfirmedBy: null,
+        handledBy: input.handledBy,
+        updatedAt: new Date(),
+      })
+      .where(eq(appointments.id, input.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({
+      appointmentId: input.appointmentId,
+      previousStatus: input.previousStatus,
+      nextStatus: "pending",
+      handledBy: input.handledBy,
+      eventNote: input.eventNote,
+    });
+  });
+  return getAppointmentById(input.appointmentId);
+}
+
 export async function returnAppointmentForRescheduling(input: {
   appointmentId: number;
   previousStatus: "received" | "completed";

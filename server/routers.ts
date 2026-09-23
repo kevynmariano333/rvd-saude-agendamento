@@ -36,6 +36,7 @@ import {
   listUnreadAppointmentMessages,
   listSupplierActiveAppointments,
   markAppointmentMessagesRead,
+  reabrirComoPendente,
   returnAppointmentForRescheduling,
   rescueAppointment,
   scheduleAppointment,
@@ -588,6 +589,35 @@ export const appRouter = router({
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
         await deleteAppointmentById(appointment.id);
         return { success: true } as const;
+      }),
+    /**
+     * Volta uma nota recebida ou concluída para pendente.
+     *
+     * Só o administrador, e só a partir de "Recebida" ou "Concluída": é desfazer
+     * um clique errado — alguém deu baixa na nota que não era —, não um caminho
+     * normal da nota. O MIRO e o recebimento caem junto, porque uma nota
+     * pendente não pode carregar lançamento no SAP nem hora de chegada, e o que
+     * ela tinha fica escrito no histórico, que é o que sobra para auditar.
+     */
+    voltarParaPendente: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        assertAdmin(ctx.user.role);
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
+        if (appointment.status !== "completed" && appointment.status !== "received") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Somente notas recebidas ou concluídas podem voltar para pendente." });
+        }
+        const tinha = [
+          appointment.miroNumber ? `MIRO ${appointment.miroNumber}` : null,
+          appointment.receivedAt ? `recebida em ${appointment.receivedAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : null,
+        ].filter(Boolean).join(" · ");
+        return reabrirComoPendente({
+          appointmentId: appointment.id,
+          previousStatus: appointment.status,
+          handledBy: ctx.user.id,
+          eventNote: `Status revertido pelo administrador: de ${appointment.status === "completed" ? "Concluída" : "Recebida"} para Pendente.${tinha ? ` A nota estava com ${tinha}.` : ""}`,
+        });
       }),
     returnForRescheduling: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))

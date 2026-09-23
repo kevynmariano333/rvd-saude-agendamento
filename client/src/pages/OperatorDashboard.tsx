@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, type PortalStatus, formatAppointmentDate, sourceCopy, statusCopy, homePathFor, isPortalOperator, isPortalSchedulingDesk, type PortalRole } from "@/lib/portal";
+import { getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, type PortalStatus, formatAppointmentDate, sourceCopy, statusCopy, homePathFor, isPortalAdmin, isPortalOperator, isPortalSchedulingDesk, type PortalRole } from "@/lib/portal";
 import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { cnpjsDoDestinatario, rotuloDoDestinatario } from "@shared/recipients";
 import SeletorDeDestinatario from "../components/SeletorDeDestinatario";
@@ -14,7 +14,7 @@ import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
 import { numerosDasPaginas } from "@/lib/paginacao";
 import UrgenciaBadge from "../components/UrgenciaBadge";
 import { MOTIVOS_DE_BACKLOG } from "@shared/backlogReasons";
-import { AlertTriangle, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardCheck, FileText, Filter, Grid2X2, MessageSquare, RefreshCw, RotateCcw, Search, X, Wrench} from "lucide-react";
+import { AlertTriangle, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardCheck, FileText, Filter, Grid2X2, MessageSquare, RefreshCw, RotateCcw, Search, Undo2, X, Wrench} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -99,6 +99,10 @@ export default function OperatorDashboard() {
   // entram sem XML, registradas pela operação.
   const [somenteServico, setSomenteServico] = useState(false);
   const [notaDeServicoAberta, setNotaDeServicoAberta] = useState(false);
+  // Receber é irreversível para quem não é administrador: a nota sai da agenda
+  // e entra na fila de lançamento. Por isso passa por uma confirmação.
+  const [confirmarRecebimento, setConfirmarRecebimento] = useState<Appointment | null>(null);
+  const [voltarParaPendente, setVoltarParaPendente] = useState<Appointment | null>(null);
   // "Data inicial/final" é intervalo; "Hoje" e "Amanhã" continuam sendo um dia
   // só, por isso vão num campo separado em vez de virar um intervalo de um dia.
   const listInput = useMemo(() => ({
@@ -131,6 +135,15 @@ export default function OperatorDashboard() {
   // As contagens das abas vêm contadas do banco. Antes a tela baixava a tabela
   // inteira só para exibir sete números.
   const contagens = trpc.appointments.counts.useQuery();
+  const reverter = trpc.appointments.voltarParaPendente.useMutation({
+    onSuccess: () => {
+      toast.success("Nota devolvida para pendente. O MIRO e o recebimento foram desfeitos.");
+      setVoltarParaPendente(null);
+      utils.appointments.list.invalidate();
+      utils.appointments.counts.invalidate();
+    },
+    onError: erro => toast.error(erro.message),
+  });
   const activeSupplier = trpc.appointments.activeForSupplier.useQuery({ supplierId: selected?.supplierId ?? 1 }, { enabled: Boolean(selected) });
   const pendingSuggestions = trpc.suggestions.list.useQuery({ appointmentId: selected?.id ?? 1, status: "pending" }, { enabled: Boolean(selected) });
   const updateStatus = trpc.appointments.updateStatus.useMutation({ onSuccess: () => { toast.success("Status atualizado."); setFinalizeTarget(null); utils.appointments.list.invalidate(); utils.calendar.list.invalidate(); }, onError: error => toast.error(error.message) });
@@ -188,6 +201,8 @@ export default function OperatorDashboard() {
   // botão de agendar vira um pedido, que entra na mesma fila das sugestões do
   // fornecedor e espera o aceite.
   const podeConfirmar = isPortalOperator(auth.data.role as PortalRole);
+  // Desfazer um status já dado é correção, não operação: fica com o administrador.
+  const ehAdmin = isPortalAdmin(auth.data.role as PortalRole);
 
   const clearFilters = () => { setDate(""); setDateEnd(""); setDailyFilterDate(null); setTomorrowFilterDate(null); setInvoiceNumber(""); setSupplierName(""); setRecipientCnpj(""); setPurchaseOrder(""); setSapCode(""); setSupplierCnpj(""); setItemCountOperator(">="); setItemCount(""); setOnlyUrgent(false); setPreNote("all"); setActiveStatus("all"); };
   const openSchedule = (item: Appointment) => {
@@ -257,12 +272,35 @@ export default function OperatorDashboard() {
         <button onClick={() => setSomenteServico(valor => !valor)} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-[11px] font-bold uppercase tracking-wide transition ${somenteServico ? "border-rvd-plum bg-brand text-white" : "border-line bg-surface text-rvd-plum hover:bg-rvd-plum-pale"}`}><Wrench className="size-3.5" />Serviço</button></div>
       {somenteServico && <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-rvd-plum-pale px-4 py-3 text-xs font-bold text-rvd-plum"><span className="inline-flex items-center gap-2"><Wrench className="size-4" />Você está vendo as notas de serviço — não as notas de produto.</span><button onClick={() => setSomenteServico(false)} className="underline">Voltar aos produtos</button></div>}
     </section>
-      <section className="mt-6 overflow-hidden panel"><div className="overflow-x-auto"><table className="w-full min-w-[1060px] text-left"><thead className="bg-sunken"><tr className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint"><th className="px-3 py-3">Status</th><th className="px-3 py-3">Fornecedor</th><th className="px-3 py-3">Destinatário</th><th className="px-3 py-3">Nota fiscal</th><th className="px-3 py-3">Pedido</th><th className="px-3 py-3">{activeStatus === "rejected" ? "Motivo da recusa" : activeStatus === "pending" ? "Confirmação" : activeStatus === "received" ? "Recebimento" : "Agendamento"}</th><th className="px-3 py-3 text-right">Ações</th></tr></thead><tbody>{agenda.isLoading ? <tr><td colSpan={7} className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando agendamentos...</td></tr> : visibleAgenda.length ? visibleAgenda.map(item => <AppointmentRow key={item.id} item={item} activeStatus={activeStatus} canConfirm={podeConfirmar} onFinalize={() => openFinalize(item)} onDetails={() => setDetails(item)} onHistory={() => setDateHistory(item)} onChat={() => setChatTarget(item)} onPreNote={() => item.preNoteConfirmedAt ? toast.info("Pré-nota já confirmada.") : setPreNoteTarget(item)} onSchedule={() => openSchedule(item)} onUpdate={(status, reason) => updateStatus.mutate({ appointmentId: item.id, status, rejectionReason: reason })} onRescue={() => rescue.mutate({ appointmentId: item.id })} />) : <tr><td colSpan={7} className="px-4 py-16 text-center"><Search className="mx-auto size-7 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhum agendamento encontrado</p><p className="mt-1 text-sm text-ink-soft">Ajuste os filtros ou selecione outra aba de status.</p></td></tr>}</tbody></table></div>{totalDePaginas > 1 && <BarraDePaginas pagina={pagina} totalDePaginas={totalDePaginas} total={totalFiltrado} primeira={(pagina - 1) * POR_PAGINA + 1} ultima={Math.min(pagina * POR_PAGINA, totalFiltrado)} onPagina={setPagina} />}</section>
+      <section className="mt-6 overflow-hidden panel"><div className="overflow-x-auto"><table className="w-full min-w-[1060px] text-left"><thead className="bg-sunken"><tr className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint"><th className="px-3 py-3">Status</th><th className="px-3 py-3">Fornecedor</th><th className="px-3 py-3">Destinatário</th><th className="px-3 py-3">Nota fiscal</th><th className="px-3 py-3">Pedido</th><th className="px-3 py-3">{activeStatus === "rejected" ? "Motivo da recusa" : activeStatus === "pending" ? "Confirmação" : activeStatus === "received" ? "Recebimento" : "Agendamento"}</th><th className="px-3 py-3 text-right">Ações</th></tr></thead><tbody>{agenda.isLoading ? <tr><td colSpan={7} className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando agendamentos...</td></tr> : visibleAgenda.length ? visibleAgenda.map(item => <AppointmentRow key={item.id} item={item} activeStatus={activeStatus} canConfirm={podeConfirmar} onFinalize={() => openFinalize(item)} onDetails={() => setDetails(item)} onHistory={() => setDateHistory(item)} onChat={() => setChatTarget(item)} onPreNote={() => item.preNoteConfirmedAt ? toast.info("Pré-nota já confirmada.") : setPreNoteTarget(item)} onSchedule={() => openSchedule(item)} onUpdate={(status, reason) => status === "received" ? setConfirmarRecebimento(item) : updateStatus.mutate({ appointmentId: item.id, status, rejectionReason: reason })} onRescue={() => rescue.mutate({ appointmentId: item.id })} ehAdmin={ehAdmin} onVoltarParaPendente={() => setVoltarParaPendente(item)} />) : <tr><td colSpan={7} className="px-4 py-16 text-center"><Search className="mx-auto size-7 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhum agendamento encontrado</p><p className="mt-1 text-sm text-ink-soft">Ajuste os filtros ou selecione outra aba de status.</p></td></tr>}</tbody></table></div>{totalDePaginas > 1 && <BarraDePaginas pagina={pagina} totalDePaginas={totalDePaginas} total={totalFiltrado} primeira={(pagina - 1) * POR_PAGINA + 1} ultima={Math.min(pagina * POR_PAGINA, totalFiltrado)} onPagina={setPagina} />}</section>
     <FinalizeDialog item={finalizeTarget} open={Boolean(finalizeTarget)} onOpenChange={open => !open && setFinalizeTarget(null)} mode={finalizeMode} onMode={setFinalizeMode} miro={miro} onMiro={setMiro} note={finalizeNote} onNote={setFinalizeNote} reason={finalizeReason} onReason={setFinalizeReason} onConfirm={confirmFinalize} loading={updateStatus.isPending} />
     <SuggestDialog item={suggestTarget} open={Boolean(suggestTarget)} onOpenChange={open => !open && setSuggestTarget(null)} date={suggestDate} time={suggestTime} notes={suggestNotes} onDate={setSuggestDate} onTime={setSuggestTime} onNotes={setSuggestNotes} onConfirm={confirmSuggestion} loading={createSuggestion.isPending} />
     <ScheduleDialog item={selected} open={Boolean(selected)} onOpenChange={open => !open && setSelected(null)} date={scheduleDate} time={scheduleTime} onDate={setScheduleDate} onTime={setScheduleTime} onConfirm={confirmSchedule} loading={schedule.isPending} activeAppointments={activeSupplier.data?.filter(item => item.id !== selected?.id) ?? []} suggestions={pendingSuggestions.data ?? []} acceptedSuggestionId={acceptedSuggestionId} onAcceptSuggestion={acceptSuggestion} />
     <AppointmentDetailsDialog appointment={details} open={Boolean(details)} onOpenChange={open => !open && setDetails(null)} onHistory={() => { if (details) { setDateHistory(details); setDetails(null); } }} />
     <AppointmentDateHistoryDialog appointment={dateHistory} open={Boolean(dateHistory)} onOpenChange={open => !open && setDateHistory(null)} />
+    <ConfirmacaoDialog
+      aberto={Boolean(confirmarRecebimento)}
+      onFechar={() => setConfirmarRecebimento(null)}
+      icone={ClipboardCheck}
+      titulo="Confirmar o recebimento?"
+      descricao={confirmarRecebimento ? `NF ${confirmarRecebimento.invoiceNumber || "não identificada"} · ${confirmarRecebimento.invoiceSupplierName || confirmarRecebimento.supplierName || "Fornecedor"}` : ""}
+      corpo="Ao confirmar, a nota sai da agenda e entra na fila de lançamento. Só o administrador consegue desfazer isso depois."
+      rotulo="Sim, recebi a nota"
+      carregando={updateStatus.isPending}
+      onConfirmar={() => { if (confirmarRecebimento) { updateStatus.mutate({ appointmentId: confirmarRecebimento.id, status: "received" }); setConfirmarRecebimento(null); } }}
+    />
+    <ConfirmacaoDialog
+      aberto={Boolean(voltarParaPendente)}
+      onFechar={() => setVoltarParaPendente(null)}
+      icone={Undo2}
+      perigo
+      titulo="Voltar a nota para pendente?"
+      descricao={voltarParaPendente ? `NF ${voltarParaPendente.invoiceNumber || "não identificada"} · ${statusCopy[voltarParaPendente.status as PortalStatus]}` : ""}
+      corpo="A nota volta para o começo da fila. O recebimento, o número MIRO e a confirmação de pré-nota são desfeitos, e o que ela tinha fica registrado no histórico."
+      rotulo="Voltar para pendente"
+      carregando={reverter.isPending}
+      onConfirmar={() => voltarParaPendente && reverter.mutate({ appointmentId: voltarParaPendente.id })}
+    />
     <NotaDeServicoDialog open={notaDeServicoAberta} onOpenChange={setNotaDeServicoAberta} onCriada={() => { utils.appointments.list.invalidate(); utils.appointments.counts.invalidate(); }} /><AppointmentChatDialog appointment={chatTarget} currentUserId={auth.data.id} open={Boolean(chatTarget)} onOpenChange={open => { if (!open) { setChatTarget(null); if (window.location.search.includes("chat=")) setLocation("/operador"); } }} />
     <PreNoteConfirmDialog item={preNoteTarget} open={Boolean(preNoteTarget)} onOpenChange={open => !open && setPreNoteTarget(null)} onConfirm={() => preNoteTarget && confirmPreNote.mutate({ appointmentId: preNoteTarget.id })} loading={confirmPreNote.isPending} />
     <UnscheduledReceiptDialog open={receiptOpen} onOpenChange={setReceiptOpen} onRegistered={() => { utils.appointments.list.invalidate(); utils.calendar.list.invalidate(); }} />
@@ -271,10 +309,10 @@ export default function OperatorDashboard() {
 
 function FilterField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) { return <div><Label className="text-xs font-bold uppercase tracking-wide text-rvd-plum">{label}</Label><div className="relative mt-2"><Search className="absolute left-3 top-3 size-4 text-rvd-plum" /><Input value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} className="border-line pl-9 text-rvd-plum placeholder:text-ink-soft" /></div></div>; }
 
-function AppointmentRow({ item, activeStatus, canConfirm, onDetails, onHistory, onChat, onPreNote, onSchedule, onUpdate, onRescue, onFinalize }: { item: Appointment; activeStatus: StatusTab; canConfirm: boolean; onFinalize: () => void; onDetails: () => void; onHistory: () => void; onChat: () => void; onPreNote: () => void; onSchedule: () => void; onUpdate: (status: Exclude<PortalStatus, "pending">, reason?: string) => void; onRescue: () => void }) { const displaySupplier = item.invoiceSupplierName || item.supplierName || "Fornecedor"; const showReceivedMoment = item.status === "received" && Boolean(item.receivedAt); const hasConfirmedSchedule = hasConfirmedAppointmentMoment(item.status as PortalStatus); const displayedMoment = getAppointmentMomentForDisplay({ status: item.status as PortalStatus, scheduledFor: item.scheduledFor, receivedAt: item.receivedAt }); const destinatario = rotuloDoDestinatario(item.recipientCnpj); const pedidos = pedidosDaNota(item.purchaseOrder); // Agendada com a hora já vencida e ninguém recebeu: o caminhão não chegou.
+function AppointmentRow({ item, activeStatus, canConfirm, onDetails, onHistory, onChat, onPreNote, onSchedule, onUpdate, onRescue, onFinalize, ehAdmin, onVoltarParaPendente }: { item: Appointment; activeStatus: StatusTab; canConfirm: boolean; onFinalize: () => void; onDetails: () => void; onHistory: () => void; onChat: () => void; onPreNote: () => void; onSchedule: () => void; onUpdate: (status: Exclude<PortalStatus, "pending">, reason?: string) => void; onRescue: () => void; ehAdmin: boolean; onVoltarParaPendente: () => void }) { const displaySupplier = item.invoiceSupplierName || item.supplierName || "Fornecedor"; const showReceivedMoment = item.status === "received" && Boolean(item.receivedAt); const hasConfirmedSchedule = hasConfirmedAppointmentMoment(item.status as PortalStatus); const displayedMoment = getAppointmentMomentForDisplay({ status: item.status as PortalStatus, scheduledFor: item.scheduledFor, receivedAt: item.receivedAt }); const destinatario = rotuloDoDestinatario(item.recipientCnpj); const pedidos = pedidosDaNota(item.purchaseOrder); // Agendada com a hora já vencida e ninguém recebeu: o caminhão não chegou.
   // A linha pisca junto com a aba, para o atraso ser visto por quem está
   // olhando a lista e não o contador.
-  const atrasada = item.status === "scheduled" && new Date(item.scheduledFor).getTime() < Date.now(); return <tr title={atrasada ? "Horário combinado já passou e a nota não foi recebida" : undefined} className={`border-t border-line align-middle text-sm ${atrasada ? "rvd-piscando-fundo" : ""}`}><td className="px-3 py-3"><span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusStyle[item.status as PortalStatus]}`}>{statusCopy[item.status as PortalStatus]}</span><UrgenciaBadge purchaseOrder={item.purchaseOrder} className="mt-1.5 flex w-fit" /></td><td className="px-3 py-3"><p title={displaySupplier} className="line-clamp-2 max-w-40 text-[13px] font-bold leading-4 text-rvd-plum">{displaySupplier}</p><p title={item.supplierEmail ?? undefined} className="mt-0.5 max-w-40 truncate text-[11px] text-ink-soft">{item.supplierEmail}</p></td><td className="px-3 py-3"><div title={destinatario.tooltip} className={destinatario.unidade ? "font-display text-[13px] font-extrabold leading-4 text-ink" : ""}><p className={destinatario.unidade ? "" : "font-bold text-rvd-plum"}>{destinatario.principal}</p><p className={destinatario.unidade ? "" : "mt-1 text-xs text-ink-soft"}>{destinatario.secundaria}</p></div></td><td className="px-3 py-3"><p className="font-display text-base font-extrabold leading-5 text-ink">{item.invoiceNumber || "—"}</p><p className="text-[10px] text-ink-soft">{sourceCopy[item.source]}</p></td><td className="px-3 py-3">{pedidos.length ? <div className="flex flex-col items-start gap-1">{pedidos.map(pedido => <span key={pedido} className={`rounded px-2 py-0.5 text-[11px] font-bold ${pedidoEhUrgente(pedido) ? "bg-state-stop-bg text-state-stop" : "bg-rvd-plum-pale text-rvd-plum"}`}>{pedido}</span>)}</div> : <span className="text-xs text-ink-soft">—</span>}</td><td className="px-3 py-3">{activeStatus === "rejected" ? <p className="max-w-36 text-[12px] font-semibold leading-4 text-red-700">{item.rejectionReason || "Motivo não informado"}</p> : hasConfirmedSchedule ? <><p className="text-[13px] font-bold text-rvd-plum">{new Date(displayedMoment).toLocaleDateString("pt-BR")}</p><p className="text-[11px] text-ink-soft">{new Date(displayedMoment).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>{showReceivedMoment && <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">Recebido em</p>}</> : <p className="max-w-32 text-[12px] font-semibold leading-4 text-rvd-plum">Aguardando confirmação</p>}</td><td className="px-3 py-3"><div className="flex items-center justify-end gap-2 text-rvd-plum"><ActionIcon label="Abrir detalhes da nota" icon={FileText} onClick={onDetails} /><ActionIcon label="Histórico de datas" icon={CalendarClock} onClick={onHistory} />{item.status === "scheduled" && <ActionIcon label={canConfirm ? "Reagendar" : "Sugerir outra data"} icon={CalendarDays} onClick={onSchedule} />}<ActionIcon label="Conversar sobre esta nota" icon={MessageSquare} onClick={onChat} /><ActionIcon label={item.preNoteConfirmedAt ? "Pré-nota confirmada" : "Confirmar pré-nota"} icon={ClipboardCheck} onClick={onPreNote} confirmed={Boolean(item.preNoteConfirmedAt)} /><PrimaryAction status={item.status as PortalStatus} canConfirm={canConfirm} onSchedule={onSchedule} onUpdate={onUpdate} onRescue={onRescue} onFinalize={onFinalize} /></div></td></tr>; }
+  const atrasada = item.status === "scheduled" && new Date(item.scheduledFor).getTime() < Date.now(); return <tr title={atrasada ? "Horário combinado já passou e a nota não foi recebida" : undefined} className={`border-t border-line align-middle text-sm ${atrasada ? "rvd-piscando-fundo" : ""}`}><td className="px-3 py-3"><span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusStyle[item.status as PortalStatus]}`}>{statusCopy[item.status as PortalStatus]}</span><UrgenciaBadge purchaseOrder={item.purchaseOrder} className="mt-1.5 flex w-fit" /></td><td className="px-3 py-3"><p title={displaySupplier} className="line-clamp-2 max-w-40 text-[13px] font-bold leading-4 text-rvd-plum">{displaySupplier}</p><p title={item.supplierEmail ?? undefined} className="mt-0.5 max-w-40 truncate text-[11px] text-ink-soft">{item.supplierEmail}</p></td><td className="px-3 py-3"><div title={destinatario.tooltip} className={destinatario.unidade ? "font-display text-[13px] font-extrabold leading-4 text-ink" : ""}><p className={destinatario.unidade ? "" : "font-bold text-rvd-plum"}>{destinatario.principal}</p><p className={destinatario.unidade ? "" : "mt-1 text-xs text-ink-soft"}>{destinatario.secundaria}</p></div></td><td className="px-3 py-3"><p className="font-display text-base font-extrabold leading-5 text-ink">{item.invoiceNumber || "—"}</p><p className="text-[10px] text-ink-soft">{sourceCopy[item.source]}</p></td><td className="px-3 py-3">{pedidos.length ? <div className="flex flex-col items-start gap-1">{pedidos.map(pedido => <span key={pedido} className={`rounded px-2 py-0.5 text-[11px] font-bold ${pedidoEhUrgente(pedido) ? "bg-state-stop-bg text-state-stop" : "bg-rvd-plum-pale text-rvd-plum"}`}>{pedido}</span>)}</div> : <span className="text-xs text-ink-soft">—</span>}</td><td className="px-3 py-3">{activeStatus === "rejected" ? <p className="max-w-36 text-[12px] font-semibold leading-4 text-red-700">{item.rejectionReason || "Motivo não informado"}</p> : hasConfirmedSchedule ? <><p className="text-[13px] font-bold text-rvd-plum">{new Date(displayedMoment).toLocaleDateString("pt-BR")}</p><p className="text-[11px] text-ink-soft">{new Date(displayedMoment).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>{showReceivedMoment && <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">Recebido em</p>}</> : <p className="max-w-32 text-[12px] font-semibold leading-4 text-rvd-plum">Aguardando confirmação</p>}</td><td className="px-3 py-3"><div className="flex items-center justify-end gap-2 text-rvd-plum"><ActionIcon label="Abrir detalhes da nota" icon={FileText} onClick={onDetails} /><ActionIcon label="Histórico de datas" icon={CalendarClock} onClick={onHistory} />{item.status === "scheduled" && <ActionIcon label={canConfirm ? "Reagendar" : "Sugerir outra data"} icon={CalendarDays} onClick={onSchedule} />}<ActionIcon label="Conversar sobre esta nota" icon={MessageSquare} onClick={onChat} /><ActionIcon label={item.preNoteConfirmedAt ? "Pré-nota confirmada" : "Confirmar pré-nota"} icon={ClipboardCheck} onClick={onPreNote} confirmed={Boolean(item.preNoteConfirmedAt)} />{ehAdmin && (item.status === "received" || item.status === "completed") && <ActionIcon label="Voltar esta nota para pendente" icon={Undo2} onClick={onVoltarParaPendente} />}<PrimaryAction status={item.status as PortalStatus} canConfirm={canConfirm} onSchedule={onSchedule} onUpdate={onUpdate} onRescue={onRescue} onFinalize={onFinalize} /></div></td></tr>; }
 function ActionIcon({ label, icon: Icon, onClick, confirmed = false }: { label: string; icon: typeof FileText; onClick: () => void; confirmed?: boolean }) { return <button onClick={onClick} title={label} className={`rounded-lg p-1.5 hover:bg-rvd-plum-pale ${confirmed ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : ""}`}><Icon className="size-4" /></button>; }
 function PrimaryAction({ status, canConfirm, onSchedule, onUpdate, onRescue, onFinalize }: { status: PortalStatus; canConfirm: boolean; onSchedule: () => void; onUpdate: (status: Exclude<PortalStatus, "pending">, reason?: string) => void; onRescue: () => void; onFinalize: () => void }) { const buttonClass = "h-9 shrink-0 rounded-xl px-3 text-xs font-bold"; if (status === "pending") return <Button onClick={onSchedule} className={`${buttonClass} bg-brand text-white hover:bg-brand`}>{canConfirm ? "Agendar" : "Sugerir data"}</Button>; if (status === "scheduled") return <div className="flex justify-end gap-2"><Button onClick={() => onUpdate("received")} className={`${buttonClass} bg-brand text-white hover:bg-brand`}>Receber</Button><Button onClick={() => onUpdate("rejected", canConfirm ? "Recusado pelo operador" : "Recusado pelo planejador")} variant="ghost" className={`${buttonClass} border border-line text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum`}>Rejeitar</Button></div>; if (status === "received") return <Button onClick={onFinalize} className={`${buttonClass} bg-brand text-white hover:bg-brand`}>Concluir</Button>; if (status === "backlog") return <span className="whitespace-nowrap text-xs font-bold text-rvd-plum">Em tratativa</span>; if (status === "rejected") return <Button onClick={onRescue} className={`${buttonClass} bg-rvd-blue text-rvd-plum hover:bg-rvd-blue-pale`}><RefreshCw className="size-3.5" />Resgatar</Button>; return <span className="text-xs font-bold text-rvd-plum">Consulta</span>; }
 
@@ -356,5 +394,36 @@ function BarraDePaginas({ pagina, totalDePaginas, total, primeira, ultima, onPag
         <button type="button" onClick={() => onPagina(pagina + 1)} disabled={pagina >= totalDePaginas} className={`${botao} border border-line text-rvd-plum hover:bg-rvd-plum-pale`}>Próxima</button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Uma pergunta antes de um clique que custa caro.
+ *
+ * Serve tanto para dar baixa numa nota quanto para desfazer uma — em ambos os
+ * casos o que a pessoa precisa ver antes de confirmar é qual nota é, e o que
+ * acontece com ela depois. Por isso a NF e a consequência vêm escritas, em vez
+ * de um "tem certeza?" solto.
+ */
+function ConfirmacaoDialog({ aberto, onFechar, icone: Icone, titulo, descricao, corpo, rotulo, carregando, perigo = false, onConfirmar }: { aberto: boolean; onFechar: () => void; icone: typeof ClipboardCheck; titulo: string; descricao: string; corpo: string; rotulo: string; carregando: boolean; perigo?: boolean; onConfirmar: () => void }) {
+  return (
+    <Dialog open={aberto} onOpenChange={valor => !valor && onFechar()}>
+      <DialogContent className="w-[calc(100%-1rem)] rounded-[1.5rem] !border !border-line !bg-surface p-0 sm:max-w-md">
+        <DialogHeader className="border-b border-line px-6 py-5">
+          <div className="flex items-start gap-3">
+            <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${perigo ? "bg-state-stop-bg text-state-stop" : "bg-rvd-plum-pale text-rvd-plum"}`}><Icone className="size-5" /></span>
+            <div>
+              <DialogTitle className="font-display text-lg font-extrabold text-ink">{titulo}</DialogTitle>
+              <DialogDescription className="mt-0.5 text-[13px] font-bold text-rvd-plum">{descricao}</DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+        <p className="px-6 py-5 text-[13px] leading-5 text-ink-soft">{corpo}</p>
+        <footer className="flex items-center justify-end gap-3 border-t border-line px-6 py-4">
+          <Button type="button" variant="ghost" onClick={onFechar} className="font-bold text-ink-soft hover:bg-sunken">Cancelar</Button>
+          <Button type="button" onClick={onConfirmar} disabled={carregando} className={`h-10 rounded-xl px-5 text-sm font-bold text-white ${perigo ? "bg-state-stop hover:bg-state-stop" : "bg-brand hover:bg-brand"}`}>{carregando ? "Aguarde..." : rotulo}</Button>
+        </footer>
+      </DialogContent>
+    </Dialog>
   );
 }
