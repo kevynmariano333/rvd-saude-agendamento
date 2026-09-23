@@ -9,7 +9,6 @@ import {
   CalendarDays,
   ChevronDown,
   ClipboardList,
-  DatabaseBackup,
   DoorOpen,
   KeyRound,
   LayoutDashboard,
@@ -159,10 +158,6 @@ export default function PortalLayout({
     ? [
         { label: "Acessos", path: "/operador/acessos", icon: UserCheck },
         { label: "Administrar notas", path: "/operador/notas", icon: ShieldCheck },
-        // Importar acervo sai da barra de cima de propósito: é uma tela que se
-        // usa de vez em quando, e lá em cima ela disputava espaço com o que a
-        // operação abre todo dia.
-        { label: "Importar acervo", path: "/operador/importar", icon: DatabaseBackup },
       ]
     : [];
 
