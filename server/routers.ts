@@ -574,11 +574,23 @@ export const appRouter = router({
         });
       }),
     /** Quantas notas há em cada situação, contadas no banco e não no navegador. */
-    counts: protectedProcedure.query(async ({ ctx }) => {
-      const filters: AppointmentFilters = {};
-      if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
-      return countAppointmentsByStatus(filters);
-    }),
+    /**
+     * A contagem de cada aba, com os mesmos filtros que a lista.
+     *
+     * O status do input é ignorado de propósito: ele é o que agrupa.
+     */
+    counts: protectedProcedure
+      .input(filtrosDaLista)
+      .query(async ({ ctx, input }) => {
+        const filters: AppointmentFilters = {
+          date: input?.date, source: input?.source, invoiceNumber: input?.invoiceNumber,
+          supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj, recipientCnpjs: input?.recipientCnpjs,
+          purchaseOrder: input?.purchaseOrder, sapCode: input?.sapCode, supplierCnpj: input?.supplierCnpj,
+          itemCountOperator: input?.itemCountOperator, itemCount: input?.itemCount,
+          dateStart: input?.dateStart, dateEnd: input?.dateEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote };
+        if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
+        return countAppointmentsByStatus(filters);
+      }),
     history: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
@@ -1063,7 +1075,11 @@ export const appRouter = router({
         const start = new Date(input.start);
         const end = new Date(input.end);
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) throw new TRPCError({ code: "BAD_REQUEST", message: "Período inválido." });
-        return listAppointmentsBetween(start, end);
+        // O calendário é a agenda do que ainda vai chegar. Nota recebida já
+        // chegou, concluída já foi lançada e recusada não vem — deixá-las no
+        // quadro faz o número do dia contar trabalho que não existe mais. O
+        // histórico delas continua na lista e no relatório.
+        return listAppointmentsBetween(start, end, ["pending", "scheduled"]);
       }),
   }),
   attendances: router({

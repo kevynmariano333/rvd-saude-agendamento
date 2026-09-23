@@ -71,9 +71,10 @@ export default function CalendarPage() {
   }, [mes]);
   const calendario = trpc.calendar.list.useQuery(periodo, { placeholderData: anterior => anterior });
 
-  // O backlog não tem hora marcada: ele não mora no calendário, mora na fila.
+  // O que o calendário mostra — só o que ainda vai chegar — é decidido no
+  // servidor. Aqui fica só o recorte por unidade, que é escolha da pessoa.
   const notas = useMemo(
-    () => (calendario.data ?? []).filter(nota => nota.status !== "backlog" && (unidade === "todas" || nota.recipientCnpj === unidade)),
+    () => (calendario.data ?? []).filter(nota => unidade === "todas" || nota.recipientCnpj === unidade),
     [calendario.data, unidade],
   );
   const porDia = useMemo(() => {
@@ -102,7 +103,7 @@ export default function CalendarPage() {
 
   const nomeDoMes = mes.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
-  return <PortalLayout user={auth.data} title="Calendário operacional" subtitle="Veja o mês inteiro e abra o dia para ler as notas." onLogout={() => logout.mutate()} actions={<div className="flex flex-wrap items-center gap-2">
+  return <PortalLayout user={auth.data} title="Calendário operacional" subtitle="O que ainda vai chegar, mês a mês. Abra o dia para ler as notas." onLogout={() => logout.mutate()} actions={<div className="flex flex-wrap items-center gap-2">
     <Button variant="ghost" onClick={() => setMes(atual => somarMeses(atual, -1))} className="rounded-xl border border-line bg-surface font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"><ChevronLeft className="size-4" />Anterior</Button>
     <Button variant="ghost" onClick={() => setMes(primeiroDoMes(new Date()))} className="rounded-xl border border-line bg-surface font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Este mês</Button>
     <Button variant="ghost" onClick={() => setMes(atual => somarMeses(atual, 1))} className="rounded-xl border border-line bg-surface font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Próximo<ChevronRight className="size-4" /></Button>
@@ -115,7 +116,7 @@ export default function CalendarPage() {
           {UNIDADES.map(item => <ChipDeUnidade key={item.cnpj} ativo={unidade === item.cnpj} cor={corDaUnidade(item.cnpj)} onClick={() => setUnidade(item.cnpj)}>{item.sigla}</ChipDeUnidade>)}
         </div>
         <div className="flex flex-wrap items-center gap-4 text-xs text-ink-soft">
-          <span><strong className="font-extrabold text-ink">{notas.length}</strong> agendamento(s) em <span className="capitalize">{mes.toLocaleDateString("pt-BR", { month: "long" })}</span></span>
+          <span><strong className="font-extrabold text-ink">{notas.length}</strong> nota(s) a chegar em <span className="capitalize">{mes.toLocaleDateString("pt-BR", { month: "long" })}</span></span>
           <span className="inline-flex items-center gap-1.5 font-bold uppercase tracking-wide text-state-stop"><span className="size-2 rounded-full bg-state-stop" />Contém urgente</span>
         </div>
       </div>

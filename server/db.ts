@@ -330,16 +330,22 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
  * só para saber que existem 3.738 concluídas. Um GROUP BY responde o mesmo em
  * alguns bytes.
  */
+/**
+ * Quantas notas existem em cada situação, contadas no banco.
+ *
+ * Lê os mesmos filtros da lista — menos o status, que é justamente o que se
+ * agrupa. Sem isso, a bolinha da aba respondia "quantas existem no total"
+ * enquanto a tabela logo abaixo mostrava "quantas casam com o filtro": dois
+ * números na mesma tela, medindo coisas diferentes, sem nada dizendo isso.
+ */
 export async function countAppointmentsByStatus(filters: AppointmentFilters = {}) {
   const db = await getDb();
   if (!db) return {} as Record<string, number>;
-  const conditions = [];
-  if (filters.supplierId) conditions.push(eq(appointments.supplierId, filters.supplierId));
-  if (filters.supplierIds) {
-    if (!filters.supplierIds.length) return {} as Record<string, number>;
-    conditions.push(inArray(appointments.supplierId, filters.supplierIds));
-  }
-  const consulta = db.select({ status: appointments.status, total: count() }).from(appointments);
+  // O status sai do filtro (é o que agrupa) e o backlog volta para a contagem:
+  // ele tem aba própria, e ela também mostra o seu número.
+  const conditions = condicoesDaLista({ ...filters, status: undefined, excludeBacklog: false });
+  if (!conditions) return {} as Record<string, number>;
+  const consulta = db.select({ status: appointments.status, total: count() }).from(appointments).innerJoin(users, eq(appointments.supplierId, users.id));
   const linhas = await (conditions.length ? consulta.where(and(...conditions)) : consulta).groupBy(appointments.status);
   const porStatus: Record<string, number> = {};
   for (const linha of linhas) porStatus[linha.status] = Number(linha.total);
@@ -347,7 +353,7 @@ export async function countAppointmentsByStatus(filters: AppointmentFilters = {}
   // Nota agendada cuja hora já passou e que ninguém recebeu: é o caminhão que
   // não chegou. A tela pisca a aba quando este número não é zero.
   const atraso = [...conditions, eq(appointments.status, "scheduled"), lt(appointments.scheduledFor, new Date())];
-  const atrasadas = await db.select({ total: count() }).from(appointments).where(and(...atraso));
+  const atrasadas = await db.select({ total: count() }).from(appointments).innerJoin(users, eq(appointments.supplierId, users.id)).where(and(...atraso));
   porStatus.atrasadas = Number(atrasadas[0]?.total ?? 0);
   return porStatus;
 }
@@ -435,9 +441,10 @@ export async function listUnreadAppointmentMessages(input: { userId: number; isO
  * abrir a nota ali mesmo, e voltar ao banco por cada uma seria uma consulta
  * por clique. Os itens continuam de fora, que é o único campo pesado.
  */
-export async function listAppointmentsBetween(start: Date, end: Date) {
+export async function listAppointmentsBetween(start: Date, end: Date, status?: AppointmentStatus[]) {
   const db = await getDb();
   if (!db) return [];
+  if (status && !status.length) return [];
   return db
     .select({
       id: appointments.id,
@@ -478,7 +485,7 @@ export async function listAppointmentsBetween(start: Date, end: Date) {
     })
     .from(appointments)
     .innerJoin(users, eq(appointments.supplierId, users.id))
-    .where(and(gte(appointments.scheduledFor, start), lte(appointments.scheduledFor, end)))
+    .where(and(gte(appointments.scheduledFor, start), lte(appointments.scheduledFor, end), ...(status ? [inArray(appointments.status, status)] : [])))
     .orderBy(appointments.scheduledFor);
 }
 
