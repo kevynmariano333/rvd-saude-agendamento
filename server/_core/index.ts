@@ -50,6 +50,28 @@ function assertSessionSecret() {
   }
 }
 
+/**
+ * Os cabeçalhos que o navegador obedece.
+ *
+ * São baratos e cobrem três coisas que não dependem do nosso código: adivinhar
+ * o tipo de um arquivo servido (nosniff), abrir o portal dentro de um iframe de
+ * terceiro para roubar cliques (frame-ancestors), e vazar o endereço interno
+ * que a pessoa estava vendo ao clicar num link para fora (referrer).
+ *
+ * Em produção entra também o HSTS, que manda o navegador nunca mais tentar
+ * http:// neste domínio. Ele fica de fora em desenvolvimento, onde o acesso é
+ * por http mesmo e a regra ficaria gravada no navegador de quem programa.
+ */
+function cabecalhosDeSeguranca(_req: express.Request, res: express.Response, next: express.NextFunction) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  if (ENV.isProduction) res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  next();
+}
+
 async function startServer() {
   assertSessionSecret();
   // Antes de atender qualquer requisição: o banco precisa estar na versão que
@@ -57,7 +79,12 @@ async function startServer() {
   // ao ler uma coluna que ainda não existe.
   await migrarNaSubida();
   const app = express();
+  // Atrás do proxy do hosting, req.ip é o do proxy para todo mundo. Sem isto, o
+  // freio de tentativas de login contaria o mundo inteiro como um visitante só
+  // — e bloquearia todo mundo junto.
+  app.set("trust proxy", 1);
   const server = createServer(app);
+  app.use(cabecalhosDeSeguranca);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

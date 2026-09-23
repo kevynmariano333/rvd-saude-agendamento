@@ -79,6 +79,7 @@ import { nanoid } from "nanoid";
 import { storagePut } from "./storage";
 import { MAX_XML_BYTES, parseInvoiceXml } from "./xmlInvoice";
 import { ENV } from "./_core/env";
+import { limparFalhas, registrarFalha, segundosDeEspera } from "./loginThrottle";
 import { createAppointmentValidationToken, readAppointmentValidationToken } from "./appointmentValidation";
 import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
 import { isMailerConfigured, sendMail } from "./_core/mailer";
@@ -115,6 +116,27 @@ const statusSchema = z.enum(appointmentStatuses);
 const filtrosDaLista = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional(), recipientCnpjs: z.array(z.string().max(40)).max(20).optional(), purchaseOrder: z.string().max(100).optional(), sapCode: z.string().max(60).optional(), supplierCnpj: z.string().max(20).optional(), itemCountOperator: z.enum([">=", "<=", "="]).optional(), itemCount: z.number().int().min(0).max(100000).optional(), dateStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), dateEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), onlyUrgent: z.boolean().optional(), preNote: z.enum(["done", "pending"]).optional(), excludeBacklog: z.boolean().optional(), source: z.enum(appointmentSources).optional(), limit: z.number().int().positive().max(500).optional(), offset: z.number().int().min(0).optional() }).optional();
 const demoLogin = "admin";
 const demoPassword = "admin";
+
+/**
+ * As contas de teste, e por que elas não existem em produção.
+ *
+ * O login "admin" com senha "admin" cria — e depois abre — uma conta de
+ * administrador. Em desenvolvimento isso poupa cadastro; num servidor aberto à
+ * internet é uma porta que qualquer pessoa que encontre o endereço consegue
+ * abrir na primeira tentativa, com acesso a todo o acervo de notas e aos dados
+ * dos fornecedores.
+ *
+ * Bloquear só a criação não bastaria: onde a conta de teste já foi criada uma
+ * vez, ela continua no banco com a senha conhecida. Por isso a porta se fecha
+ * pelos dois lados — pelo login "admin" e pelos e-mails das contas de teste.
+ */
+const EMAILS_DE_TESTE = new Set(["operator", "supplier", "portaria", "operacao"].map(perfil => demoAccountFor(perfil as z.infer<typeof localProfileSchema>).email));
+
+function recusarContaDeTeste(login: string, email: string) {
+  if (!ENV.isProduction) return;
+  if (login !== demoLogin && !EMAILS_DE_TESTE.has(email)) return;
+  throw new TRPCError({ code: "UNAUTHORIZED", message: "As contas de teste não existem neste ambiente. Entre com o seu cadastro." });
+}
 
 function demoAccountFor(profile: z.infer<typeof localProfileSchema>) {
   if (profile === "supplier") return { email: "teste.fornecedor@rvdsaude.local", name: "Fornecedor de Teste RVD Saúde", companyName: "Fornecedor de Teste RVD Saúde", companyCnpj: "00000000000000" };
@@ -250,12 +272,21 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const requestedLogin = input.email.trim().toLowerCase();
+        // O IP e o login contam separado: o primeiro barra quem varre senhas de
+        // um mesmo lugar, o segundo barra quem distribui as tentativas por
+        // muitos endereços contra a mesma conta.
+        const chavesDoFreio = [`ip:${ctx.req.ip ?? "desconhecido"}`, `login:${requestedLogin}`];
+        const espera = segundosDeEspera(chavesDoFreio);
+        if (espera > 0) {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Muitas tentativas seguidas. Tente de novo em ${Math.ceil(espera / 60)} minuto(s).` });
+        }
         const isDemoLogin = requestedLogin === demoLogin;
         if (!isDemoLogin && !z.string().email().safeParse(requestedLogin).success) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Informe um e-mail válido ou use o login de teste admin." });
         }
         const demoAccount = demoAccountFor(input.profile);
         const email = isDemoLogin ? demoAccount.email : requestedLogin;
+        recusarContaDeTeste(requestedLogin, email);
         const existing = await getUserByEmail(email);
         let user;
 
@@ -271,6 +302,7 @@ export const appRouter = router({
             (existing.role === "admin" && input.profile !== "supplier") ||
             (entraPelaPortaDoOperador && input.profile === "operator");
           if (!profileAllowed || !existing.passwordHash || !passwordMatches(input.password, existing.passwordHash)) {
+            registrarFalha(chavesDoFreio);
             throw new TRPCError({ code: "UNAUTHORIZED", message: "E-mail, senha ou perfil não conferem." });
           }
           // Checked only after the password, so the status of an account is not
@@ -286,11 +318,14 @@ export const appRouter = router({
         } else if (isDemoLogin && input.password === demoPassword) {
           user = await createLocalUser({ ...demoAccount, role: demoRoleFor(input.profile), passwordHash: hashPassword(demoPassword) });
         } else if (isDemoLogin) {
+          registrarFalha(chavesDoFreio);
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Login, senha ou perfil não conferem." });
         } else {
+          registrarFalha(chavesDoFreio);
           throw new TRPCError({ code: "NOT_FOUND", message: input.profile === "supplier" ? "Fornecedor não encontrado. Faça seu cadastro antes de entrar." : "Acesso interno não encontrado." });
         }
 
+        limparFalhas(chavesDoFreio);
         await createRvdSession(ctx.res, user);
         return publicUser(user);
       }),
