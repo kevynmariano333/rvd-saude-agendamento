@@ -140,8 +140,12 @@ export default function PortalLayout({
 
   // O planejador para na agenda: as quatro telas de planejamento e nada do
   // pátio. É o recorte inteiro do perfil.
+  // O "Importar" mora na barra de cima enquanto o acervo está sendo acertado:
+  // guardado no menu do perfil ele existia, mas ninguém achava — e é uma tela
+  // que está sendo aberta várias vezes por dia. Só o administrador o vê.
+  const importarNav: NavItem[] = isAdmin ? [{ label: "Importar", path: "/operador/importar", icon: DatabaseBackup }] : [];
   const nav: NavItem[] = isAdmin
-    ? [...schedulingNav, ...backlogNav, ...patioNav]
+    ? [...schedulingNav, ...backlogNav, ...patioNav, ...importarNav]
     : isOperator
       ? [...schedulingNav, ...patioNav]
       : isPortalPlanner(role)
@@ -159,10 +163,6 @@ export default function PortalLayout({
     ? [
         { label: "Acessos", path: "/operador/acessos", icon: UserCheck },
         { label: "Administrar notas", path: "/operador/notas", icon: ShieldCheck },
-        // Importar acervo sai da barra de cima de propósito: é uma tela que se
-        // usa de vez em quando, e lá em cima ela disputava espaço com o que a
-        // operação abre todo dia.
-        { label: "Importar acervo", path: "/operador/importar", icon: DatabaseBackup },
       ]
     : [];
 
