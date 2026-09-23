@@ -23,6 +23,7 @@ import {
   type UserRole,
   users,
   companies,
+  purchaseOrderItems,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { normalizeCnpj } from "./fiscalFilters";
@@ -1727,4 +1728,111 @@ export async function listarIdsDaEmpresa(empresaId: number) {
     .from(users)
     .where(and(eq(users.companyId, empresaId), eq(users.role, "supplier"), eq(users.accessStatus, "approved")));
   return linhas.map(linha => linha.id);
+}
+
+// ---------------------------------------------------------------------------
+// Pedidos de compra, lidos do relatório do SAP
+// ---------------------------------------------------------------------------
+
+export type ItemDePedidoGravavel = {
+  purchaseOrder: string;
+  item: string;
+  sapCode: string | null;
+  description: string | null;
+  recipientCnpj: string | null;
+  supplierCode: string | null;
+  supplierName: string | null;
+  orderedQuantity: string | null;
+  pendingQuantity: string | null;
+  unitPriceCents: number | null;
+  totalCents: number | null;
+  documentDate: Date | null;
+};
+
+/**
+ * Grava a foto do relatório sem perder o que saiu dele.
+ *
+ * O arquivo lista os pedidos em aberto: um item entregue por completo deixa de
+ * aparecer. Apagar a linha junto levaria o código SAP embora, e quem precisa
+ * dele é justamente a nota atrasada, que chega depois. Por isso o que sumiu é
+ * marcado com a data em que sumiu — sai da conferência de saldo, fica no
+ * cadastro.
+ */
+export async function gravarPedidosDoSap(itens: ItemDePedidoGravavel[], opcoes: { lote?: number } = {}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  // Sem os milissegundos de propósito: a coluna é TIMESTAMP, que guarda só o
+  // segundo. Com a hora "quebrada", a própria linha recém-gravada ficava mais
+  // antiga que este instante e era marcada como ausente no mesmo comando.
+  const agora = new Date(Math.floor(Date.now() / 1000) * 1000);
+  const lote = opcoes.lote ?? 500;
+  let gravados = 0;
+
+  for (let inicio = 0; inicio < itens.length; inicio += lote) {
+    const parte = itens.slice(inicio, inicio + lote);
+    if (!parte.length) continue;
+    await db
+      .insert(purchaseOrderItems)
+      .values(parte.map(item => ({ ...item, updatedAt: agora, missingSince: null })))
+      .onDuplicateKeyUpdate({
+        set: {
+          sapCode: sql`VALUES(${purchaseOrderItems.sapCode})`,
+          description: sql`VALUES(${purchaseOrderItems.description})`,
+          recipientCnpj: sql`VALUES(${purchaseOrderItems.recipientCnpj})`,
+          supplierCode: sql`VALUES(${purchaseOrderItems.supplierCode})`,
+          supplierName: sql`VALUES(${purchaseOrderItems.supplierName})`,
+          orderedQuantity: sql`VALUES(${purchaseOrderItems.orderedQuantity})`,
+          pendingQuantity: sql`VALUES(${purchaseOrderItems.pendingQuantity})`,
+          unitPriceCents: sql`VALUES(${purchaseOrderItems.unitPriceCents})`,
+          totalCents: sql`VALUES(${purchaseOrderItems.totalCents})`,
+          documentDate: sql`VALUES(${purchaseOrderItems.documentDate})`,
+          updatedAt: agora,
+          // Voltou a aparecer: deixa de estar ausente.
+          missingSince: null,
+        },
+      });
+    gravados += parte.length;
+  }
+
+  // O que não veio neste arquivo saiu do relatório de pendências. A data só é
+  // marcada na primeira vez: ela responde "sumiu quando?", não "continua
+  // sumido desde ontem".
+  const ausentes = await db
+    .update(purchaseOrderItems)
+    .set({ missingSince: agora })
+    .where(and(lt(purchaseOrderItems.updatedAt, agora), isNull(purchaseOrderItems.missingSince)));
+
+  return { gravados, marcadosComoAusentes: Number(ausentes[0]?.affectedRows ?? 0) };
+}
+
+/** Os itens que um pedido esperava — a conferência da nota é contra isto. */
+export async function itensDoPedido(pedidos: string[]) {
+  const db = await getDb();
+  if (!db || !pedidos.length) return [];
+  return db
+    .select()
+    .from(purchaseOrderItems)
+    .where(inArray(purchaseOrderItems.purchaseOrder, pedidos))
+    .orderBy(asc(purchaseOrderItems.purchaseOrder), asc(purchaseOrderItems.item));
+}
+
+/** Quantos itens de pedido existem e quando o relatório foi lido pela última vez. */
+export async function situacaoDosPedidos() {
+  const db = await getDb();
+  if (!db) return { itens: 0, pedidos: 0, emAberto: 0, atualizadoEm: null as Date | null };
+  const linhas = await db
+    .select({
+      itens: count(),
+      pedidos: sql<number>`COUNT(DISTINCT ${purchaseOrderItems.purchaseOrder})`,
+      emAberto: sql<number>`SUM(CASE WHEN ${purchaseOrderItems.missingSince} IS NULL THEN 1 ELSE 0 END)`,
+      atualizadoEm: sql<Date | null>`MAX(${purchaseOrderItems.updatedAt})`,
+    })
+    .from(purchaseOrderItems);
+  const linha = linhas[0];
+  return {
+    itens: Number(linha?.itens ?? 0),
+    pedidos: Number(linha?.pedidos ?? 0),
+    emAberto: Number(linha?.emAberto ?? 0),
+    atualizadoEm: linha?.atualizadoEm ? new Date(linha.atualizadoEm) : null,
+  };
 }

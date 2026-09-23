@@ -72,6 +72,9 @@ import {
   listStaffUsers,
   listSupplierAccounts,
   razaoSocialConhecida,
+  gravarPedidosDoSap,
+  situacaoDosPedidos,
+  itensDoPedido,
   setUserRole,
 } from "./db";
 import { supplierNameRule } from "../shared/attendanceFields";
@@ -98,6 +101,9 @@ import { contarAgendamentos } from "./db";
 import { countAppointments, countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
 import { gerarBackup } from "./backup";
 import { decodificarCsv, importarAcervo } from "./agilizaImport";
+import { lerPedidosDoSap } from "./pedidosSap";
+import { pedidosDaNota as numerosDosPedidos } from "../shared/purchaseOrders";
+import { normalizeCnpj } from "./fiscalFilters";
 import { situacaoDasMigracoes } from "./_core/migrations";
 
 /** Uma importação de acervo por vez em todo o servidor. Ver a rota abaixo. */
@@ -573,6 +579,29 @@ export const appRouter = router({
         }
         return appointment;
       }),
+    /**
+     * O que os pedidos de uma nota esperavam, segundo o SAP.
+     *
+     * A nota traz o número do pedido; o pedido diz quais materiais, em que
+     * quantidade e para qual unidade. É contra isto que a nota se confere — e é
+     * dado de compra, então fica no balcão interno, longe do fornecedor.
+     */
+    pedidosDaNota: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        assertSchedulingDesk(ctx.user.role);
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+        const pedidos = numerosDosPedidos(appointment.purchaseOrder);
+        if (!pedidos.length) return { itens: [], unidadeDivergente: false as const };
+        const itens = await itensDoPedido(pedidos);
+        // A unidade do pedido é a que o SAP mandou comprar para; se a nota foi
+        // agendada para outra, a carga vai parar no lugar errado.
+        const unidadesDoPedido = new Set(itens.map(item => item.recipientCnpj).filter(Boolean));
+        const daNota = normalizeCnpj(appointment.recipientCnpj ?? "");
+        const unidadeDivergente = Boolean(daNota) && unidadesDoPedido.size > 0 && !unidadesDoPedido.has(daNota);
+        return { itens, unidadeDivergente };
+      }),
     /** Os fornecedores já cadastrados, para escolher ao registrar uma nota de serviço. */
     fornecedores: protectedProcedure.query(async ({ ctx }) => {
       assertSchedulingDesk(ctx.user.role);
@@ -1001,6 +1030,46 @@ export const appRouter = router({
      * nota, então uma requisição que estoure o tempo pode ser repetida sem
      * duplicar nada.
      */
+    /**
+     * Importa o relatório de pedidos de compra do SAP.
+     *
+     * Separada da importação do acervo de propósito: é outro arquivo, outra
+     * origem e outra frequência — o acervo veio uma vez, este vem todo dia.
+     */
+    importarPedidos: adminProcedure
+      .input(z.object({
+        planilha: z.string().min(1, "Envie a planilha do SAP.").max(20_000_000, "A planilha passa do tamanho aceito."),
+        confirmar: z.boolean().default(false),
+      }))
+      .mutation(async ({ input }) => {
+        if (importacaoEmCurso) {
+          throw new TRPCError({ code: "CONFLICT", message: "Já existe uma importação em andamento. Espere ela terminar." });
+        }
+        importacaoEmCurso = true;
+        try {
+          const conteudo = Buffer.from(input.planilha, "base64");
+          const { itens, recusas } = lerPedidosDoSap(conteudo);
+          const pedidos = new Set(itens.map(item => item.purchaseOrder));
+          const semUnidade = itens.filter(item => !item.recipientCnpj).length;
+          const resumo = {
+            linhas: itens.length,
+            pedidos: pedidos.size,
+            materiais: new Set(itens.map(item => item.sapCode).filter(Boolean)).size,
+            semUnidade,
+            recusas: recusas.slice(0, 20),
+            totalDeRecusas: recusas.length,
+          };
+          // A simulação diz o que entraria sem gravar nada, como na do acervo:
+          // arquivo errado é o tipo de engano que se descobre olhando o resumo.
+          if (!input.confirmar) return { ...resumo, gravados: 0, marcadosComoAusentes: 0, simulacao: true as const };
+          const gravacao = await gravarPedidosDoSap(itens);
+          return { ...resumo, ...gravacao, simulacao: false as const };
+        } finally {
+          importacaoEmCurso = false;
+        }
+      }),
+    /** Quantos pedidos o portal conhece e de quando é a última leitura. */
+    situacaoDosPedidos: adminProcedure.query(async () => situacaoDosPedidos()),
     importarAcervo: adminProcedure
       .input(
         z.object({

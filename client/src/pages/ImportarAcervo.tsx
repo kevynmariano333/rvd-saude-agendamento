@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { homePathFor, type PortalRole } from "@/lib/portal";
-import { AlertTriangle, CheckCircle2, Database, FileSpreadsheet, ListChecks, Play, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Database, FileSpreadsheet, ListChecks, Play, ShoppingCart, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -108,6 +108,19 @@ function ListaDeOcorrencias({ titulo, itens, tom }: { titulo: string; itens: { l
  * de abrir o console do provedor — e o que depende disso não acontece. Aqui o
  * administrador manda os CSVs, vê o que vai entrar e só então confirma.
  */
+/** O que a importação do SAP devolve, simulada ou gravada. */
+type ResumoDosPedidos = {
+  linhas: number;
+  pedidos: number;
+  materiais: number;
+  semUnidade: number;
+  recusas: { linha: number; motivo: string }[];
+  totalDeRecusas: number;
+  gravados: number;
+  marcadosComoAusentes: number;
+  simulacao: boolean;
+};
+
 export default function ImportarAcervo() {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
@@ -118,6 +131,22 @@ export default function ImportarAcervo() {
   const [relatorio, setRelatorio] = useState<Relatorio | null>(null);
   const [preparando, setPreparando] = useState(false);
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
+
+  const [planilhaDoSap, setPlanilhaDoSap] = useState<File | null>(null);
+  const [resumoDoSap, setResumoDoSap] = useState<ResumoDosPedidos | null>(null);
+  const situacao = trpc.manutencao.situacaoDosPedidos.useQuery(undefined, { enabled: ehAdmin });
+  const utils = trpc.useUtils();
+  const importarPedidos = trpc.manutencao.importarPedidos.useMutation({
+    onSuccess: dados => {
+      setResumoDoSap(dados);
+      if (dados.simulacao) toast.success("Simulação concluída. Nada foi gravado.");
+      else {
+        toast.success(`${dados.gravados} item(ns) de pedido atualizados.`);
+        utils.manutencao.situacaoDosPedidos.invalidate();
+      }
+    },
+    onError: erro => toast.error(erro.message),
+  });
 
   const importar = trpc.manutencao.importarAcervo.useMutation({
     onSuccess: dados => {
@@ -152,6 +181,19 @@ export default function ImportarAcervo() {
     }
   };
 
+  const enviarPedidos = async (confirmar: boolean) => {
+    if (!planilhaDoSap) return toast.error("Selecione a planilha do SAP.");
+    setPreparando(true);
+    try {
+      importarPedidos.mutate({ planilha: await lerBase64(planilhaDoSap), confirmar });
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível ler a planilha.");
+    } finally {
+      setPreparando(false);
+    }
+  };
+  const ocupadoNoSap = preparando || importarPedidos.isPending;
+  const simulouSap = Boolean(resumoDoSap?.simulacao);
   const ocupado = preparando || importar.isPending;
   const simulou = Boolean(relatorio && !relatorio.gravou);
 
@@ -168,6 +210,55 @@ export default function ImportarAcervo() {
             </p>
           </div>
         </div>
+      </section>
+
+      {/* Os pedidos vêm de outro arquivo, de outra origem e com outra
+          frequência: o acervo veio uma vez, este vem todo dia. Por isso é um
+          bloco à parte, com o seu próprio simular e confirmar. */}
+      <section className="mt-7 panel p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-rvd-plum-pale text-rvd-plum"><ShoppingCart className="size-5" /></span>
+            <div>
+              <h2 className="font-display text-base font-extrabold text-ink">Pedidos de compra (SAP)</h2>
+              <p className="mt-1 max-w-2xl text-[13px] leading-5 text-ink-soft">
+                A planilha de pedidos em aberto. É ela que diz quais materiais cada pedido esperava — e é contra isso que a nota
+                se confere no detalhamento. Envie de novo a cada atualização: o que mudou é atualizado, e o que saiu do relatório
+                fica marcado como encerrado, sem perder o código SAP.
+              </p>
+            </div>
+          </div>
+          {situacao.data && (
+            <div className="rounded-2xl bg-sunken px-4 py-3 text-right">
+              <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-ink-faint">No portal agora</p>
+              <p className="mt-1 text-[13px] font-bold text-ink">{situacao.data.pedidos} pedido(s) · {situacao.data.itens} item(ns)</p>
+              <p className="mt-0.5 text-[11px] text-ink-soft">{situacao.data.atualizadoEm ? `Última leitura em ${new Date(situacao.data.atualizadoEm).toLocaleString("pt-BR")}` : "Nunca importado"}</p>
+            </div>
+          )}
+        </div>
+        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_auto]">
+          <CampoDeArquivo id="sap-pedidos" titulo="Relatório do SAP" descricao="Planilha (.xlsx) com uma linha por item de pedido." arquivo={planilhaDoSap} onChange={setPlanilhaDoSap} />
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => enviarPedidos(false)} disabled={ocupadoNoSap || !planilhaDoSap} className="h-12 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand/90"><ListChecks className="size-4" />{ocupadoNoSap && !importarPedidos.variables?.confirmar ? "Conferindo..." : "Simular"}</Button>
+            <Button onClick={() => enviarPedidos(true)} disabled={ocupadoNoSap || !simulouSap} className="h-12 rounded-xl bg-rvd-blue px-5 font-bold text-rvd-plum hover:bg-rvd-blue-pale"><Play className="size-4" />{ocupadoNoSap && importarPedidos.variables?.confirmar ? "Gravando..." : "Confirmar e gravar"}</Button>
+          </div>
+        </div>
+        {resumoDoSap && (
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Numero rotulo="Linhas lidas" valor={resumoDoSap.linhas} />
+            <Numero rotulo="Pedidos" valor={resumoDoSap.pedidos} />
+            <Numero rotulo="Materiais" valor={resumoDoSap.materiais} />
+            <Numero rotulo={resumoDoSap.simulacao ? "Seriam gravados" : "Gravados"} valor={resumoDoSap.simulacao ? resumoDoSap.linhas : resumoDoSap.gravados} />
+            {resumoDoSap.semUnidade > 0 && <Numero rotulo="Sem unidade reconhecida" valor={resumoDoSap.semUnidade} destaque />}
+            {!resumoDoSap.simulacao && resumoDoSap.marcadosComoAusentes > 0 && <Numero rotulo="Saíram do relatório" valor={resumoDoSap.marcadosComoAusentes} />}
+            {resumoDoSap.totalDeRecusas > 0 && <Numero rotulo="Linhas recusadas" valor={resumoDoSap.totalDeRecusas} destaque />}
+          </div>
+        )}
+        {resumoDoSap?.recusas.length ? (
+          <ul className="mt-4 space-y-1 rounded-2xl bg-sunken p-4 text-[11px] text-ink-soft">
+            {resumoDoSap.recusas.map(recusa => <li key={`${recusa.linha}-${recusa.motivo}`}>Linha {recusa.linha}: {recusa.motivo}</li>)}
+          </ul>
+        ) : null}
       </section>
 
       <div className="mt-7 grid gap-4 lg:grid-cols-3">

@@ -1,5 +1,6 @@
 import {
   datetime,
+  decimal,
   index,
   int,
   mysqlEnum,
@@ -113,6 +114,56 @@ export const users = mysqlTable(
     lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   },
   table => [uniqueIndex("users_email_unique").on(table.email), index("users_company_cnpj_idx").on(table.companyCnpj), index("users_company_id_idx").on(table.companyId)]
+);
+
+/**
+ * Os itens dos pedidos de compra, lidos do relatório do SAP.
+ *
+ * Servem para a nota se conferir contra a compra que a originou: quais
+ * materiais aquele pedido esperava, em que quantidade, por qual preço e para
+ * qual unidade. Divergência de quantidade e de valor são dois dos motivos de
+ * backlog mais comuns, e hoje só aparecem na doca.
+ *
+ * A chave é o par pedido + item, que é o que identifica uma linha do relatório
+ * sem ambiguidade — um pedido sozinho cobre vários materiais.
+ */
+export const purchaseOrderItems = mysqlTable(
+  "purchaseOrderItems",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    /** "Documento de compras" no relatório. Dez dígitos, como na nota. */
+    purchaseOrder: varchar("purchaseOrder", { length: 20 }).notNull(),
+    /** "Item": 10, 20, 30... */
+    item: varchar("item", { length: 10 }).notNull(),
+    /** "Material Pai": o código SAP do material. */
+    sapCode: varchar("sapCode", { length: 40 }),
+    description: varchar("description", { length: 255 }),
+    /** O centro do SAP traduzido para o CNPJ da unidade que recebe. */
+    recipientCnpj: varchar("recipientCnpj", { length: 20 }),
+    supplierCode: varchar("supplierCode", { length: 40 }),
+    supplierName: varchar("supplierName", { length: 255 }),
+    orderedQuantity: decimal("orderedQuantity", { precision: 14, scale: 3 }),
+    pendingQuantity: decimal("pendingQuantity", { precision: 14, scale: 3 }),
+    unitPriceCents: int("unitPriceCents"),
+    totalCents: int("totalCents"),
+    documentDate: timestamp("documentDate"),
+    /** Quando a última importação trouxe esta linha. */
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    /**
+     * Desde quando a linha parou de vir no relatório.
+     *
+     * Item entregue por completo some do relatório de pendências. Apagar a
+     * linha junto levaria o código SAP embora — e quem precisa dele é
+     * justamente a nota atrasada, que chega depois. Some da conferência de
+     * saldo, fica no cadastro.
+     */
+    missingSince: timestamp("missingSince"),
+  },
+  table => [
+    uniqueIndex("purchase_order_items_unique").on(table.purchaseOrder, table.item),
+    index("purchase_order_items_order_idx").on(table.purchaseOrder),
+    index("purchase_order_items_sap_idx").on(table.sapCode),
+  ]
 );
 
 export const passwordResetTokens = mysqlTable(
