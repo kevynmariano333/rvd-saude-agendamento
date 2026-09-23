@@ -1813,7 +1813,9 @@ export async function itensDoPedido(pedidos: string[]) {
     .select()
     .from(purchaseOrderItems)
     .where(inArray(purchaseOrderItems.purchaseOrder, pedidos))
-    .orderBy(asc(purchaseOrderItems.purchaseOrder), asc(purchaseOrderItems.item));
+    // O item é texto no SAP ("10", "100"), e em ordem de texto o 100 vem antes
+    // do 20. Ordenado como número, a lista sai na sequência do pedido.
+    .orderBy(asc(purchaseOrderItems.purchaseOrder), sql`CAST(${purchaseOrderItems.item} AS UNSIGNED)`);
 }
 
 /** Quantos itens de pedido existem e quando o relatório foi lido pela última vez. */

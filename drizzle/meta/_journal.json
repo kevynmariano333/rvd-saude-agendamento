@@ -232,6 +232,13 @@
       "when": 1790195885793,
       "tag": "0032_lyrical_killer_shrike",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1790197258909,
+      "tag": "0033_magical_captain_universe",
+      "breakpoints": true
     }
   ]
 }

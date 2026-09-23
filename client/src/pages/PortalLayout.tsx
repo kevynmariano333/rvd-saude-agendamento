@@ -95,8 +95,13 @@ export default function PortalLayout({
   const pendingReleases = canApproveEntries ? (releaseRequests.data ?? []) : [];
   // Quem trata o backlog precisa saber que ele encheu sem abrir a tela.
   const podeTratarBacklog = canTreatBacklogPortal(role);
-  const backlogFila = trpc.appointments.list.useQuery({ status: "backlog" }, { enabled: podeTratarBacklog, refetchInterval: 60_000 });
-  const backlogCount = podeTratarBacklog ? (backlogFila.data?.length ?? 0) : 0;
+  // Só o número, não a fila.
+  //
+  // O menu mostra quantas notas estão em backlog, e para isso baixava as notas
+  // inteiras — 557 linhas, mais de meio megabyte — em toda tela do sistema, a
+  // cada minuto. Contar é trabalho do banco.
+  const backlogFila = trpc.appointments.total.useQuery({ status: "backlog" }, { enabled: podeTratarBacklog, refetchInterval: 60_000 });
+  const backlogCount = podeTratarBacklog ? (backlogFila.data ?? 0) : 0;
   const releaseCount = pendingReleases.length;
   const alertCount = unreadCount + releaseCount;
 

@@ -240,6 +240,16 @@ export const appointments = mysqlTable(
   table => [
     index("appointments_supplier_status_idx").on(table.supplierId, table.status),
     index("appointments_schedule_idx").on(table.scheduledFor),
+    // A fila de cada aba é "status + data": sem este índice, o banco lia a
+    // tabela inteira para montar 25 linhas, e o índice (supplierId, status)
+    // não servia porque a busca não começa pelo fornecedor.
+    index("appointments_status_schedule_idx").on(table.status, table.scheduledFor),
+    // O CNPJ do emitente é como as notas são agrupadas por empresa e filtradas
+    // no relatório; sem índice, cada agrupamento varria a tabela.
+    index("appointments_invoice_supplier_cnpj_idx").on(table.invoiceSupplierCnpj),
+    index("appointments_recipient_cnpj_idx").on(table.recipientCnpj),
+    index("appointments_invoice_number_idx").on(table.invoiceNumber),
+    index("appointments_source_idx").on(table.source),
   ]
 );
 

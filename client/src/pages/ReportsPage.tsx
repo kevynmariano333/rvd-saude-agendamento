@@ -8,11 +8,15 @@ import SeletorDeDestinatario from "@/components/SeletorDeDestinatario";
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, CalendarRange, ClipboardList, Download, FileSpreadsheet, Filter, RefreshCw, Search, TableProperties, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { useLocation } from "wouter";
 import PortalLayout from "./PortalLayout";
 
 const initialFilters: ReportFilters = { status: "all" };
+/** Quantas linhas a tela desenha, e quantas o Excel leva. */
+const NA_TELA = 200;
+const NO_EXCEL = 5000;
 const statusOptions = [
   ["all", "Todos"], ["pending", "Pendente"], ["scheduled", "Agendado"], ["received", "Recebido"], ["completed", "Concluído"], ["backlog", "Backlog"], ["rejected", "Rejeitado"],
 ] as const;
@@ -39,7 +43,14 @@ export default function ReportsPage() {
     supplier: filters.supplier?.trim() || undefined,
     recipientCnpjs: cnpjsDoDestinatario(filters.recipientCnpj),
   }), [filters]);
-  const appointments = trpc.reports.notas.useQuery(consultaDeNotas, { enabled: !ehBacklog, placeholderData: anterior => anterior });
+  // A tela mostra uma amostra; o Excel leva tudo.
+  //
+  // Antes cada abertura baixava 3.000 linhas — 2 MB — para desenhar as
+  // primeiras que cabem na rolagem. Agora a tela pede 200 e o arquivo completo
+  // só é buscado quando alguém clica em exportar, que é quando ele serve.
+  const appointments = trpc.reports.notas.useQuery({ ...consultaDeNotas, limite: NA_TELA }, { enabled: !ehBacklog, placeholderData: anterior => anterior });
+  const [exportando, setExportando] = useState(false);
+  const utils = trpc.useUtils();
   const backlogReport = trpc.reports.backlog.useQuery(undefined, { enabled: ehBacklog });
   useEffect(() => { if (auth.data && !isPortalSchedulingDesk(auth.data.role as PortalRole)) setLocation(homePathFor(auth.data.role as PortalRole)); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
   // Já vem filtrado do banco; a tela só conta o que chegou e avisa quando o
@@ -55,17 +66,31 @@ export default function ReportsPage() {
   const tituloDaVisao = view === "backlog" ? "Backlog" : view === "detailed" ? "Detalhado" : "Consolidado";
   const carregando = view === "backlog" ? backlogReport.isLoading : appointments.isFetching && !appointments.data;
   const setFilter = <K extends keyof ReportFilters>(key: K, value: ReportFilters[K]) => setFilters(current => ({ ...current, [key]: value }));
-  const exportExcel = () => {
-    const worksheet = XLSX.utils.json_to_sheet(rows);
+  /** Monta e baixa a planilha a partir das linhas recebidas. */
+  const baixarExcel = (linhas: Record<string, string>[]) => {
+    const worksheet = XLSX.utils.json_to_sheet(linhas);
     worksheet["!cols"] = colunas.map(coluna => ({ wch: Math.max(16, coluna.length + 6) }));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, tituloDaVisao);
     XLSX.writeFile(workbook, `relatorio-${tituloDaVisao.toLowerCase()}-rvd-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
+
+  const exportExcel = async () => {
+    if (view === "backlog") return baixarExcel(rows);
+    setExportando(true);
+    try {
+      const completo = await utils.reports.notas.fetch({ ...consultaDeNotas, limite: NO_EXCEL });
+      baixarExcel(view === "detailed" ? toDetailedReportRows(completo.linhas) : toConsolidatedReportRows(completo.linhas));
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível montar a planilha.");
+    } finally {
+      setExportando(false);
+    }
+  };
   if (!auth.data || !isPortalSchedulingDesk(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;
 
   return <PortalLayout user={auth.data} title="Relatórios" subtitle={ehBacklog ? "Notas que travaram no recebimento, da entrada no backlog à tratativa." : "Histórico completo das notas lançadas."} onLogout={() => logout.mutate()}>
-    <section className="overflow-hidden rounded-3xl bg-[#172136] p-6 text-white shadow-xl shadow-rvd-plum/10 sm:p-8"><div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between"><div className="flex items-center gap-4"><span className="flex size-14 items-center justify-center rounded-2xl bg-white/10 text-on-brand"><ClipboardList className="size-7" /></span><div><p className="font-display text-3xl font-extrabold">Relatórios</p><p className="mt-1 text-sm text-white/75">Consolidado operacional de agendamentos e recebimentos.</p></div></div><div className="flex flex-wrap gap-3"><Button onClick={() => (view === "backlog" ? backlogReport.refetch() : appointments.refetch())} variant="ghost" className="h-11 rounded-xl bg-surface font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"><RefreshCw className="size-4" />Carregar relatório</Button><Button onClick={exportExcel} disabled={!rows.length} className="h-11 rounded-xl bg-rvd-blue font-bold text-rvd-plum hover:bg-rvd-blue-pale"><Download className="size-4" />Exportar Excel ({rows.length})</Button></div></div></section>
+    <section className="overflow-hidden rounded-3xl bg-[#172136] p-6 text-white shadow-xl shadow-rvd-plum/10 sm:p-8"><div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between"><div className="flex items-center gap-4"><span className="flex size-14 items-center justify-center rounded-2xl bg-white/10 text-on-brand"><ClipboardList className="size-7" /></span><div><p className="font-display text-3xl font-extrabold">Relatórios</p><p className="mt-1 text-sm text-white/75">Consolidado operacional de agendamentos e recebimentos.</p></div></div><div className="flex flex-wrap gap-3"><Button onClick={() => (view === "backlog" ? backlogReport.refetch() : appointments.refetch())} variant="ghost" className="h-11 rounded-xl bg-surface font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum"><RefreshCw className="size-4" />Carregar relatório</Button><Button onClick={exportExcel} disabled={!rows.length || exportando} className="h-11 rounded-xl bg-rvd-blue font-bold text-rvd-plum hover:bg-rvd-blue-pale"><Download className="size-4" />{exportando ? "Montando a planilha..." : `Exportar Excel (${view === "backlog" ? rows.length : totalNoBanco})`}</Button></div></div></section>
 
     <section className="mt-7">{ehBacklog ? <div className="flex items-center gap-2 rounded-xl bg-rvd-plum-pale px-4 py-2.5 text-sm font-extrabold text-rvd-plum"><AlertTriangle className="size-4" />Backlog<span className="ml-1 font-normal text-ink-soft">Notas que passaram pelo backlog, com entrada, saída, motivo e comentários.</span></div> : <div className="flex flex-wrap items-center gap-2"><button onClick={() => setVisaoDeNotas("consolidated")} className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold transition ${view === "consolidated" ? "bg-brand text-white shadow-sm" : "bg-rvd-plum-pale text-rvd-plum hover:bg-rvd-plum-soft"}`}><TableProperties className="size-4" />Consolidado</button><button onClick={() => setVisaoDeNotas("detailed")} className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold transition ${view === "detailed" ? "bg-brand text-white shadow-sm" : "bg-rvd-plum-pale text-rvd-plum hover:bg-rvd-plum-soft"}`}><FileSpreadsheet className="size-4" />Detalhado</button><span className="ml-1 text-sm text-ink-soft">{view === "consolidated" ? "Uma linha por nota — visão geral." : "Consulta com todos os dados operacionais disponíveis."}</span></div>}</section>
 
