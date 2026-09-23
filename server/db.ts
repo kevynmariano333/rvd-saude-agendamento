@@ -22,6 +22,7 @@ import {
   type UserAccessStatus,
   type UserRole,
   users,
+  companies,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { normalizeCnpj } from "./fiscalFilters";
@@ -1575,4 +1576,98 @@ export async function listSupplierOptions() {
     .from(users)
     .where(and(eq(users.role, "supplier"), eq(users.accessStatus, "approved")))
     .orderBy(users.companyName);
+}
+
+// ---------------------------------------------------------------------------
+// Empresas: o guarda-chuva sobre os CNPJs de um mesmo fornecedor
+// ---------------------------------------------------------------------------
+
+/**
+ * Um CNPJ que aparece no portal, com quem o usa e quanto ele movimenta.
+ *
+ * A lista é montada a partir das contas de fornecedor, e não das notas: é a
+ * conta que se agrupa numa empresa. O total de notas vem junto porque é por ele
+ * que se reconhece o CNPJ que importa no meio de uma lista longa.
+ */
+export async function listarCnpjsDeFornecedores() {
+  const db = await getDb();
+  if (!db) return [];
+  const linhas = await db
+    .select({
+      companyCnpj: users.companyCnpj,
+      companyName: sql<string | null>`MIN(${users.companyName})`,
+      empresaId: sql<number | null>`MIN(${users.companyId})`,
+      contas: count(users.id),
+    })
+    .from(users)
+    .where(and(eq(users.role, "supplier"), isNotNull(users.companyCnpj), ne(users.companyCnpj, "")))
+    .groupBy(users.companyCnpj)
+    .orderBy(asc(sql`MIN(${users.companyName})`));
+
+  // As notas são contadas por CNPJ do emitente, que é o que a operação enxerga
+  // na tabela — e não pelo dono do login, que pode ser uma transportadora.
+  const notas = await db
+    .select({ cnpj: appointments.invoiceSupplierCnpj, total: count() })
+    .from(appointments)
+    .where(isNotNull(appointments.invoiceSupplierCnpj))
+    .groupBy(appointments.invoiceSupplierCnpj);
+  const porCnpj = new Map(notas.map(linha => [normalizeCnpj(linha.cnpj ?? ""), Number(linha.total)]));
+
+  return linhas.map(linha => ({
+    cnpj: linha.companyCnpj ?? "",
+    nome: linha.companyName,
+    empresaId: linha.empresaId,
+    contas: Number(linha.contas),
+    notas: porCnpj.get(normalizeCnpj(linha.companyCnpj ?? "")) ?? 0,
+  }));
+}
+
+export async function listarEmpresas() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: companies.id, nome: companies.name, criadaEm: companies.createdAt }).from(companies).orderBy(asc(companies.name));
+}
+
+export async function criarEmpresa(nome: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const inserido = await db.insert(companies).values({ name: nome });
+  return { id: Number(inserido[0].insertId), nome };
+}
+
+/** Membros de uma empresa: todas as contas de fornecedor ligadas a ela. */
+export async function listarMembrosDaEmpresa(empresaId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({ id: users.id, nome: users.name, email: users.email, cnpj: users.companyCnpj, razaoSocial: users.companyName, acesso: users.accessStatus })
+    .from(users)
+    .where(eq(users.companyId, empresaId))
+    .orderBy(asc(users.name));
+}
+
+/**
+ * Liga (ou desliga) um CNPJ inteiro a uma empresa.
+ *
+ * O agrupamento é por CNPJ, e não por conta: quem cadastra uma conta nova com um
+ * CNPJ já agrupado entra na empresa junto, sem ninguém precisar lembrar de
+ * arrastá-la para lá depois.
+ */
+export async function agruparCnpj(cnpj: string, empresaId: number | null) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const digitos = normalizeCnpj(cnpj);
+  if (!digitos) throw new Error("Informe um CNPJ válido.");
+  await db.update(users).set({ companyId: empresaId, updatedAt: new Date() }).where(and(eq(users.role, "supplier"), eq(users.companyCnpj, digitos)));
+}
+
+/** As contas aprovadas de uma empresa — o alcance de quem pertence a ela. */
+export async function listarIdsDaEmpresa(empresaId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const linhas = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.companyId, empresaId), eq(users.role, "supplier"), eq(users.accessStatus, "approved")));
+  return linhas.map(linha => linha.id);
 }

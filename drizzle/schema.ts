@@ -75,6 +75,24 @@ export type AttendanceClassificationDetail = (typeof attendanceClassificationDet
 export type AttendanceStatus = (typeof attendanceStatuses)[number];
 export type AttendanceEventType = (typeof attendanceEventTypes)[number];
 
+/**
+ * A empresa que agrupa CNPJs de um mesmo fornecedor.
+ *
+ * Um fornecedor grande entrega por várias filiais, cada uma com o seu CNPJ, e
+ * quem acompanha é a mesma pessoa. Sem agrupamento, ela precisaria de um login
+ * por filial e não veria o conjunto. A empresa é esse guarda-chuva: quem está
+ * nela enxerga as notas de todos os CNPJs dela.
+ */
+export const companies = mysqlTable(
+  "companies",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    name: varchar("name", { length: 255 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [uniqueIndex("companies_name_unique").on(table.name)]
+);
+
 export const users = mysqlTable(
   "users",
   {
@@ -84,6 +102,8 @@ export const users = mysqlTable(
     email: varchar("email", { length: 320 }),
     companyName: varchar("companyName", { length: 255 }),
     companyCnpj: varchar("companyCnpj", { length: 20 }),
+    /** Vazio: a conta vê só o seu CNPJ. Preenchido: vê o da empresa inteira. */
+    companyId: int("companyId").references(() => companies.id, { onDelete: "set null" }),
     loginMethod: varchar("loginMethod", { length: 64 }),
     passwordHash: varchar("passwordHash", { length: 255 }),
     role: mysqlEnum("role", userRoles).default("supplier").notNull(),
@@ -92,7 +112,7 @@ export const users = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
     lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   },
-  table => [uniqueIndex("users_email_unique").on(table.email), index("users_company_cnpj_idx").on(table.companyCnpj)]
+  table => [uniqueIndex("users_email_unique").on(table.email), index("users_company_cnpj_idx").on(table.companyCnpj), index("users_company_id_idx").on(table.companyId)]
 );
 
 export const passwordResetTokens = mysqlTable(

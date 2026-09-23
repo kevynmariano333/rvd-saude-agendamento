@@ -9,6 +9,7 @@ import {
   attendanceStatuses,
   type AppointmentStatus,
   type UserRole,
+  userRoles,
 } from "../drizzle/schema";
 import {
   type AppointmentFilters,
@@ -47,6 +48,12 @@ import {
   updateUserName,
   updateUserPassword,
   listApprovedCompanyUserIds,
+  listarIdsDaEmpresa,
+  listarCnpjsDeFornecedores,
+  listarEmpresas,
+  listarMembrosDaEmpresa,
+  criarEmpresa,
+  agruparCnpj,
   listPendingAccessRequests,
   setUserAccessStatus,
   createPasswordResetToken,
@@ -226,7 +233,7 @@ async function getExistingAttendance(attendanceId: number) {
   return attendance;
 }
 
-type ScopedUser = { id: number; role: UserRole; companyCnpj?: string | null };
+type ScopedUser = { id: number; role: UserRole; companyCnpj?: string | null; companyId?: number | null };
 
 /**
  * The supplier logins whose appointments this caller may read. Logins sharing a
@@ -234,6 +241,9 @@ type ScopedUser = { id: number; role: UserRole; companyCnpj?: string | null };
  * on the operator neither sees the company nor is seen by it.
  */
 async function supplierScopeIds(user: ScopedUser): Promise<number[]> {
+  // Conta agrupada numa empresa enxerga os CNPJs todos dela — é para isso que a
+  // empresa existe. Sem grupo, continua valendo o CNPJ da própria conta.
+  if (user.companyId) return buildScopeIds(user.id, await listarIdsDaEmpresa(user.companyId));
   const key = companyKey(user.companyCnpj);
   if (!key) return [user.id];
   return buildScopeIds(user.id, await listApprovedCompanyUserIds(key));
@@ -1243,8 +1253,81 @@ export const appRouter = router({
         });
       }),
   }),
+  /**
+   * Empresas: o guarda-chuva sobre os CNPJs de um mesmo fornecedor.
+   *
+   * Tudo aqui é do administrador. Agrupar CNPJ é decidir quem enxerga as notas
+   * de quem — é controle de acesso, não organização de cadastro.
+   */
+  empresas: router({
+    lista: adminProcedure.query(async () => ({ empresas: await listarEmpresas(), cnpjs: await listarCnpjsDeFornecedores() })),
+    membros: adminProcedure
+      .input(z.object({ empresaId: z.number().int().positive() }))
+      .query(async ({ input }) => listarMembrosDaEmpresa(input.empresaId)),
+    criar: adminProcedure
+      .input(z.object({ nome: z.string().trim().min(2, "Informe o nome da empresa.").max(255) }))
+      .mutation(async ({ input }) => {
+        const existentes = await listarEmpresas();
+        if (existentes.some(empresa => empresa.nome.toLowerCase() === input.nome.toLowerCase())) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe uma empresa com esse nome." });
+        }
+        return criarEmpresa(input.nome);
+      }),
+    agrupar: adminProcedure
+      .input(z.object({ cnpj: z.string().min(11).max(20), empresaId: z.number().int().positive().nullable() }))
+      .mutation(async ({ input }) => {
+        if (input.empresaId) {
+          const existentes = await listarEmpresas();
+          if (!existentes.some(empresa => empresa.id === input.empresaId)) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Empresa não encontrada." });
+          }
+        }
+        await agruparCnpj(input.cnpj, input.empresaId);
+        return { ok: true as const };
+      }),
+  }),
   staff: router({
     list: adminProcedure.query(async () => listStaffUsers()),
+    /**
+     * Cria uma conta já liberada, pelo administrador.
+     *
+     * Até aqui só existiam dois caminhos para entrar: o fornecedor se cadastrar
+     * e esperar aprovação, ou a conta de teste. Quem precisa dar acesso a um
+     * operador novo — ou cadastrar o fornecedor que não se cadastra sozinho —
+     * não tinha por onde. A conta nasce aprovada porque quem a criou é
+     * justamente quem aprovaria.
+     */
+    criarUsuario: adminProcedure
+      .input(z.object({
+        nome: z.string().trim().min(2, "Informe o nome.").max(255),
+        email: z.string().trim().email("Informe um e-mail válido.").max(320),
+        senha: z.string().min(6, "A senha deve ter pelo menos 6 caracteres.").max(200),
+        role: z.enum(userRoles),
+        razaoSocial: z.string().trim().max(255).optional(),
+        cnpj: z.string().trim().max(20).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const email = input.email.toLowerCase();
+        if (await getUserByEmail(email)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe uma conta com esse e-mail." });
+        }
+        const cnpj = input.cnpj ? input.cnpj.replace(/\D/g, "") : "";
+        // O fornecedor sem CNPJ não enxergaria nota nenhuma: é pelo CNPJ que as
+        // notas dele são encontradas.
+        if (input.role === "supplier" && cnpj.length !== 14) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o CNPJ do fornecedor com 14 dígitos." });
+        }
+        const criado = await createLocalUser({
+          email,
+          role: input.role,
+          passwordHash: hashPassword(input.senha),
+          name: input.nome,
+          companyName: input.razaoSocial || undefined,
+          companyCnpj: cnpj || undefined,
+          accessStatus: "approved",
+        });
+        return publicUser(criado);
+      }),
     setRole: adminProcedure
       .input(z.object({ userId: z.number().int().positive(), role: z.enum(["admin", "operator", "portaria", "operacao", "planejador"]) }))
       .mutation(async ({ ctx, input }) => {
