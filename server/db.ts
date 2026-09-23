@@ -1197,6 +1197,33 @@ export async function listStaffUsers() {
     .orderBy(desc(users.lastSignedIn));
 }
 
+/**
+ * As contas de fornecedor, que são a outra metade de quem entra no portal.
+ *
+ * Ficam separadas da equipe interna porque o que se faz com elas é outro: um
+ * fornecedor não muda de perfil — ele é fornecedor —, o que se decide é se
+ * entra ou não, e por qual CNPJ ele enxerga as notas.
+ */
+export async function listSupplierAccounts() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      companyName: users.companyName,
+      companyCnpj: users.companyCnpj,
+      companyId: users.companyId,
+      accessStatus: users.accessStatus,
+      lastSignedIn: users.lastSignedIn,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(eq(users.role, "supplier"))
+    .orderBy(desc(users.lastSignedIn));
+}
+
 export async function setUserRole(input: { userId: number; role: UserRole }) {
   const db = await getDb();
   if (!db) return;

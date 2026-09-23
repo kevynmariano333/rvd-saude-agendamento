@@ -2,8 +2,10 @@ import { EmptyState, Panel, PanelBody, PanelHeader } from "@/components/PortalKi
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { formatCnpj, roleLabel, type PortalRole, homePathFor } from "@/lib/portal";
-import { Ban, CheckCircle2, ShieldCheck, UserCheck, UsersRound, X } from "lucide-react";
-import { useEffect } from "react";
+import { Ban, Building2, CheckCircle2, Search, ShieldCheck, UserCheck, UsersRound, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { formatarCnpj } from "@shared/recipients";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import PortalLayout from "./PortalLayout";
@@ -29,6 +31,8 @@ export default function AccessRequests() {
   const isAdmin = auth.data?.role === "admin";
   const pending = trpc.accessRequests.listPending.useQuery(undefined, { enabled: isAdmin });
   const staff = trpc.staff.list.useQuery(undefined, { enabled: isAdmin });
+  const fornecedores = trpc.staff.fornecedores.useQuery(undefined, { enabled: isAdmin });
+  const [buscaDeFornecedor, setBuscaDeFornecedor] = useState("");
 
   const decide = trpc.accessRequests.decide.useMutation({
     onSuccess: (_result, variables) => {
@@ -51,9 +55,45 @@ export default function AccessRequests() {
     onSuccess: (_result, variables) => {
       toast.success(variables.allowed ? "Acesso liberado." : "Acesso bloqueado. A conta não entra mais no sistema.");
       utils.staff.list.invalidate();
+      utils.staff.fornecedores.invalidate();
     },
     onError: error => toast.error(error.message),
   });
+
+  /**
+   * A equipe interna, separada por perfil.
+   *
+   * Numa lista só, achar o planejador no meio dos operadores era ler linha por
+   * linha. A ordem é a da hierarquia de acesso — de quem vê tudo a quem vê uma
+   * tela — e perfil sem ninguém não vira cabeçalho vazio.
+   */
+  const equipePorPerfil = useMemo(() => {
+    const ordem: PortalRole[] = ["admin", "operator", "planejador", "portaria", "operacao"];
+    const contas = staff.data ?? [];
+    return ordem
+      .map(perfil => ({ perfil, contas: contas.filter(conta => conta.role === perfil && conta.accessStatus !== "rejected") }))
+      .filter(grupo => grupo.contas.length > 0);
+  }, [staff.data]);
+  /**
+   * As contas bloqueadas, num lugar só.
+   *
+   * Espalhadas pelos perfis, elas engordavam listas de gente que trabalha com
+   * gente que não entra mais. Juntas, viram o que de fato são: uma lista para
+   * revisar de vez em quando, e de onde se libera quem voltou.
+   */
+  const bloqueados = useMemo(() => [
+    ...(staff.data ?? []).filter(conta => conta.accessStatus === "rejected").map(conta => ({ id: conta.id, nome: conta.name, email: conta.email, detalhe: roleLabel[conta.role as PortalRole] })),
+    ...(fornecedores.data ?? []).filter(conta => conta.accessStatus === "rejected").map(conta => ({ id: conta.id, nome: conta.companyName || conta.name, email: conta.email, detalhe: conta.companyCnpj ? `Fornecedor · ${formatarCnpj(conta.companyCnpj)}` : "Fornecedor" })),
+  ], [fornecedores.data, staff.data]);
+  const fornecedoresFiltrados = useMemo(() => {
+    const texto = buscaDeFornecedor.trim().toLowerCase();
+    const digitos = texto.replace(/\D/g, "");
+    return (fornecedores.data ?? []).filter(conta => conta.accessStatus !== "rejected").filter(conta => {
+      if (!texto) return true;
+      const alvo = `${conta.companyName ?? ""} ${conta.name ?? ""} ${conta.email ?? ""}`.toLowerCase();
+      return alvo.includes(texto) || (digitos.length > 0 && (conta.companyCnpj ?? "").includes(digitos));
+    });
+  }, [buscaDeFornecedor, fornecedores.data]);
 
   useEffect(() => {
     if (auth.data && auth.data.role !== "admin") {
@@ -150,9 +190,13 @@ export default function AccessRequests() {
             <PanelBody>
               <p className="text-sm text-ink-soft">Carregando equipe...</p>
             </PanelBody>
-          ) : team.length ? (
+          ) : equipePorPerfil.length ? (
             <ul className="divide-y divide-line">
-              {team.map(member => {
+              {equipePorPerfil.flatMap(grupo => [
+                <li key={`cabecalho-${grupo.perfil}`} className="bg-sunken px-5 py-2 sm:px-6">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-ink-faint">{roleLabel[grupo.perfil]} · {grupo.contas.length}</p>
+                </li>,
+                ...grupo.contas.map(member => {
                 const blocked = member.accessStatus === "rejected";
                 return (
                 <li key={member.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -210,7 +254,8 @@ export default function AccessRequests() {
                   </div>
                 </li>
                 );
-              })}
+                }),
+              ])}
             </ul>
           ) : (
             <EmptyState
@@ -220,6 +265,94 @@ export default function AccessRequests() {
             />
           )}
         </Panel>
+
+        <Panel>
+          <PanelHeader
+            eyebrow="Logins de fornecedor"
+            title="Quem entra de fora"
+            description="As contas dos fornecedores ficam aqui, à parte da equipe interna: o que se decide nelas é se entram ou não, e por qual CNPJ enxergam as notas."
+            icon={Building2}
+          />
+          <div className="border-b border-line px-5 py-3 sm:px-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 size-4 text-rvd-plum" />
+              <Input value={buscaDeFornecedor} onChange={evento => setBuscaDeFornecedor(evento.target.value)} placeholder="Buscar por nome, e-mail ou CNPJ..." className="h-10 border-line bg-surface pl-9 text-sm text-rvd-plum" />
+            </div>
+          </div>
+          {fornecedores.isLoading ? (
+            <PanelBody><p className="text-sm text-ink-soft">Carregando fornecedores...</p></PanelBody>
+          ) : fornecedoresFiltrados.length ? (
+            <ul className="max-h-[32rem] divide-y divide-line overflow-y-auto">
+              {fornecedoresFiltrados.map(conta => {
+                const bloqueado = conta.accessStatus === "rejected";
+                return (
+                  <li key={conta.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-ink">{conta.companyName || conta.name || "Conta sem nome"}</p>
+                      <p className="mt-0.5 truncate text-[13px] text-ink-soft">{conta.email || "E-mail não informado"}</p>
+                      <p className="mt-0.5 text-[11px] text-ink-faint">
+                        {conta.companyCnpj ? formatarCnpj(conta.companyCnpj) : "Sem CNPJ — não enxerga nota nenhuma"}
+                        {conta.lastSignedIn ? ` · último acesso em ${new Date(conta.lastSignedIn).toLocaleDateString("pt-BR")}` : ""}
+                      </p>
+                      {conta.accessStatus !== "approved" && (
+                        <span className={`mt-1.5 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${bloqueado ? "bg-state-stop-bg text-state-stop" : "bg-state-wait-bg text-state-wait"}`}>
+                          {conta.accessStatus === "pending" ? "Aguardando aprovação" : "Bloqueado — não entra no sistema"}
+                        </span>
+                      )}
+                    </div>
+                    {/* Fornecedor não muda de perfil: ele é fornecedor. O que se
+                        decide aqui é se a conta entra ou não. */}
+                    <Button
+                      onClick={() => setAccess.mutate({ userId: conta.id, allowed: bloqueado })}
+                      disabled={setAccess.isPending}
+                      variant="outline"
+                      className={`h-9 shrink-0 rounded-xl border-line px-3.5 text-xs font-bold ${bloqueado ? "text-state-go hover:bg-state-go-bg" : "text-state-stop hover:bg-state-stop-bg"}`}
+                    >
+                      {bloqueado ? <><ShieldCheck className="size-4" />Liberar</> : <><Ban className="size-4" />Bloquear</>}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <EmptyState
+              icon={Building2}
+              title={buscaDeFornecedor ? "Nenhum fornecedor encontrado" : "Nenhum fornecedor cadastrado"}
+              description={buscaDeFornecedor ? "Tente outro nome, e-mail ou CNPJ." : "As contas aparecem aqui assim que o primeiro fornecedor se cadastrar."}
+            />
+          )}
+        </Panel>
+
+        {bloqueados.length > 0 && (
+          <Panel>
+            <PanelHeader
+              eyebrow="Bloqueados"
+              title="Contas sem acesso"
+              description="Ficam fora das listas acima para não se misturarem com quem trabalha. Continuam no histórico das notas que registraram; só não entram mais."
+              icon={Ban}
+            />
+            <ul className="divide-y divide-line">
+              {bloqueados.map(conta => (
+                <li key={conta.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-ink">{conta.nome || "Conta sem nome"}</p>
+                    <p className="mt-0.5 truncate text-[13px] text-ink-soft">{conta.email || "E-mail não informado"}</p>
+                    <p className="mt-0.5 text-[11px] text-ink-faint">{conta.detalhe}</p>
+                  </div>
+                  <Button
+                    onClick={() => setAccess.mutate({ userId: conta.id, allowed: true })}
+                    disabled={setAccess.isPending}
+                    variant="outline"
+                    className="h-9 shrink-0 rounded-xl border-line px-3.5 text-xs font-bold text-state-go hover:bg-state-go-bg"
+                  >
+                    <ShieldCheck className="size-4" />
+                    Liberar de novo
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        )}
 
         <EstadoDoSistemaCard />
       <BackupCard />

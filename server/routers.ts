@@ -70,6 +70,7 @@ import {
   listAttendancesByDay,
   listAttendancesInRange,
   listStaffUsers,
+  listSupplierAccounts,
   setUserRole,
 } from "./db";
 import { supplierNameRule } from "../shared/attendanceFields";
@@ -1288,6 +1289,8 @@ export const appRouter = router({
   }),
   staff: router({
     list: adminProcedure.query(async () => listStaffUsers()),
+    /** As contas de fornecedor, listadas à parte da equipe interna. */
+    fornecedores: adminProcedure.query(async () => listSupplierAccounts()),
     /**
      * Cria uma conta já liberada, pelo administrador.
      *
