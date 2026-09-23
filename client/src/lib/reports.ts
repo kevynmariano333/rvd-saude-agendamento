@@ -12,6 +12,7 @@ export type ReportAppointment = {
   /** CNPJ cadastrado no login que enviou. Serve de reserva. */
   supplierCnpj: string | null;
   recipientCnpj: string | null;
+  rejectionReason?: string | null;
   purchaseOrder: string | null;
   miroNumber: string | null;
   invoiceVolumeCount: number | null;
@@ -50,6 +51,7 @@ export type DetailedReportRow = ConsolidatedReportRow & {
   "CNPJ destinatário": string;
   Volumes: string;
   "Valor total": string;
+  "Motivo da recusa": string;
 };
 
 function isWithinDateRange(value: Date | string | null, start?: string, end?: string) {
@@ -105,7 +107,15 @@ function baseRow(item: ReportAppointment): ConsolidatedReportRow {
     Status: statusCopy[item.status],
     "Data de agendamento": formatReportDate(item.scheduledFor),
     "Data de recebimento": formatReportDate(item.receivedAt),
-    "Item recebido": item.status === "received" || item.status === "completed" ? item.serviceType : "Aguardando recebimento",
+    // Uma nota recusada não está "aguardando recebimento": ela não vem mais. A
+    // coluna diz o que aconteceu com ela, com o motivo quando existe.
+    "Item recebido": item.status === "received" || item.status === "completed"
+      ? item.serviceType
+      : item.status === "rejected"
+        ? `Recusada${item.rejectionReason ? `: ${item.rejectionReason}` : ""}`
+        : item.status === "backlog"
+          ? "Em backlog"
+          : "Aguardando recebimento",
   };
 }
 
@@ -120,6 +130,7 @@ export function toDetailedReportRows(appointments: ReportAppointment[]): Detaile
     "CNPJ destinatário": apenasDigitos(item.recipientCnpj) ? formatarCnpj(item.recipientCnpj) : "—",
     Volumes: item.invoiceVolumeCount === null ? "—" : String(item.invoiceVolumeCount),
     "Valor total": formatReportMoney(item.invoiceTotalCents),
+    "Motivo da recusa": item.rejectionReason || "—",
   }));
 }
 

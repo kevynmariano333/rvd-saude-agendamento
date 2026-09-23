@@ -7,11 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { getAppointmentMomentForDisplay, hasConfirmedAppointmentMoment, type PortalStatus, formatAppointmentDate, sourceCopy, statusCopy, homePathFor, isPortalOperator, isPortalSchedulingDesk, type PortalRole } from "@/lib/portal";
-import { isScheduledForDate } from "@/lib/agendaFilters";
 import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { cnpjsDoDestinatario, rotuloDoDestinatario } from "@shared/recipients";
 import SeletorDeDestinatario from "../components/SeletorDeDestinatario";
 import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
+import { numerosDasPaginas } from "@/lib/paginacao";
 import UrgenciaBadge from "../components/UrgenciaBadge";
 import { MOTIVOS_DE_BACKLOG } from "@shared/backlogReasons";
 import { AlertTriangle, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardCheck, FileText, Filter, Grid2X2, MessageSquare, RefreshCw, RotateCcw, Search, X, Wrench} from "lucide-react";
@@ -47,8 +47,9 @@ function todayValue() { return formatSaoPauloDateKey(); }
 function tomorrowValue() { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); return formatSaoPauloDateKey(tomorrow); }
 function datePart(value: Date | string) { return new Date(value).toLocaleDateString("en-CA"); }
 
-/** Quantas linhas a tabela pede por vez. */
-const PAGINA = 100;
+/** Quantas notas cabem numa página da tabela. */
+const POR_PAGINA = 25;
+
 
 export default function OperatorDashboard() {
   const [location, setLocation] = useLocation();
@@ -93,7 +94,7 @@ export default function OperatorDashboard() {
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
   // A tabela mostra um punhado de linhas por vez. Sem teto, cada abertura
   // trazia as milhares de notas do acervo para exibir as primeiras cinquenta.
-  const [limite, setLimite] = useState(PAGINA);
+  const [pagina, setPagina] = useState(1);
   // A aba de serviço filtra por origem, e não por status: são as notas que
   // entram sem XML, registradas pela operação.
   const [somenteServico, setSomenteServico] = useState(false);
@@ -101,12 +102,14 @@ export default function OperatorDashboard() {
   // "Data inicial/final" é intervalo; "Hoje" e "Amanhã" continuam sendo um dia
   // só, por isso vão num campo separado em vez de virar um intervalo de um dia.
   const listInput = useMemo(() => ({
-    limit: limite,
+    limit: POR_PAGINA,
+    offset: (pagina - 1) * POR_PAGINA,
     source: somenteServico ? ("servico" as const) : undefined,
     date: dailyFilterDate || tomorrowFilterDate || undefined,
     dateStart: date || undefined,
     dateEnd: dateEnd || undefined,
     status: activeStatus === "all" ? undefined : activeStatus,
+    excludeBacklog: activeStatus === "all",
     invoiceNumber: invoiceNumber || undefined,
     supplierName: supplierName || undefined,
     recipientCnpjs: cnpjsDoDestinatario(recipientCnpj),
@@ -117,11 +120,14 @@ export default function OperatorDashboard() {
     itemCount: itemCount.trim() ? Number(itemCount) : undefined,
     onlyUrgent: onlyUrgent || undefined,
     preNote: preNote === "all" ? undefined : preNote,
-  }), [activeStatus, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, limite, onlyUrgent, preNote, purchaseOrder, recipientCnpj, sapCode, somenteServico, supplierCnpj, supplierName, tomorrowFilterDate]);
+  }), [activeStatus, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, pagina, preNote, purchaseOrder, recipientCnpj, sapCode, somenteServico, supplierCnpj, supplierName, tomorrowFilterDate]);
   // Trocar de aba ou de filtro recomeça a contagem: a página 3 de uma busca não
   // é a página 3 da seguinte.
-  useEffect(() => { setLimite(PAGINA); }, [activeStatus, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, preNote, purchaseOrder, recipientCnpj, sapCode, supplierCnpj, supplierName, tomorrowFilterDate]);
+  useEffect(() => { setPagina(1); }, [activeStatus, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, preNote, purchaseOrder, recipientCnpj, sapCode, supplierCnpj, supplierName, tomorrowFilterDate]);
   const agenda = trpc.appointments.list.useQuery(listInput);
+  // Quantas notas o filtro alcança. A lista devolve uma página; o número de
+  // páginas só o banco sabe.
+  const totalDoFiltro = trpc.appointments.total.useQuery(listInput, { placeholderData: anterior => anterior });
   // As contagens das abas vêm contadas do banco. Antes a tela baixava a tabela
   // inteira só para exibir sete números.
   const contagens = trpc.appointments.counts.useQuery();
@@ -143,10 +149,12 @@ export default function OperatorDashboard() {
     if (!nota) return;
     setChatTarget({ id: nota.id, invoiceNumber: nota.invoiceNumber, serviceType: nota.serviceType, invoiceSupplierName: nota.invoiceSupplierName });
   }, [notaPedidaPeloLink.data, location]);
-  const shortcutDate = dailyFilterDate || tomorrowFilterDate;
   // O backlog é o que travou e precisa voltar para a fila. Continua fora das
   // outras abas para não inflar a contagem do dia, mas agora tem a sua.
-  const visibleAgenda = useMemo(() => agenda.data?.filter(item => (activeStatus === "backlog" || item.status !== "backlog") && (!shortcutDate || isScheduledForDate(item.scheduledFor, shortcutDate))) ?? [], [activeStatus, agenda.data, shortcutDate]);
+  // O que a tabela mostra é a página que o banco devolveu, sem peneira aqui: o
+  // backlog e o dia já saem filtrados de lá. Peneirar depois de paginar daria
+  // páginas de 22 linhas onde deveriam vir 25.
+  const visibleAgenda = agenda.data ?? [];
   const counters = useMemo(() => {
     const porStatus: Record<string, number> = contagens.data ?? {};
     const de = (status: string) => porStatus[status] ?? 0;
@@ -154,6 +162,8 @@ export default function OperatorDashboard() {
     const total = Object.entries(porStatus).reduce((soma, [status, quantidade]) => (status === "backlog" ? soma : soma + quantidade), 0);
     return { all: total, pending: de("pending"), scheduled: de("scheduled"), received: de("received"), completed: de("completed"), backlog: de("backlog"), rejected: de("rejected") };
   }, [contagens.data]);
+  const totalFiltrado = totalDoFiltro.data ?? visibleAgenda.length;
+  const totalDePaginas = Math.max(1, Math.ceil(totalFiltrado / POR_PAGINA));
   /** Agendadas cujo horário já passou sem recebimento. */
   const atrasadas = contagens.data?.atrasadas ?? 0;
   const isTodayFilterApplied = Boolean(dailyFilterDate);
@@ -247,7 +257,7 @@ export default function OperatorDashboard() {
         <button onClick={() => setSomenteServico(valor => !valor)} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-[11px] font-bold uppercase tracking-wide transition ${somenteServico ? "border-rvd-plum bg-brand text-white" : "border-line bg-surface text-rvd-plum hover:bg-rvd-plum-pale"}`}><Wrench className="size-3.5" />Serviço</button></div>
       {somenteServico && <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-rvd-plum-pale px-4 py-3 text-xs font-bold text-rvd-plum"><span className="inline-flex items-center gap-2"><Wrench className="size-4" />Você está vendo as notas de serviço — não as notas de produto.</span><button onClick={() => setSomenteServico(false)} className="underline">Voltar aos produtos</button></div>}
     </section>
-      <section className="mt-6 overflow-hidden panel"><div className="overflow-x-auto"><table className="w-full min-w-[1060px] text-left"><thead className="bg-sunken"><tr className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint"><th className="px-3 py-3">Status</th><th className="px-3 py-3">Fornecedor</th><th className="px-3 py-3">Destinatário</th><th className="px-3 py-3">Nota fiscal</th><th className="px-3 py-3">Pedido</th><th className="px-3 py-3">{activeStatus === "rejected" ? "Motivo da recusa" : activeStatus === "pending" ? "Confirmação" : activeStatus === "received" ? "Recebimento" : "Agendamento"}</th><th className="px-3 py-3 text-right">Ações</th></tr></thead><tbody>{agenda.isLoading ? <tr><td colSpan={7} className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando agendamentos...</td></tr> : visibleAgenda.length ? visibleAgenda.map(item => <AppointmentRow key={item.id} item={item} activeStatus={activeStatus} canConfirm={podeConfirmar} onFinalize={() => openFinalize(item)} onDetails={() => setDetails(item)} onHistory={() => setDateHistory(item)} onChat={() => setChatTarget(item)} onPreNote={() => item.preNoteConfirmedAt ? toast.info("Pré-nota já confirmada.") : setPreNoteTarget(item)} onSchedule={() => openSchedule(item)} onUpdate={(status, reason) => updateStatus.mutate({ appointmentId: item.id, status, rejectionReason: reason })} onRescue={() => rescue.mutate({ appointmentId: item.id })} />) : <tr><td colSpan={7} className="px-4 py-16 text-center"><Search className="mx-auto size-7 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhum agendamento encontrado</p><p className="mt-1 text-sm text-ink-soft">Ajuste os filtros ou selecione outra aba de status.</p></td></tr>}</tbody></table></div>{visibleAgenda.length >= limite && <div className="border-t border-line px-4 py-4 text-center"><Button onClick={() => setLimite(atual => atual + PAGINA)} variant="ghost" className="h-10 rounded-xl border border-line font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Carregar mais {PAGINA} · mostrando {visibleAgenda.length} de {counters[activeStatus === "all" ? "all" : activeStatus] ?? visibleAgenda.length}</Button></div>}</section>
+      <section className="mt-6 overflow-hidden panel"><div className="overflow-x-auto"><table className="w-full min-w-[1060px] text-left"><thead className="bg-sunken"><tr className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint"><th className="px-3 py-3">Status</th><th className="px-3 py-3">Fornecedor</th><th className="px-3 py-3">Destinatário</th><th className="px-3 py-3">Nota fiscal</th><th className="px-3 py-3">Pedido</th><th className="px-3 py-3">{activeStatus === "rejected" ? "Motivo da recusa" : activeStatus === "pending" ? "Confirmação" : activeStatus === "received" ? "Recebimento" : "Agendamento"}</th><th className="px-3 py-3 text-right">Ações</th></tr></thead><tbody>{agenda.isLoading ? <tr><td colSpan={7} className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando agendamentos...</td></tr> : visibleAgenda.length ? visibleAgenda.map(item => <AppointmentRow key={item.id} item={item} activeStatus={activeStatus} canConfirm={podeConfirmar} onFinalize={() => openFinalize(item)} onDetails={() => setDetails(item)} onHistory={() => setDateHistory(item)} onChat={() => setChatTarget(item)} onPreNote={() => item.preNoteConfirmedAt ? toast.info("Pré-nota já confirmada.") : setPreNoteTarget(item)} onSchedule={() => openSchedule(item)} onUpdate={(status, reason) => updateStatus.mutate({ appointmentId: item.id, status, rejectionReason: reason })} onRescue={() => rescue.mutate({ appointmentId: item.id })} />) : <tr><td colSpan={7} className="px-4 py-16 text-center"><Search className="mx-auto size-7 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhum agendamento encontrado</p><p className="mt-1 text-sm text-ink-soft">Ajuste os filtros ou selecione outra aba de status.</p></td></tr>}</tbody></table></div>{totalDePaginas > 1 && <BarraDePaginas pagina={pagina} totalDePaginas={totalDePaginas} total={totalFiltrado} primeira={(pagina - 1) * POR_PAGINA + 1} ultima={Math.min(pagina * POR_PAGINA, totalFiltrado)} onPagina={setPagina} />}</section>
     <FinalizeDialog item={finalizeTarget} open={Boolean(finalizeTarget)} onOpenChange={open => !open && setFinalizeTarget(null)} mode={finalizeMode} onMode={setFinalizeMode} miro={miro} onMiro={setMiro} note={finalizeNote} onNote={setFinalizeNote} reason={finalizeReason} onReason={setFinalizeReason} onConfirm={confirmFinalize} loading={updateStatus.isPending} />
     <SuggestDialog item={suggestTarget} open={Boolean(suggestTarget)} onOpenChange={open => !open && setSuggestTarget(null)} date={suggestDate} time={suggestTime} notes={suggestNotes} onDate={setSuggestDate} onTime={setSuggestTime} onNotes={setSuggestNotes} onConfirm={confirmSuggestion} loading={createSuggestion.isPending} />
     <ScheduleDialog item={selected} open={Boolean(selected)} onOpenChange={open => !open && setSelected(null)} date={scheduleDate} time={scheduleTime} onDate={setScheduleDate} onTime={setScheduleTime} onConfirm={confirmSchedule} loading={schedule.isPending} activeAppointments={activeSupplier.data?.filter(item => item.id !== selected?.id) ?? []} suggestions={pendingSuggestions.data ?? []} acceptedSuggestionId={acceptedSuggestionId} onAcceptSuggestion={acceptSuggestion} />
@@ -323,4 +333,28 @@ function FinalizeDialog({ item, open, onOpenChange, mode, onMode, miro, onMiro, 
         </div>}
     <div className="mt-7 flex justify-end gap-3"><Button variant="ghost" onClick={() => onOpenChange(false)} className="font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button><Button onClick={onConfirm} disabled={loading} className="h-12 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand">{loading ? "Confirmando..." : mode === "sucesso" ? "Confirmar finalização" : "Enviar para o backlog"}</Button></div>
   </DialogContent></Dialog>;
+}
+
+/**
+ * A barra de páginas.
+ *
+ * Antes a tabela tinha um "carregar mais" que empilhava linhas: para chegar à
+ * nota do meio do acervo era preciso clicar dezenas de vezes e rolar tudo. Com
+ * páginas numeradas, ir da 1 para a 7 é um clique — e a barra diz sempre quais
+ * linhas estão à vista, do total.
+ */
+function BarraDePaginas({ pagina, totalDePaginas, total, primeira, ultima, onPagina }: { pagina: number; totalDePaginas: number; total: number; primeira: number; ultima: number; onPagina: (pagina: number) => void }) {
+  const botao = "inline-flex h-9 min-w-9 items-center justify-center rounded-lg px-2.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40";
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
+      <p className="text-xs text-ink-soft">Mostrando <strong className="font-extrabold text-ink">{primeira}–{ultima}</strong> de <strong className="font-extrabold text-ink">{total}</strong> nota(s)</p>
+      <div className="flex flex-wrap items-center gap-1">
+        <button type="button" onClick={() => onPagina(pagina - 1)} disabled={pagina <= 1} className={`${botao} border border-line text-rvd-plum hover:bg-rvd-plum-pale`}>Anterior</button>
+        {numerosDasPaginas(pagina, totalDePaginas).map((numero, indice) => numero === "vazio"
+          ? <span key={`vazio-${indice}`} className="px-1 text-xs font-bold text-ink-faint">…</span>
+          : <button key={numero} type="button" onClick={() => onPagina(numero)} aria-current={numero === pagina ? "page" : undefined} className={`${botao} ${numero === pagina ? "bg-brand text-white" : "border border-line text-rvd-plum hover:bg-rvd-plum-pale"}`}>{numero}</button>)}
+        <button type="button" onClick={() => onPagina(pagina + 1)} disabled={pagina >= totalDePaginas} className={`${botao} border border-line text-rvd-plum hover:bg-rvd-plum-pale`}>Próxima</button>
+      </div>
+    </div>
+  );
 }

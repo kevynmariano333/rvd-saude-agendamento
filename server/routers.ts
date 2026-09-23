@@ -83,7 +83,7 @@ import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, re
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
-import { countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
+import { countAppointments, countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
 import { gerarBackup } from "./backup";
 import { decodificarCsv, importarAcervo } from "./agilizaImport";
 import { situacaoDasMigracoes } from "./_core/migrations";
@@ -109,6 +109,9 @@ import {
 
 const localProfileSchema = z.enum(["operator", "supplier", "portaria", "operacao"]);
 const statusSchema = z.enum(appointmentStatuses);
+
+/** Os filtros da agenda: a lista e a contagem das páginas leem os mesmos. */
+const filtrosDaLista = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional(), recipientCnpjs: z.array(z.string().max(40)).max(20).optional(), purchaseOrder: z.string().max(100).optional(), sapCode: z.string().max(60).optional(), supplierCnpj: z.string().max(20).optional(), itemCountOperator: z.enum([">=", "<=", "="]).optional(), itemCount: z.number().int().min(0).max(100000).optional(), dateStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), dateEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), onlyUrgent: z.boolean().optional(), preNote: z.enum(["done", "pending"]).optional(), excludeBacklog: z.boolean().optional(), source: z.enum(appointmentSources).optional(), limit: z.number().int().positive().max(500).optional(), offset: z.number().int().min(0).optional() }).optional();
 const demoLogin = "admin";
 const demoPassword = "admin";
 
@@ -432,7 +435,7 @@ export const appRouter = router({
         return { valid: true as const, invoiceNumber: appointment.invoiceNumber, scheduledFor };
       }),
     list: protectedProcedure
-      .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional(), recipientCnpjs: z.array(z.string().max(40)).max(20).optional(), purchaseOrder: z.string().max(100).optional(), sapCode: z.string().max(60).optional(), supplierCnpj: z.string().max(20).optional(), itemCountOperator: z.enum([">=", "<=", "="]).optional(), itemCount: z.number().int().min(0).max(100000).optional(), dateStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), dateEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), onlyUrgent: z.boolean().optional(), preNote: z.enum(["done", "pending"]).optional(), source: z.enum(appointmentSources).optional(), limit: z.number().int().positive().max(500).optional(), offset: z.number().int().min(0).optional() }).optional())
+      .input(filtrosDaLista)
       .query(async ({ ctx, input }) => {
         const filters: AppointmentFilters = {
           limit: input?.limit,
@@ -443,9 +446,28 @@ export const appRouter = router({
           date: input?.date, status: input?.status as AppointmentStatus | undefined, source: input?.source, invoiceNumber: input?.invoiceNumber, supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj, recipientCnpjs: input?.recipientCnpjs,
           purchaseOrder: input?.purchaseOrder, sapCode: input?.sapCode, supplierCnpj: input?.supplierCnpj,
           itemCountOperator: input?.itemCountOperator, itemCount: input?.itemCount,
-          dateStart: input?.dateStart, dateEnd: input?.dateEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote };
+          dateStart: input?.dateStart, dateEnd: input?.dateEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote, excludeBacklog: input?.excludeBacklog };
         if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
         return listAppointments(filters);
+      }),
+    /**
+     * Quantas notas o filtro alcança — o que diz quantas páginas existem.
+     *
+     * Fica separado da lista porque a lista devolve um array e cinco telas já
+     * dependem desse formato; embrulhar tudo num objeto para servir a paginação
+     * de uma delas quebraria as outras quatro.
+     */
+    total: protectedProcedure
+      .input(filtrosDaLista)
+      .query(async ({ ctx, input }) => {
+        const filters: AppointmentFilters = {
+          date: input?.date, status: input?.status as AppointmentStatus | undefined, source: input?.source, invoiceNumber: input?.invoiceNumber,
+          supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj, recipientCnpjs: input?.recipientCnpjs,
+          purchaseOrder: input?.purchaseOrder, sapCode: input?.sapCode, supplierCnpj: input?.supplierCnpj,
+          itemCountOperator: input?.itemCountOperator, itemCount: input?.itemCount,
+          dateStart: input?.dateStart, dateEnd: input?.dateEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote, excludeBacklog: input?.excludeBacklog };
+        if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
+        return countAppointments(filters);
       }),
     /**
      * Uma nota inteira, para quem abriu o detalhamento.

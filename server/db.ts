@@ -159,6 +159,8 @@ export type AppointmentFilters = {
   onlyUrgent?: boolean;
   /** Pré-nota: confirmada, pendente, ou tanto faz. */
   preNote?: "done" | "pending";
+  /** Tira o backlog da lista: ele tem aba e fila próprias. */
+  excludeBacklog?: boolean;
 };
 
 /**
@@ -199,25 +201,23 @@ function condicoesDeBusca(filtros: AppointmentFilters) {
 }
 
 /**
- * A lista das notas, sem o que só o detalhamento usa.
+ * As condições de uma consulta à lista de notas.
  *
- * Os itens de cada nota (invoiceItemsJson) ficaram de fora: eram 39% do peso da
- * resposta, e nenhuma tela de lista mostra item nenhum. Quem abre uma nota
- * busca a nota inteira por id, uma de cada vez.
+ * Devolve `null` quando o filtro de fornecedores está vazio: isso não é "sem
+ * condição nenhuma", é "não vê nada". Quem chama precisa tratar os dois casos,
+ * e é por isso que o vazio não vem como lista vazia.
  */
-export async function listAppointments(filters: AppointmentFilters = {}) {
-  const db = await getDb();
-  if (!db) return [];
-
+function condicoesDaLista(filters: AppointmentFilters) {
   const conditions = [];
   if (filters.supplierId) conditions.push(eq(appointments.supplierId, filters.supplierId));
-  // An empty list is "sees nothing", not "sees everything": inArray with no
-  // values would drop the condition and expose every supplier's records.
   if (filters.supplierIds) {
-    if (!filters.supplierIds.length) return [];
+    if (!filters.supplierIds.length) return null;
     conditions.push(inArray(appointments.supplierId, filters.supplierIds));
   }
   if (filters.status) conditions.push(eq(appointments.status, filters.status));
+  // O backlog sai no banco, e não na tela: filtrar depois de paginar entregaria
+  // páginas de tamanhos diferentes, com buracos onde estavam as notas tiradas.
+  else if (filters.excludeBacklog) conditions.push(ne(appointments.status, "backlog"));
   if (filters.source) conditions.push(eq(appointments.source, filters.source));
   if (filters.invoiceNumber) conditions.push(like(appointments.invoiceNumber, `%${filters.invoiceNumber.trim()}%`));
   if (filters.supplierName) {
@@ -232,6 +232,40 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
     if (range) conditions.push(gte(appointments.scheduledFor, range.start), lte(appointments.scheduledFor, range.end));
   }
   conditions.push(...condicoesDeBusca(filters));
+  return conditions;
+}
+
+/**
+ * Quantas notas o filtro alcança, contadas no banco.
+ *
+ * A tela pagina de 25 em 25 e precisa saber quantas páginas existem. Contar o
+ * que voltou não serve: o que volta é uma página.
+ */
+export async function countAppointments(filters: AppointmentFilters = {}) {
+  const db = await getDb();
+  if (!db) return 0;
+  const conditions = condicoesDaLista(filters);
+  if (!conditions) return 0;
+  const consulta = db.select({ total: count() }).from(appointments).innerJoin(users, eq(appointments.supplierId, users.id));
+  const linhas = await (conditions.length ? consulta.where(and(...conditions)) : consulta);
+  return Number(linhas[0]?.total ?? 0);
+}
+
+/**
+ * A lista das notas, sem o que só o detalhamento usa.
+ *
+ * Os itens de cada nota (invoiceItemsJson) ficaram de fora: eram 39% do peso da
+ * resposta, e nenhuma tela de lista mostra item nenhum. Quem abre uma nota
+ * busca a nota inteira por id, uma de cada vez.
+ */
+export async function listAppointments(filters: AppointmentFilters = {}) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = condicoesDaLista(filters);
+  // Lista vazia de fornecedores é "não vê nada", não "vê tudo": sem esta saída,
+  // o inArray sem valores cairia fora e exporia as notas de todo mundo.
+  if (!conditions) return [];
 
   const query = db
     .select({
@@ -1404,6 +1438,9 @@ export async function listReportRows(filtros: {
     status: appointments.status,
     scheduledFor: appointments.scheduledFor,
     receivedAt: appointments.receivedAt,
+    // A nota recusada aparece no relatório como qualquer outra; sem o motivo,
+    // a linha diria "recusada" e não diria por quê.
+    rejectionReason: appointments.rejectionReason,
   };
 
   const base = db.select(colunas).from(appointments).innerJoin(users, eq(appointments.supplierId, users.id));
