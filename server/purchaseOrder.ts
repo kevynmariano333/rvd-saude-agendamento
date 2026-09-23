@@ -20,3 +20,15 @@ export function normalizePurchaseOrder(bruto: string | null | undefined): string
   if (!limpo) return null;
   return limpo.slice(0, PURCHASE_ORDER_MAX);
 }
+
+/**
+ * Cabe na coluna?
+ *
+ * Uma nota pode cobrir vários pedidos, e eles são gravados num campo só. Passar
+ * do limite fazia o `slice` cortar o último pela metade — a nota ficava com um
+ * pedido inventado e ninguém era avisado. Melhor recusar e dizer quantos cabem.
+ */
+export function pedidosCabem(bruto: string | null | undefined): boolean {
+  if (!bruto) return true;
+  return bruto.replace(/\s+/g, " ").trim().length <= PURCHASE_ORDER_MAX;
+}

@@ -93,7 +93,7 @@ import { situacaoDasMigracoes } from "./_core/migrations";
 
 /** Uma importação de acervo por vez em todo o servidor. Ver a rota abaixo. */
 let importacaoEmCurso = false;
-import { normalizePurchaseOrder } from "./purchaseOrder";
+import { normalizePurchaseOrder, pedidosCabem, PURCHASE_ORDER_MAX } from "./purchaseOrder";
 import { MIRO_DIGITS, normalizeMiroNumber } from "../shared/miro";
 import { buildDashboardMetrics } from "./dashboardMetrics";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
@@ -729,6 +729,11 @@ export const appRouter = router({
         const purchaseOrder = normalizePurchaseOrder(input.purchaseOrder);
         if (!purchaseOrder) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o número do pedido de compra da nota." });
+        }
+        // Vários pedidos são gravados num campo só; passar do limite cortaria o
+        // último pela metade e a nota ficaria com um pedido que não existe.
+        if (!pedidosCabem(input.purchaseOrder)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `São pedidos demais para uma nota só (o limite é ${PURCHASE_ORDER_MAX} caracteres somando todos). Divida em mais de um agendamento.` });
         }
         const suggestedFor = input.suggestedFor ? new Date(input.suggestedFor) : undefined;
         if (suggestedFor && (Number.isNaN(suggestedFor.getTime()) || suggestedFor.getTime() <= Date.now())) {
