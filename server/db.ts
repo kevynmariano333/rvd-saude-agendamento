@@ -340,6 +340,13 @@ export async function listUnreadAppointmentMessages(input: { userId: number; isO
     .limit(8);
 }
 
+/**
+ * As notas de um período, para o calendário.
+ *
+ * Traz a nota inteira menos os itens: quem abre um dia no calendário quer
+ * abrir a nota ali mesmo, e voltar ao banco por cada uma seria uma consulta
+ * por clique. Os itens continuam de fora, que é o único campo pesado.
+ */
 export async function listAppointmentsBetween(start: Date, end: Date) {
   const db = await getDb();
   if (!db) return [];
@@ -349,6 +356,7 @@ export async function listAppointmentsBetween(start: Date, end: Date) {
       supplierId: appointments.supplierId,
       supplierName: users.name,
       supplierEmail: users.email,
+      supplierCnpj: users.companyCnpj,
       serviceType: appointments.serviceType,
       scheduledFor: appointments.scheduledFor,
       notes: appointments.notes,
@@ -364,9 +372,21 @@ export async function listAppointmentsBetween(start: Date, end: Date) {
       invoiceSupplierCnpj: appointments.invoiceSupplierCnpj,
       recipientCnpj: appointments.recipientCnpj,
       invoiceIssuedAt: appointments.invoiceIssuedAt,
+      invoiceTotalCents: appointments.invoiceTotalCents,
+      invoiceVolumeCount: appointments.invoiceVolumeCount,
+      receivedAt: appointments.receivedAt,
+      miroNumber: appointments.miroNumber,
+      quotationNumber: appointments.quotationNumber,
+      memorizedOrder: appointments.memorizedOrder,
+      hisEntryDocument: appointments.hisEntryDocument,
+      hisExitDocument: appointments.hisExitDocument,
+      backlogReasonCode: appointments.backlogReasonCode,
+      backlogReason: appointments.backlogReason,
+      treatedAt: appointments.treatedAt,
       rejectionReason: appointments.rejectionReason,
       status: appointments.status,
       createdAt: appointments.createdAt,
+      updatedAt: appointments.updatedAt,
     })
     .from(appointments)
     .innerJoin(users, eq(appointments.supplierId, users.id))
