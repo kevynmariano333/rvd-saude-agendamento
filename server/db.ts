@@ -1472,6 +1472,12 @@ export async function listReportRows(filtros: {
   const onde = condicoes.length ? and(...condicoes) : undefined;
   const colunas = {
     id: appointments.id,
+    createdAt: appointments.createdAt,
+    // Quando o status mudou pela última vez — a coluna "Data do Último Status".
+    updatedAt: appointments.updatedAt,
+    // Quantas linhas a nota tem. Contado no banco: trazer o JSON dos itens só
+    // para medir o tamanho dele custaria 39% do peso da resposta.
+    totalDeLinhas: sql<number>`COALESCE(JSON_LENGTH(${appointments.invoiceItemsJson}), 0)`,
     invoiceNumber: appointments.invoiceNumber,
     supplierName: users.name,
     invoiceSupplierName: appointments.invoiceSupplierName,

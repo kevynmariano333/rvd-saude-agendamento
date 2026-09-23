@@ -4,6 +4,11 @@ import { rotuloDoMotivo } from "@shared/backlogReasons";
 
 export type ReportAppointment = {
   id: number;
+  createdAt?: Date | string | null;
+  /** Quando o status mudou pela última vez. */
+  updatedAt?: Date | string | null;
+  /** Quantos itens a nota tem. Vem contado do banco. */
+  totalDeLinhas?: number | null;
   invoiceNumber: string | null;
   supplierName: string | null;
   invoiceSupplierName: string | null;
@@ -33,24 +38,35 @@ export type ReportFilters = {
   recipientCnpj?: string;
 };
 
+/**
+ * As colunas do consolidado, na ordem em que a operação as conhece.
+ *
+ * São as mesmas do relatório que o sistema anterior exportava: quem confere
+ * hoje tem planilha antiga aberta ao lado, e mudar a ordem ou o nome de uma
+ * coluna obriga a pessoa a reaprender um documento que ela já lê de cor. O que
+ * é só nosso — MIRO, volumes, valores — mora no detalhado.
+ */
 export type ConsolidatedReportRow = {
-  "Nota fiscal": string;
-  Fornecedor: string;
-  Unidade: string;
-  Pedido: string;
-  "Número MIRO": string;
-  Status: string;
-  "Data de agendamento": string;
-  "Data de recebimento": string;
-  "Item recebido": string;
+  "Data de Criação": string;
+  "Último Status": string;
+  "Data do Último Status": string;
+  "Data de Agendamento": string;
+  "Número da Nota": string;
+  "Número do Pedido": string;
+  "CNPJ Fornecedor": string;
+  "Nome Fornecedor": string;
+  "Total de Linhas": string;
+  "CNPJ Destino": string;
+  "Descrição Destino": string;
 };
 
 /** O detalhado acrescenta o que não cabe numa visão de conferência rápida. */
 export type DetailedReportRow = ConsolidatedReportRow & {
-  "CNPJ fornecedor": string;
-  "CNPJ destinatário": string;
+  "Número MIRO": string;
   Volumes: string;
   "Valor total": string;
+  "Data de Recebimento": string;
+  "Item recebido": string;
   "Motivo da recusa": string;
 };
 
@@ -95,27 +111,26 @@ export function unitLabel(recipientCnpj: string | null) {
   return apenasDigitos(recipientCnpj) ? formatarCnpj(recipientCnpj) : "—";
 }
 
+/** "HSH - HOSPITAL", como a planilha de origem escreve. */
+function descricaoDestino(recipientCnpj: string | null) {
+  const unidade = unidadePorCnpj(recipientCnpj);
+  if (unidade) return `${unidade.sigla} - ${unidade.curto}`;
+  return apenasDigitos(recipientCnpj) ? "Destino não cadastrado" : "—";
+}
+
 function baseRow(item: ReportAppointment): ConsolidatedReportRow {
   return {
-    "Nota fiscal": item.invoiceNumber || "—",
-    Fornecedor: item.invoiceSupplierName || item.supplierName || "—",
-    Unidade: unitLabel(item.recipientCnpj),
-    Pedido: item.purchaseOrder || "—",
-    // O MIRO é a chave para cruzar este relatório com o SAP; sem ele a
-    // conferência volta a ser nota por nota, na mão.
-    "Número MIRO": item.miroNumber || "—",
-    Status: statusCopy[item.status],
-    "Data de agendamento": formatReportDate(item.scheduledFor),
-    "Data de recebimento": formatReportDate(item.receivedAt),
-    // Uma nota recusada não está "aguardando recebimento": ela não vem mais. A
-    // coluna diz o que aconteceu com ela, com o motivo quando existe.
-    "Item recebido": item.status === "received" || item.status === "completed"
-      ? item.serviceType
-      : item.status === "rejected"
-        ? `Recusada${item.rejectionReason ? `: ${item.rejectionReason}` : ""}`
-        : item.status === "backlog"
-          ? "Em backlog"
-          : "Aguardando recebimento",
+    "Data de Criação": formatReportDate(item.createdAt ?? null),
+    "Último Status": statusCopy[item.status],
+    "Data do Último Status": formatReportDate(item.updatedAt ?? null),
+    "Data de Agendamento": formatReportDate(item.scheduledFor),
+    "Número da Nota": item.invoiceNumber || "—",
+    "Número do Pedido": item.purchaseOrder || "—",
+    "CNPJ Fornecedor": cnpjDoRemetente(item) ? formatarCnpj(cnpjDoRemetente(item)) : "—",
+    "Nome Fornecedor": item.invoiceSupplierName || item.supplierName || "—",
+    "Total de Linhas": item.totalDeLinhas === null || item.totalDeLinhas === undefined ? "—" : String(item.totalDeLinhas),
+    "CNPJ Destino": apenasDigitos(item.recipientCnpj) ? formatarCnpj(item.recipientCnpj) : "—",
+    "Descrição Destino": descricaoDestino(item.recipientCnpj),
   };
 }
 
@@ -126,10 +141,21 @@ export function toConsolidatedReportRows(appointments: ReportAppointment[]): Con
 export function toDetailedReportRows(appointments: ReportAppointment[]): DetailedReportRow[] {
   return appointments.map(item => ({
     ...baseRow(item),
-    "CNPJ fornecedor": cnpjDoRemetente(item) ? formatarCnpj(cnpjDoRemetente(item)) : "—",
-    "CNPJ destinatário": apenasDigitos(item.recipientCnpj) ? formatarCnpj(item.recipientCnpj) : "—",
+    // O MIRO é a chave para cruzar com o SAP; sem ele a conferência volta a ser
+    // nota por nota, na mão.
+    "Número MIRO": item.miroNumber || "—",
     Volumes: item.invoiceVolumeCount === null ? "—" : String(item.invoiceVolumeCount),
     "Valor total": formatReportMoney(item.invoiceTotalCents),
+    "Data de Recebimento": formatReportDate(item.receivedAt),
+    // Uma nota recusada não está "aguardando recebimento": ela não vem mais. A
+    // coluna diz o que aconteceu com ela, com o motivo quando existe.
+    "Item recebido": item.status === "received" || item.status === "completed"
+      ? item.serviceType
+      : item.status === "rejected"
+        ? `Recusada${item.rejectionReason ? `: ${item.rejectionReason}` : ""}`
+        : item.status === "backlog"
+          ? "Em backlog"
+          : "Aguardando recebimento",
     "Motivo da recusa": item.rejectionReason || "—",
   }));
 }
@@ -146,6 +172,7 @@ export function reportColumns(view: "consolidated" | "detailed"): string[] {
     id: 0, invoiceNumber: null, supplierName: null, invoiceSupplierName: null, supplierCnpj: null,
     invoiceSupplierCnpj: null, recipientCnpj: null, purchaseOrder: null, miroNumber: null, invoiceVolumeCount: null,
     invoiceTotalCents: null, serviceType: "", status: "pending", scheduledFor: new Date(0), receivedAt: null,
+    createdAt: null, updatedAt: null, totalDeLinhas: null,
   };
   const linha = view === "detailed" ? toDetailedReportRows([modelo])[0] : toConsolidatedReportRows([modelo])[0];
   return Object.keys(linha);
