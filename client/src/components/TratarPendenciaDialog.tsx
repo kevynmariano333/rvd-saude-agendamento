@@ -9,6 +9,7 @@ import { rotuloDoDestinatario } from "@shared/recipients";
 import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
 import UrgenciaBadge from "./UrgenciaBadge";
 import { ERRO_MIRO, validarTratativa } from "@shared/tratativa";
+import { normalizeMiroNumber } from "@shared/miro";
 import { rotuloDoMotivo } from "@shared/backlogReasons";
 import { AlertTriangle, ClipboardCheck, MessageSquare, Send } from "lucide-react";
 import { useState } from "react";
@@ -32,6 +33,9 @@ function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode 
  */
 export default function TratarPendenciaDialog({ appointment, open, onOpenChange, onTreated }: { appointment: AppointmentDetail | null; open: boolean; onOpenChange: (open: boolean) => void; onTreated: () => void }) {
   const [miro, setMiro] = useState("");
+  // O mesmo que o servidor exige, verificado aqui para o botão não convidar a
+  // um clique que vai ser recusado.
+  const miroValido = Boolean(normalizeMiroNumber(miro));
   const [cotacao, setCotacao] = useState("");
   const [pedidoMemorizado, setPedidoMemorizado] = useState("");
   const [entradaHis, setEntradaHis] = useState("");
@@ -144,7 +148,7 @@ export default function TratarPendenciaDialog({ appointment, open, onOpenChange,
         </div>
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <Button variant="ghost" onClick={() => onOpenChange(false)} className="font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Fechar</Button>
-          <Button onClick={finalizar} disabled={tratar.isPending} className="h-12 rounded-xl bg-brand px-6 font-bold text-white hover:bg-brand"><ClipboardCheck className="size-4" />{tratar.isPending ? "Finalizando..." : "Finalizar tratamento"}</Button>
+          <Button onClick={finalizar} disabled={tratar.isPending || !miroValido} title={miroValido ? undefined : "Informe o MIRO para finalizar a tratativa"} className="h-12 rounded-xl bg-brand px-6 font-bold text-white hover:bg-brand"><ClipboardCheck className="size-4" />{tratar.isPending ? "Finalizando..." : "Finalizar tratamento"}</Button>
         </div>
       </section>
     </div>

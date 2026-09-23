@@ -11,6 +11,7 @@ import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { cnpjsDoDestinatario, rotuloDoDestinatario } from "@shared/recipients";
 import SeletorDeDestinatario from "../components/SeletorDeDestinatario";
 import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
+import { MIRO_DIGITS, normalizeMiroNumber } from "@shared/miro";
 import { numerosDasPaginas } from "@/lib/paginacao";
 import UrgenciaBadge from "../components/UrgenciaBadge";
 import { MOTIVOS_DE_BACKLOG } from "@shared/backlogReasons";
@@ -221,7 +222,7 @@ export default function OperatorDashboard() {
     }
     // A mesma regra do servidor, aqui só para responder na hora em vez de
     // depois da ida e volta.
-    if (!/^\d{10}$/.test(miro.replace(/\s/g, ""))) return toast.error("O número MIRO deve ter exatamente 10 dígitos.");
+    if (!normalizeMiroNumber(miro)) return toast.error(`O número MIRO deve ter exatamente ${MIRO_DIGITS} dígitos.`);
     updateStatus.mutate({ appointmentId: finalizeTarget.id, status: "completed", miroNumber: miro });
   };
   const confirmSuggestion = () => {
@@ -352,9 +353,22 @@ function SuggestDialog({ item, open, onOpenChange, date, time, notes, onDate, on
  */
 function FinalizeDialog({ item, open, onOpenChange, mode, onMode, miro, onMiro, note, onNote, reason, onReason, onConfirm, loading }: { item: Appointment | null; open: boolean; onOpenChange: (open: boolean) => void; mode: "sucesso" | "problema"; onMode: (value: "sucesso" | "problema") => void; miro: string; onMiro: (value: string) => void; note: string; onNote: (value: string) => void; reason: string; onReason: (value: string) => void; onConfirm: () => void; loading: boolean }) {
   const cardClass = (active: boolean) => `flex flex-1 flex-col items-center gap-2 rounded-2xl border px-4 py-5 text-sm font-bold transition ${active ? "border-rvd-plum bg-brand text-white" : "border-line bg-sunken text-ink-soft hover:bg-rvd-plum-pale hover:text-rvd-plum"}`;
+  const digitosDoMiro = miro.replace(/\D/g, "");
+  const miroValido = digitosDoMiro.length === MIRO_DIGITS;
+  const podeConfirmar = mode === "sucesso" ? miroValido : Boolean(reason) && Boolean(note.trim());
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-lg rounded-[2rem] border-line bg-surface p-7"><DialogHeader><DialogTitle className="flex items-center gap-2 font-display text-2xl font-extrabold text-ink"><CheckCircle2 className="size-6 text-rvd-plum" />Finalizar recebimento</DialogTitle><DialogDescription className="text-rvd-plum">{item?.invoiceNumber ? `Nota ${item.invoiceNumber}` : "Nota sem número"} · confirme o resultado da operação.</DialogDescription></DialogHeader>
     <div className="mt-6 flex gap-3"><button type="button" onClick={() => onMode("sucesso")} className={cardClass(mode === "sucesso")} aria-pressed={mode === "sucesso"}><CheckCircle2 className="size-5" />Sucesso</button><button type="button" onClick={() => onMode("problema")} className={cardClass(mode === "problema")} aria-pressed={mode === "problema"}><AlertTriangle className="size-5" />Problema / Backlog</button></div>
-    {mode === "sucesso" ? <div className="mt-6 rounded-2xl border border-line bg-canvas p-5"><Label htmlFor="miro" className="text-xs font-bold uppercase tracking-[0.14em] text-ink-faint">Número MIRO (SAP)</Label><Input id="miro" value={miro} onChange={event => onMiro(event.target.value)} inputMode="numeric" maxLength={14} placeholder="0000000000" className="mt-2 h-12 border-line bg-surface font-mono text-lg text-rvd-plum" /><p className="mt-2 text-xs text-ink-soft">Deve ter exatamente 10 dígitos numéricos.</p></div>
+    {mode === "sucesso" ? <div className="mt-6 rounded-2xl border border-line bg-canvas p-5">
+        <Label htmlFor="miro" className="text-xs font-bold uppercase tracking-[0.14em] text-ink-faint">Número MIRO (SAP) *</Label>
+        <Input id="miro" value={miro} onChange={event => onMiro(event.target.value)} inputMode="numeric" maxLength={14} placeholder="0000000000" aria-required aria-invalid={!miroValido && digitosDoMiro.length > 0} className={`mt-2 h-12 bg-surface font-mono text-lg text-rvd-plum ${miroValido ? "border-state-go" : digitosDoMiro.length ? "border-state-stop" : "border-line"}`} />
+        {/* O MIRO é o que fecha a nota contra o SAP: sem ele a conclusão é só
+            uma marcação na tela. Em vez de deixar clicar e recusar depois, o
+            botão só libera com os dez dígitos, e o campo vai dizendo quanto
+            falta. */}
+        <p className={`mt-2 text-xs font-bold ${miroValido ? "text-state-go" : digitosDoMiro.length ? "text-state-stop" : "text-ink-soft"}`}>
+          {miroValido ? "MIRO válido." : digitosDoMiro.length ? `Faltam ${MIRO_DIGITS - digitosDoMiro.length} dígito(s) — o MIRO tem exatamente ${MIRO_DIGITS}.` : `Obrigatório: exatamente ${MIRO_DIGITS} dígitos numéricos.`}
+        </p>
+      </div>
       : <div className="mt-6 space-y-4 rounded-2xl border border-line bg-canvas p-5">
           <div>
             <Label htmlFor="finalize-reason" className="text-xs font-bold uppercase tracking-[0.14em] text-ink-faint">Motivo *</Label>
@@ -369,7 +383,7 @@ function FinalizeDialog({ item, open, onOpenChange, mode, onMode, miro, onMiro, 
             <p className="mt-2 text-xs text-ink-soft">A nota vai para o Backlog e fica lá até o Planejador tratar. É este texto que ele lê primeiro.</p>
           </div>
         </div>}
-    <div className="mt-7 flex justify-end gap-3"><Button variant="ghost" onClick={() => onOpenChange(false)} className="font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button><Button onClick={onConfirm} disabled={loading} className="h-12 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand">{loading ? "Confirmando..." : mode === "sucesso" ? "Confirmar finalização" : "Enviar para o backlog"}</Button></div>
+    <div className="mt-7 flex justify-end gap-3"><Button variant="ghost" onClick={() => onOpenChange(false)} className="font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button><Button onClick={onConfirm} disabled={loading || !podeConfirmar} title={podeConfirmar ? undefined : mode === "sucesso" ? "Informe o número MIRO para concluir" : "Escolha o motivo e descreva o que houve"} className="h-12 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand disabled:cursor-not-allowed disabled:opacity-50">{loading ? "Confirmando..." : mode === "sucesso" ? "Confirmar finalização" : "Enviar para o backlog"}</Button></div>
   </DialogContent></Dialog>;
 }
 
