@@ -6,6 +6,14 @@ const str = (name: string): string => (process.env[name] ?? "").trim();
 export const ENV = {
   appId: str("VITE_APP_ID"),
   cookieSecret: str("JWT_SECRET"),
+  /**
+   * A senha das contas de teste em produção.
+   *
+   * Vazia — o padrão — mantém as contas de teste desligadas no ar. Definida,
+   * elas voltam a funcionar, mas só com esta senha: nunca com "admin", que é o
+   * que qualquer pessoa tenta primeiro.
+   */
+  senhaDasContasDeTeste: str("SENHA_CONTAS_TESTE"),
   databaseUrl: str("DATABASE_URL"),
   oAuthServerUrl: str("OAUTH_SERVER_URL"),
   ownerOpenId: str("OWNER_OPEN_ID"),

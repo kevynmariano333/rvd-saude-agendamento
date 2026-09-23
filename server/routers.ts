@@ -80,6 +80,7 @@ import { storagePut } from "./storage";
 import { MAX_XML_BYTES, parseInvoiceXml } from "./xmlInvoice";
 import { ENV } from "./_core/env";
 import { limparFalhas, registrarFalha, segundosDeEspera } from "./loginThrottle";
+import { estadoDasContasDeTeste } from "./contasDeTeste";
 import { createAppointmentValidationToken, readAppointmentValidationToken } from "./appointmentValidation";
 import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
 import { isMailerConfigured, sendMail } from "./_core/mailer";
@@ -118,24 +119,25 @@ const demoLogin = "admin";
 const demoPassword = "admin";
 
 /**
- * As contas de teste, e por que elas não existem em produção.
- *
- * O login "admin" com senha "admin" cria — e depois abre — uma conta de
- * administrador. Em desenvolvimento isso poupa cadastro; num servidor aberto à
- * internet é uma porta que qualquer pessoa que encontre o endereço consegue
- * abrir na primeira tentativa, com acesso a todo o acervo de notas e aos dados
- * dos fornecedores.
+ * As contas de teste do portal.
  *
  * Bloquear só a criação não bastaria: onde a conta de teste já foi criada uma
- * vez, ela continua no banco com a senha conhecida. Por isso a porta se fecha
- * pelos dois lados — pelo login "admin" e pelos e-mails das contas de teste.
+ * vez, ela continua no banco com a senha de então. Por isso o caminho é
+ * reconhecido pelos dois lados — pelo login "admin" e pelos e-mails das contas
+ * — e a senha vem sempre da política, nunca do que está gravado.
  */
 const EMAILS_DE_TESTE = new Set(["operator", "supplier", "portaria", "operacao"].map(perfil => demoAccountFor(perfil as z.infer<typeof localProfileSchema>).email));
 
-function recusarContaDeTeste(login: string, email: string) {
-  if (!ENV.isProduction) return;
-  if (login !== demoLogin && !EMAILS_DE_TESTE.has(email)) return;
-  throw new TRPCError({ code: "UNAUTHORIZED", message: "As contas de teste não existem neste ambiente. Entre com o seu cadastro." });
+function ehCaminhoDeTeste(login: string, email: string) {
+  return login === demoLogin || EMAILS_DE_TESTE.has(email);
+}
+
+function politicaDasContasDeTeste() {
+  return estadoDasContasDeTeste({
+    producao: ENV.isProduction,
+    senhaConfigurada: ENV.senhaDasContasDeTeste,
+    senhaDeDesenvolvimento: demoPassword,
+  });
 }
 
 function demoAccountFor(profile: z.infer<typeof localProfileSchema>) {
@@ -286,9 +288,29 @@ export const appRouter = router({
         }
         const demoAccount = demoAccountFor(input.profile);
         const email = isDemoLogin ? demoAccount.email : requestedLogin;
-        recusarContaDeTeste(requestedLogin, email);
         const existing = await getUserByEmail(email);
         let user;
+
+        // A conta de teste tem caminho próprio: a senha dela vem da política do
+        // ambiente, e não do que está gravado no banco. Assim, mudar a senha das
+        // contas de teste é mudar uma variável — e não sai sincronizada com o
+        // que sobrou de uma instalação antiga.
+        if (ehCaminhoDeTeste(requestedLogin, email)) {
+          const politica = politicaDasContasDeTeste();
+          if (!politica.ligadas) {
+            registrarFalha(chavesDoFreio);
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "As contas de teste estão desligadas neste ambiente. Entre com o seu cadastro." });
+          }
+          if (input.password !== politica.senha) {
+            registrarFalha(chavesDoFreio);
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "Login, senha ou perfil não conferem." });
+          }
+          user = existing ?? await createLocalUser({ ...demoAccount, role: demoRoleFor(input.profile), passwordHash: hashPassword(politica.senha) });
+          if (existing) await touchUserSignIn(existing.id);
+          limparFalhas(chavesDoFreio);
+          await createRvdSession(ctx.res, user);
+          return publicUser(user);
+        }
 
         if (existing) {
           // Operação e Planejamento não têm porta própria na tela de entrada:
@@ -315,11 +337,6 @@ export const appRouter = router({
           }
           await touchUserSignIn(existing.id);
           user = existing;
-        } else if (isDemoLogin && input.password === demoPassword) {
-          user = await createLocalUser({ ...demoAccount, role: demoRoleFor(input.profile), passwordHash: hashPassword(demoPassword) });
-        } else if (isDemoLogin) {
-          registrarFalha(chavesDoFreio);
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Login, senha ou perfil não conferem." });
         } else {
           registrarFalha(chavesDoFreio);
           throw new TRPCError({ code: "NOT_FOUND", message: input.profile === "supplier" ? "Fornecedor não encontrado. Faça seu cadastro antes de entrar." : "Acesso interno não encontrado." });

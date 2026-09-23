@@ -8,6 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { logStorageConfig, probeStorage } from "./s3Client";
 import { ENV } from "./env";
 import { migrarNaSubida } from "./migrations";
+import { estadoDasContasDeTeste, MINIMO_DA_SENHA_DE_TESTE } from "../contasDeTeste";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -72,8 +73,23 @@ function cabecalhosDeSeguranca(_req: express.Request, res: express.Response, nex
   next();
 }
 
+/** Dito na subida para não se descobrir isso tentando entrar. */
+function avisarContasDeTeste() {
+  const estado = estadoDasContasDeTeste({
+    producao: ENV.isProduction,
+    senhaConfigurada: ENV.senhaDasContasDeTeste,
+    senhaDeDesenvolvimento: "admin",
+  });
+  if (estado.ligadas && ENV.isProduction) {
+    console.warn("[Contas de teste] LIGADAS em produção, com a senha de SENHA_CONTAS_TESTE. Desligue apagando essa variável quando não precisar mais.");
+  } else if (!estado.ligadas) {
+    console.log(`[Contas de teste] desligadas (${estado.motivo}). Para ligar, defina SENHA_CONTAS_TESTE com ${MINIMO_DA_SENHA_DE_TESTE} caracteres ou mais.`);
+  }
+}
+
 async function startServer() {
   assertSessionSecret();
+  avisarContasDeTeste();
   // Antes de atender qualquer requisição: o banco precisa estar na versão que
   // este código espera. Subir com o banco atrasado publica telas que quebram
   // ao ler uma coluna que ainda não existe.
