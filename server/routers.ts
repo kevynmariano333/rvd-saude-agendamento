@@ -432,7 +432,7 @@ export const appRouter = router({
         return { valid: true as const, invoiceNumber: appointment.invoiceNumber, scheduledFor };
       }),
     list: protectedProcedure
-      .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional(), recipientCnpjs: z.array(z.string().max(40)).max(20).optional(), source: z.enum(appointmentSources).optional(), limit: z.number().int().positive().max(500).optional(), offset: z.number().int().min(0).optional() }).optional())
+      .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional(), recipientCnpjs: z.array(z.string().max(40)).max(20).optional(), purchaseOrder: z.string().max(100).optional(), sapCode: z.string().max(60).optional(), supplierCnpj: z.string().max(20).optional(), itemCountOperator: z.enum([">=", "<=", "="]).optional(), itemCount: z.number().int().min(0).max(100000).optional(), dateStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), dateEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), onlyUrgent: z.boolean().optional(), preNote: z.enum(["done", "pending"]).optional(), source: z.enum(appointmentSources).optional(), limit: z.number().int().positive().max(500).optional(), offset: z.number().int().min(0).optional() }).optional())
       .query(async ({ ctx, input }) => {
         const filters: AppointmentFilters = {
           limit: input?.limit,
@@ -440,7 +440,10 @@ export const appRouter = router({
           // Pendente, agendado e backlog são fila: o mais próximo primeiro.
           // Recebido, concluído e rejeitado são histórico: o mais recente primeiro.
           futuroPrimeiro: !input?.status || input.status === "pending" || input.status === "scheduled" || input.status === "backlog",
-          date: input?.date, status: input?.status as AppointmentStatus | undefined, source: input?.source, invoiceNumber: input?.invoiceNumber, supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj, recipientCnpjs: input?.recipientCnpjs };
+          date: input?.date, status: input?.status as AppointmentStatus | undefined, source: input?.source, invoiceNumber: input?.invoiceNumber, supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj, recipientCnpjs: input?.recipientCnpjs,
+          purchaseOrder: input?.purchaseOrder, sapCode: input?.sapCode, supplierCnpj: input?.supplierCnpj,
+          itemCountOperator: input?.itemCountOperator, itemCount: input?.itemCount,
+          dateStart: input?.dateStart, dateEnd: input?.dateEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote };
         if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
         return listAppointments(filters);
       }),

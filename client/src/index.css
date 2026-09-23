@@ -155,8 +155,30 @@
   animation: rvd-piscar 1.1s ease-in-out infinite;
 }
 
+/**
+ * A piscada de uma linha inteira.
+ *
+ * O selo pisca pela opacidade, e nele isso funciona: são duas palavras. Numa
+ * linha da tabela, apagar o conteúdo pela metade é o contrário do que o aviso
+ * quer — quem vê a linha piscar precisa justamente ler o que há nela. Aqui só
+ * o fundo pulsa; o texto fica firme.
+ */
+@keyframes rvd-piscar-fundo {
+  0%, 100% { background-color: var(--color-state-stop-bg); }
+  50% { background-color: transparent; }
+}
+
+.rvd-piscando-fundo {
+  animation: rvd-piscar-fundo 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .rvd-piscando {
+  .rvd-piscando,
+  .rvd-piscando-fundo {
     animation: none;
+  }
+  /* Sem animação, o aviso vira cor parada: some a piscada, fica o destaque. */
+  .rvd-piscando-fundo {
+    background-color: var(--color-state-stop-bg);
   }
 }

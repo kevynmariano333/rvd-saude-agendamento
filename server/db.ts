@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, like, lt, lte, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { customAlphabet, nanoid } from "nanoid";
 import {
@@ -143,7 +143,60 @@ export type AppointmentFilters = {
   recipientCnpj?: string;
   /** Uma escolha de grupo vira vários CNPJs; qualquer um deles serve. */
   recipientCnpjs?: string[];
+  /** Parte do pedido de compra. */
+  purchaseOrder?: string;
+  /** Código SAP do material, procurado entre os itens da nota. */
+  sapCode?: string;
+  /** CNPJ de quem emitiu, com ou sem pontuação. */
+  supplierCnpj?: string;
+  /** Quantos itens a nota tem, comparados por este operador. */
+  itemCountOperator?: ">=" | "<=" | "=";
+  itemCount?: number;
+  /** Intervalo de datas do agendamento, em dias de São Paulo. */
+  dateStart?: string;
+  dateEnd?: string;
+  /** Só notas com pedido de urgência. */
+  onlyUrgent?: boolean;
+  /** Pré-nota: confirmada, pendente, ou tanto faz. */
+  preNote?: "done" | "pending";
 };
+
+/**
+ * As condições que os filtros da tela e do relatório têm em comum.
+ *
+ * Ficam aqui, e não repetidas nos dois lugares, porque a pergunta é a mesma:
+ * "esta nota casa com o que a pessoa digitou?". Duas cópias divergiriam no dia
+ * em que uma delas ganhasse um filtro novo.
+ */
+function condicoesDeBusca(filtros: AppointmentFilters) {
+  const condicoes = [];
+  if (filtros.purchaseOrder) condicoes.push(like(appointments.purchaseOrder, `%${filtros.purchaseOrder.trim()}%`));
+  // O código SAP mora dentro dos itens, em JSON. JSON_SEARCH olha só o campo
+  // sapCode de cada item: um LIKE no JSON inteiro casaria com preço e descrição.
+  if (filtros.sapCode) {
+    const procurado = `%${filtros.sapCode.replace(/\s/g, "")}%`;
+    condicoes.push(sql`JSON_SEARCH(${appointments.invoiceItemsJson}, 'one', ${procurado}, NULL, '$[*].sapCode') IS NOT NULL`);
+  }
+  if (filtros.supplierCnpj) {
+    const digitos = normalizeCnpj(filtros.supplierCnpj);
+    if (digitos) condicoes.push(or(like(appointments.invoiceSupplierCnpj, `%${digitos}%`), like(users.companyCnpj, `%${digitos}%`)));
+  }
+  if (filtros.itemCount !== undefined && Number.isFinite(filtros.itemCount)) {
+    const quantidade = Math.trunc(filtros.itemCount);
+    const itens = sql`COALESCE(JSON_LENGTH(${appointments.invoiceItemsJson}), 0)`;
+    condicoes.push(filtros.itemCountOperator === "<=" ? sql`${itens} <= ${quantidade}` : filtros.itemCountOperator === "=" ? sql`${itens} = ${quantidade}` : sql`${itens} >= ${quantidade}`);
+  }
+  // Pedido que começa com 4000 é urgência — a mesma regra que ordena a fila e
+  // pinta o selo na linha.
+  if (filtros.onlyUrgent) condicoes.push(sql`${appointments.purchaseOrder} REGEXP '(^|[^0-9])4000'`);
+  if (filtros.preNote === "done") condicoes.push(isNotNull(appointments.preNoteConfirmedAt));
+  if (filtros.preNote === "pending") condicoes.push(isNull(appointments.preNoteConfirmedAt));
+  const inicio = getSaoPauloDayRange(filtros.dateStart ?? "");
+  const fim = getSaoPauloDayRange(filtros.dateEnd ?? "");
+  if (inicio) condicoes.push(gte(appointments.scheduledFor, inicio.start));
+  if (fim) condicoes.push(lte(appointments.scheduledFor, fim.end));
+  return condicoes;
+}
 
 /**
  * A lista das notas, sem o que só o detalhamento usa.
@@ -178,6 +231,7 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
     const range = getSaoPauloDayRange(filters.date);
     if (range) conditions.push(gte(appointments.scheduledFor, range.start), lte(appointments.scheduledFor, range.end));
   }
+  conditions.push(...condicoesDeBusca(filters));
 
   const query = db
     .select({
