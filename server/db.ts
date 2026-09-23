@@ -31,18 +31,86 @@ import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 import { getReceiptTimestampForStatus } from "./receiptStatus";
 import { getSaoPauloDayRange } from "../shared/dateFilters";
 
+/**
+ * Como o portal segura a conexão com o banco o dia inteiro.
+ *
+ * O padrão do driver abre conexões e as guarda paradas para sempre. Só que
+ * quem está do outro lado não pensa assim: o MySQL derruba conexão ociosa
+ * depois do seu `wait_timeout`, e a rede do provedor derruba antes disso. A
+ * conexão morta continua no bolso do driver, que a entrega para a próxima
+ * consulta como se estivesse boa — e a tela quebra com um erro de socket
+ * fechado que ninguém consegue reproduzir.
+ *
+ * O `keepAlive` mantém o canal vivo no nível do TCP; o `idleTimeout` devolve a
+ * conexão parada antes que o outro lado a derrube; o `maxIdle` menor que o
+ * `connectionLimit` deixa o pico de movimento passar sem manter tudo aberto
+ * depois. O `connectTimeout` existe para o banco fora do ar falhar em dez
+ * segundos, e não prender a requisição até o navegador desistir.
+ */
+const CONEXOES_DO_POOL = {
+  connectionLimit: 10,
+  maxIdle: 4,
+  idleTimeout: 60_000,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10_000,
+  connectTimeout: 10_000,
+} as const;
+
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _db = drizzle({ connection: { uri: process.env.DATABASE_URL, ...CONEXOES_DO_POOL } });
     } catch (error) {
       console.warn("[Database] Falha ao iniciar a conexão:", error);
       _db = null;
     }
   }
   return _db;
+}
+
+/**
+ * O banco responde?
+ *
+ * É o que a verificação de saúde precisa saber: processo de pé com banco
+ * inalcançável serve erro em toda tela, e para quem está de fora isso é o
+ * sistema fora do ar. Uma consulta trivial basta — o que se mede é se a
+ * conexão vai e volta, não o que ela traz.
+ */
+export async function bancoRespondendo(): Promise<boolean> {
+  try {
+    const db = await getDb();
+    if (!db) return false;
+    await db.execute(sql`select 1`);
+    return true;
+  } catch (erro) {
+    console.error("[Database] não respondeu:", erro);
+    return false;
+  }
+}
+
+/**
+ * Fecha o pool na saída, para o banco não ficar com conexões de um processo
+ * que já morreu ocupando o limite dele até expirarem sozinhas.
+ */
+export async function fecharBanco(): Promise<void> {
+  const aberto = _db;
+  _db = null;
+  if (!aberto) return;
+  try {
+    // O driver tem as duas caras: a de callback e a de promessa. Aceitar as
+    // duas evita ficar esperando para sempre por um retorno que não vem.
+    const fechar = aberto.$client as unknown as { end: (cb?: (erro?: unknown) => void) => unknown };
+    await new Promise<void>((resolve, reject) => {
+      const retorno = fechar.end(erro => (erro ? reject(erro) : resolve()));
+      if (retorno && typeof (retorno as Promise<void>).then === "function") {
+        (retorno as Promise<void>).then(() => resolve(), reject);
+      }
+    });
+  } catch (erro) {
+    console.warn("[Database] falha ao fechar o pool:", erro);
+  }
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {

@@ -79,6 +79,41 @@ Railway gera automaticamente um domínio público (algo como
 Abra esse endereço: a tela de login deve aparecer. Cadastre o primeiro
 usuário administrador pela tela de cadastro do fornecedor/operador.
 
+## 6. O que mantém o portal de pé
+
+Estas configurações já vêm no `railway.json` do repositório, então o Railway as
+aplica sozinho a cada deploy. Estão descritas aqui para quem precisar conferir
+ou mexer.
+
+**Verificação de saúde** — o servidor responde em dois endereços:
+
+- `GET /api/vivo` — responde `{"ok":true}` sem tocar em nada. Serve para saber
+  se o processo está respirando.
+- `GET /api/saude` — também pergunta ao banco. Responde 200 quando o banco
+  responde e 503 quando não. É este que o Railway consulta antes de mandar as
+  pessoas para uma versão nova: se a versão nova não conseguir falar com o
+  banco, o deploy não entra no ar e a versão que estava funcionando continua.
+
+Se quiser um aviso no celular quando o portal cair, aponte um monitor gratuito
+(UptimeRobot, Better Stack) para `https://SEU-ENDERECO/api/saude` a cada 5
+minutos. É o jeito mais barato de descobrir uma queda antes dos fornecedores.
+
+**Reinício automático** — `restartPolicyType: ON_FAILURE`. Se o processo morrer,
+o Railway sobe outro na hora.
+
+**Desligamento sem derrubar ninguém** — a cada deploy o Railway manda um sinal
+de encerramento. O servidor para de aceitar conexão nova, deixa as requisições
+em andamento terminarem, fecha o banco e só então sai. Quem estava salvando um
+agendamento no momento do deploy não perde o que fez.
+
+**Erro solto não derruba mais o servidor** — uma falha isolada (um e-mail que
+não saiu, um upload que falhou) é registrada no log e o portal continua no ar.
+Antes, uma falha dessas encerrava o processo inteiro.
+
+**Conexão com o banco** — o servidor mantém o canal vivo e devolve conexão
+parada antes que o MySQL a derrube. Era a causa dos erros que apareciam depois
+de horas sem movimento e sumiam quando alguém reiniciava o serviço.
+
 ## O que muda em relação à versão do Manus
 
 - **Login e cadastro**: já funcionavam com e-mail e senha próprios do app

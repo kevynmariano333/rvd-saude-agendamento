@@ -12,6 +12,7 @@ import { estadoDasContasDeTeste, MINIMO_DA_SENHA_DE_TESTE } from "../contasDeTes
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { ajustarTemposDoServidor, desligarComCalma, limitarCorpoAnonimo, protegerProcesso, registrarSaude, tratadorDeErros } from "./resiliencia";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -88,6 +89,8 @@ function avisarContasDeTeste() {
 }
 
 async function startServer() {
+  // Antes de tudo: a partir daqui, um erro solto não derruba mais o processo.
+  protegerProcesso();
   assertSessionSecret();
   avisarContasDeTeste();
   // Antes de atender qualquer requisição: o banco precisa estar na versão que
@@ -101,9 +104,14 @@ async function startServer() {
   app.set("trust proxy", 1);
   const server = createServer(app);
   app.use(cabecalhosDeSeguranca);
+  // Antes de ler o corpo: um corpo enorme de quem não fez login não chega a ser
+  // guardado na memória.
+  app.use(limitarCorpoAnonimo);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // Responde antes de qualquer rota que dependa de sessão ou de banco.
+  registrarSaude(app);
   logStorageConfig();
   void probeStorage();
   registerStorageProxy(app);
@@ -127,13 +135,28 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
+  // Por último, para pegar o que escapou de qualquer rota acima.
+  app.use(tratadorDeErros);
 
   const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  // Em produção, a porta é a que o provedor mandou e não há outra: se ela
+  // estiver ocupada, subir numa porta vizinha deixa o processo vivo e sem
+  // ninguém falando com ele — o pior dos dois mundos, porque para o provedor
+  // parece tudo certo enquanto o portal está fora do ar. Em desenvolvimento,
+  // procurar uma porta livre continua sendo a conveniência de sempre.
+  const port = ENV.isProduction ? preferredPort : await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
+
+  server.on("error", erro => {
+    console.error(`[Servidor] não conseguiu atender na porta ${port}:`, erro);
+    process.exit(1);
+  });
+
+  ajustarTemposDoServidor(server);
+  desligarComCalma(server);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
