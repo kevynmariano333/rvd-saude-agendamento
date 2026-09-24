@@ -897,7 +897,14 @@ export async function rescueAppointment(input: { appointmentId: number; handledB
 export async function listSupplierActiveAppointments(supplierId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select({ id: appointments.id, serviceType: appointments.serviceType, scheduledFor: appointments.scheduledFor, status: appointments.status }).from(appointments).where(and(eq(appointments.supplierId, supplierId), or(eq(appointments.status, "scheduled"), eq(appointments.status, "received")))).orderBy(appointments.scheduledFor);
+  // O número da nota junto: a tela que mostra esta lista identificava cada
+  // linha pelo serviceType, que numa nota de XML é a descrição inteira do
+  // produto — um parágrafo por linha, na largura de uma coluna.
+  return db
+    .select({ id: appointments.id, invoiceNumber: appointments.invoiceNumber, serviceType: appointments.serviceType, scheduledFor: appointments.scheduledFor, status: appointments.status })
+    .from(appointments)
+    .where(and(eq(appointments.supplierId, supplierId), or(eq(appointments.status, "scheduled"), eq(appointments.status, "received"))))
+    .orderBy(appointments.scheduledFor);
 }
 
 export async function createUnscheduledReceipt(input: {

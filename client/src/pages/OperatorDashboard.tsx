@@ -387,8 +387,106 @@ function suggestionAuthor(suggestion: ScheduleSuggestion, fallback: string | nul
   return { label: "Sugestão do fornecedor", name: suggestion.supplierName || fallback || "Fornecedor" };
 }
 
-function ScheduleDialog({ item, open, onOpenChange, date, time, onDate, onTime, onConfirm, loading, activeAppointments, suggestions, acceptedSuggestionId, onAcceptSuggestion }: { item: Appointment | null; open: boolean; onOpenChange: (open: boolean) => void; date: string; time: string; onDate: (value: string) => void; onTime: (value: string) => void; onConfirm: () => void; loading: boolean; activeAppointments: { id: number; serviceType: string; scheduledFor: Date; status: string }[]; suggestions: ScheduleSuggestion[]; acceptedSuggestionId?: number; onAcceptSuggestion: (suggestion: ScheduleSuggestion) => void }) {
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-5xl border-0 bg-transparent p-0 shadow-none"><div className="grid gap-4 md:grid-cols-[1.05fr_0.95fr]"><section className="rounded-[2rem] bg-surface p-7 shadow-2xl"><DialogHeader><DialogTitle className="font-display text-2xl font-extrabold text-ink">Agendar recebimento</DialogTitle><DialogDescription className="text-rvd-plum">Defina manualmente a data e a hora ou aceite uma sugestão do fornecedor.</DialogDescription></DialogHeader><div className="mt-7 space-y-5">{suggestions.map(suggestion => { const autor = suggestionAuthor(suggestion, item?.supplierName); return <article key={suggestion.id} className={`rounded-3xl border p-4 ${acceptedSuggestionId === suggestion.id ? "border-rvd-plum bg-rvd-plum-pale" : "border-line bg-sunken"}`}><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-faint">{autor.label}</p><div className="mt-2 flex flex-wrap items-center justify-between gap-3"><div><p className="font-display text-lg font-extrabold text-ink">{formatAppointmentDate(suggestion.suggestedFor)}</p><p className="mt-1 text-xs text-ink-soft">{autor.name}{suggestion.notes ? ` · ${suggestion.notes}` : ""}</p></div><Button type="button" onClick={() => onAcceptSuggestion(suggestion)} className="rounded-xl bg-brand px-4 font-bold text-white hover:bg-brand">{acceptedSuggestionId === suggestion.id ? "Sugestão aplicada" : "Aceitar"}</Button></div></article>; })}<div><Label className="font-bold text-rvd-plum">Data</Label><Input type="date" value={date} onChange={event => onDate(event.target.value)} className="mt-2 h-12 border-line bg-surface text-rvd-plum" /></div><div><Label className="font-bold text-rvd-plum">Hora</Label><Input type="time" value={time} onChange={event => onTime(event.target.value)} className="mt-2 h-12 border-line bg-surface text-rvd-plum" /></div><div className="flex justify-end gap-3 pt-4"><Button variant="ghost" onClick={() => onOpenChange(false)} className="font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button><Button onClick={onConfirm} disabled={loading} className="h-12 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand">{loading ? "Confirmando..." : "Confirmar agendamento"}</Button></div></div></section><aside className="rounded-[2rem] bg-surface p-7 shadow-2xl"><div className="flex items-center gap-2"><CalendarDays className="size-5 text-rvd-plum" /><div><h3 className="font-display text-lg font-extrabold text-ink">Agendamentos deste fornecedor</h3><p className="text-xs text-ink-soft">Agrupe novas entregas nas janelas já reservadas quando possível.</p></div></div>{activeAppointments.length ? <div className="mt-6 overflow-hidden rounded-2xl border border-line"><table className="w-full text-left"><thead className="bg-sunken"><tr className="text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint"><th className="px-3 py-3">Data</th><th className="px-3 py-3">Hora</th><th className="px-3 py-3">Agendamento</th></tr></thead><tbody>{activeAppointments.map(active => <tr key={active.id} className="border-t border-line text-sm text-ink-soft"><td className="px-3 py-3 font-semibold">{new Date(active.scheduledFor).toLocaleDateString("pt-BR")}</td><td className="px-3 py-3">{new Date(active.scheduledFor).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</td><td className="px-3 py-3 font-bold">{active.serviceType}</td></tr>)}</tbody></table></div> : <div className="mt-16 text-center"><CalendarDays className="mx-auto size-9 text-on-brand" /><p className="mt-4 font-bold text-rvd-plum">Nenhum agendamento ativo</p><p className="mt-1 text-sm text-ink-soft">Este fornecedor não tem outras notas agendadas no momento.</p></div>}</aside></div></DialogContent></Dialog>;
+/**
+ * Uma entrega já marcada deste fornecedor, numa linha só.
+ *
+ * A lista identificava cada uma pelo `serviceType`, que numa nota de XML é a
+ * descrição inteira do produto — "SERINGA INSUL 100 C/AG 13X0,33MM 29G
+ * SAFETYGLIDE BD(100) LOTE: 5321099 DT VAL: 3". Um parágrafo por linha, na
+ * largura de uma coluna: a janela virava uma parede de texto e o operador
+ * perdia justamente o que veio ver, que é o dia e a hora que já estão ocupados.
+ */
+function EntregaJaMarcada({ entrega }: { entrega: { id: number; invoiceNumber?: string | null; serviceType: string; scheduledFor: Date; status: string } }) {
+  const quando = new Date(entrega.scheduledFor);
+  const rotulo = entrega.invoiceNumber ? `NF ${entrega.invoiceNumber}` : entrega.serviceType;
+  return (
+    <li className="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5 first:border-t-0">
+      <div className="min-w-0">
+        <p className="font-display text-sm font-extrabold text-ink">
+          {quando.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · {quando.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+        </p>
+        {/* A descrição completa fica no hover: cabe na linha sem esconder o dado. */}
+        <p title={entrega.serviceType} className="truncate text-xs text-ink-soft">{rotulo}</p>
+      </div>
+      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${entrega.status === "received" ? "bg-rvd-lilac-blue text-rvd-plum" : "bg-rvd-plum-pale text-rvd-plum"}`}>{entrega.status === "received" ? "Recebido" : "Agendado"}</span>
+    </li>
+  );
+}
+
+function ScheduleDialog({ item, open, onOpenChange, date, time, onDate, onTime, onConfirm, loading, activeAppointments, suggestions, acceptedSuggestionId, onAcceptSuggestion }: { item: Appointment | null; open: boolean; onOpenChange: (open: boolean) => void; date: string; time: string; onDate: (value: string) => void; onTime: (value: string) => void; onConfirm: () => void; loading: boolean; activeAppointments: { id: number; invoiceNumber?: string | null; serviceType: string; scheduledFor: Date; status: string }[]; suggestions: ScheduleSuggestion[]; acceptedSuggestionId?: number; onAcceptSuggestion: (suggestion: ScheduleSuggestion) => void }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100vh-3rem)] w-[calc(100%-2rem)] !max-w-4xl overflow-y-auto rounded-[2rem] border border-line bg-surface p-0 shadow-2xl sm:!max-w-4xl">
+        <DialogHeader className="border-b border-line px-7 py-6">
+          <DialogTitle className="font-display text-2xl font-extrabold text-ink">Agendar recebimento</DialogTitle>
+          <DialogDescription className="text-[13px] text-rvd-plum">
+            {item?.invoiceNumber ? `NF ${item.invoiceNumber} · ` : ""}
+            {item?.invoiceSupplierName || item?.supplierName || "Fornecedor não informado"}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-7 px-7 py-6 md:grid-cols-2">
+          <section>
+            {suggestions.length > 0 && (
+              <div className="mb-6">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-faint">Sugestões recebidas</p>
+                <div className="mt-2 space-y-2">
+                  {suggestions.map(suggestion => {
+                    const autor = suggestionAuthor(suggestion, item?.supplierName);
+                    const aplicada = acceptedSuggestionId === suggestion.id;
+                    return (
+                      <article key={suggestion.id} className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-3 ${aplicada ? "border-rvd-plum bg-rvd-plum-pale" : "border-line bg-sunken"}`}>
+                        <div className="min-w-0">
+                          <p className="font-display text-sm font-extrabold text-ink">{formatAppointmentDate(suggestion.suggestedFor)}</p>
+                          <p className="mt-0.5 truncate text-xs text-ink-soft">{autor.label.toLowerCase()} · {autor.name}{suggestion.notes ? ` · ${suggestion.notes}` : ""}</p>
+                        </div>
+                        <Button type="button" onClick={() => onAcceptSuggestion(suggestion)} disabled={aplicada} className={`h-9 shrink-0 rounded-xl px-3 text-xs font-bold ${aplicada ? "bg-rvd-plum-pale text-rvd-plum hover:bg-rvd-plum-pale" : "bg-brand text-white hover:bg-brand"}`}>
+                          {aplicada ? "Aplicada" : "Usar esta"}
+                        </Button>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label className="text-xs font-bold uppercase tracking-wide text-rvd-plum">Data</Label>
+                <Input type="date" value={date} onChange={event => onDate(event.target.value)} className="mt-2 h-11 border-line bg-surface text-rvd-plum" />
+              </div>
+              <div>
+                <Label className="text-xs font-bold uppercase tracking-wide text-rvd-plum">Hora</Label>
+                <Input type="time" value={time} onChange={event => onTime(event.target.value)} className="mt-2 h-11 border-line bg-surface text-rvd-plum" />
+              </div>
+            </div>
+          </section>
+
+          <aside className="min-w-0">
+            <div className="flex items-start gap-2">
+              <CalendarDays className="mt-0.5 size-4 shrink-0 text-rvd-plum" />
+              <div>
+                <h3 className="text-sm font-extrabold text-ink">Entregas já marcadas deste fornecedor</h3>
+                <p className="text-xs leading-5 text-ink-soft">Quando der, agrupe na mesma janela.</p>
+              </div>
+            </div>
+            {activeAppointments.length ? (
+              <ul className="mt-3 max-h-64 overflow-y-auto rounded-2xl border border-line">
+                {activeAppointments.map(entrega => <EntregaJaMarcada key={entrega.id} entrega={entrega} />)}
+              </ul>
+            ) : (
+              <p className="mt-3 rounded-2xl border border-dashed border-line px-4 py-8 text-center text-[13px] text-ink-soft">Este fornecedor não tem outras entregas marcadas.</p>
+            )}
+          </aside>
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-line px-7 py-5">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button>
+          <Button onClick={onConfirm} disabled={loading} className="h-11 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand">{loading ? "Confirmando..." : "Confirmar agendamento"}</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 function PreNoteConfirmDialog({ item, open, onOpenChange, onConfirm, loading }: { item: Appointment | null; open: boolean; onOpenChange: (open: boolean) => void; onConfirm: () => void; loading: boolean }) { return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-md overflow-hidden rounded-[2rem] !border !border-line !bg-surface p-0 shadow-2xl"><div className="bg-surface p-7"><div className="flex items-start gap-3"><span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><ClipboardCheck className="size-5" /></span><div><DialogTitle className="font-display text-xl font-extrabold text-ink">Confirmar pré-nota</DialogTitle><DialogDescription className="mt-1 text-rvd-plum">Nota {item?.invoiceNumber || "não identificada"}</DialogDescription></div></div><p className="mt-6 text-sm font-medium text-rvd-plum">A pré-nota foi realizada no sistema?</p><div className="mt-7 flex gap-3"><Button variant="ghost" onClick={() => onOpenChange(false)} className="h-11 flex-1 rounded-xl border border-line bg-surface font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button><Button onClick={onConfirm} disabled={loading} className="h-11 flex-1 rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700">{loading ? "Confirmando..." : "Confirmar"}</Button></div></div></DialogContent></Dialog>; }
 
