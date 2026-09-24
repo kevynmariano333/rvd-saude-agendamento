@@ -2069,3 +2069,26 @@ export async function notasRepetidas(limite = 50) {
   // A mais recente primeiro: é a que interessa conferir.
   return grupos.sort((a, b) => (b.notas.at(-1)?.createdAt.getTime() ?? 0) - (a.notas.at(-1)?.createdAt.getTime() ?? 0));
 }
+
+/**
+ * Quantas mensagens por nota ainda não foram lidas.
+ *
+ * O sino do topo avisa que existe mensagem nova, mas não diz em qual nota — e
+ * um fornecedor com vinte notas na lista teria que abrir uma por uma para
+ * descobrir onde está a resposta. Contar por nota é o que permite marcar a
+ * conversa certa.
+ */
+export async function contarMensagensNaoLidasPorNota(input: { userId: number; isOperator: boolean }) {
+  const db = await getDb();
+  if (!db) return [];
+  const colunaDeLeitura = input.isOperator ? appointmentMessages.operatorReadAt : appointmentMessages.supplierReadAt;
+  // O fornecedor só conta o que está nas notas dele; quem cuida da agenda vê
+  // todas, como já acontece no sino.
+  const escopo = input.isOperator ? [] : [eq(appointments.supplierId, input.userId)];
+  return db
+    .select({ appointmentId: appointmentMessages.appointmentId, quantas: count() })
+    .from(appointmentMessages)
+    .innerJoin(appointments, eq(appointmentMessages.appointmentId, appointments.id))
+    .where(and(ne(appointmentMessages.senderId, input.userId), isNull(colunaDeLeitura), ...escopo))
+    .groupBy(appointmentMessages.appointmentId);
+}
