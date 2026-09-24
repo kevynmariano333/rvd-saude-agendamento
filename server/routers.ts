@@ -18,7 +18,6 @@ import {
   createAppointmentSuggestion,
   createManualXmlAppointment,
   createUnscheduledReceipt,
-  confirmAppointmentPreNote,
   createAppointmentMessage,
   createLocalUser,
   deleteAppointmentById,
@@ -942,15 +941,6 @@ export const appRouter = router({
           ? `${rotuloDoMotivo(backlogReasonCode)}: ${observacao}`
           : observacao || (input.status === "received" ? "Recebimento confirmado pelo operador." : input.status === "completed" ? `Recebimento concluído. MIRO ${miroNumber}.` : undefined);
         return updateAppointmentStatus({ ...input, miroNumber, backlogReasonCode, backlogReason: observacao, previousStatus: appointment.status, handledBy: ctx.user.id, eventNote: notaDoEvento });
-      }),
-    confirmPreNote: protectedProcedure
-      .input(z.object({ appointmentId: z.number().int().positive() }))
-      .mutation(async ({ ctx, input }) => {
-        assertSchedulingDesk(ctx.user.role);
-        const appointment = await getAppointmentById(input.appointmentId);
-        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
-        if (appointment.preNoteConfirmedAt) return appointment;
-        return confirmAppointmentPreNote({ appointmentId: appointment.id, status: appointment.status, operatorId: ctx.user.id });
       }),
     activeForSupplier: protectedProcedure
       .input(z.object({ supplierId: z.number().int().positive() }))

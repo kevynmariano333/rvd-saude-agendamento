@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   createAppointmentSuggestion: vi.fn(),
   createManualXmlAppointment: vi.fn(),
   createAppointmentMessage: vi.fn(),
-  confirmAppointmentPreNote: vi.fn(),
   getAppointmentById: vi.fn(),
   getSuggestionById: vi.fn(),
   getUserByCompanyCnpj: vi.fn(),
@@ -69,7 +68,6 @@ describe("procedures de agendamento", () => {
     // Por padrão a nota é inédita: os testes que tratam de repetição dizem o
     // contrário explicitamente.
     mocks.notaJaRegistrada.mockResolvedValue(null);
-    mocks.confirmAppointmentPreNote.mockResolvedValue({ id: 1, status: "scheduled", preNoteConfirmedAt: new Date() });
     mocks.listAppointmentHistory.mockResolvedValue([]);
     mocks.listAppointmentMessages.mockResolvedValue([]);
     mocks.listAppointments.mockResolvedValue([]);
@@ -270,13 +268,6 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("operator"));
     await caller.appointments.updateStatus({ appointmentId: 1, status: "received" });
     expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, status: "received", previousStatus: "scheduled", handledBy: 24, eventNote: "Recebimento confirmado pelo operador." }));
-  });
-
-  it("permite ao operador confirmar a pré-nota e registra o responsável", async () => {
-    mocks.getAppointmentById.mockResolvedValue({ id: 1, status: "scheduled", preNoteConfirmedAt: null });
-    const caller = appRouter.createCaller(context("operator"));
-    await caller.appointments.confirmPreNote({ appointmentId: 1 });
-    expect(mocks.confirmAppointmentPreNote).toHaveBeenCalledWith({ appointmentId: 1, status: "scheduled", operatorId: 24 });
   });
 
   it("registra as datas anterior e nova quando o operador reagenda", async () => {
