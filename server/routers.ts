@@ -19,6 +19,7 @@ import {
   createManualXmlAppointment,
   createUnscheduledReceipt,
   confirmAppointmentPreNote,
+  desfazerPreNotaDoAgendamento,
   createAppointmentMessage,
   createLocalUser,
   deleteAppointmentById,
@@ -951,6 +952,18 @@ export const appRouter = router({
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
         if (appointment.preNoteConfirmedAt) return appointment;
         return confirmAppointmentPreNote({ appointmentId: appointment.id, status: appointment.status, operatorId: ctx.user.id });
+      }),
+    desfazerPreNota: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        // Quem pode marcar pode desmarcar: o erro de clique é de quem usa a
+        // tela, e mandar a pessoa pedir para outra desfazer transformaria um
+        // engano de um segundo num pedido que fica para depois.
+        assertSchedulingDesk(ctx.user.role);
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+        if (!appointment.preNoteConfirmedAt) return appointment;
+        return desfazerPreNotaDoAgendamento({ appointmentId: appointment.id, status: appointment.status, operatorId: ctx.user.id });
       }),
     activeForSupplier: protectedProcedure
       .input(z.object({ supplierId: z.number().int().positive() }))

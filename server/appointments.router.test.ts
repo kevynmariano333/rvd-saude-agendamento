@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   createManualXmlAppointment: vi.fn(),
   createAppointmentMessage: vi.fn(),
   confirmAppointmentPreNote: vi.fn(),
+  desfazerPreNotaDoAgendamento: vi.fn(),
   getAppointmentById: vi.fn(),
   getSuggestionById: vi.fn(),
   getUserByCompanyCnpj: vi.fn(),
@@ -277,6 +278,29 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("operator"));
     await caller.appointments.confirmPreNote({ appointmentId: 1 });
     expect(mocks.confirmAppointmentPreNote).toHaveBeenCalledWith({ appointmentId: 1, status: "scheduled", operatorId: 24 });
+  });
+
+  it("desfaz a confirmação de pré-nota clicada por engano", async () => {
+    // O ícone fica ao lado dos outros na linha e é clicado sem querer. Sem
+    // volta, a pessoa ficaria com a marca errada para sempre.
+    const confirmada = new Date("2026-09-24T12:00:00.000Z");
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, status: "scheduled", preNoteConfirmedAt: confirmada });
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.desfazerPreNota({ appointmentId: 1 });
+    expect(mocks.desfazerPreNotaDoAgendamento).toHaveBeenCalledWith({ appointmentId: 1, status: "scheduled", operatorId: 24 });
+  });
+
+  it("não faz nada ao desfazer uma pré-nota que não estava confirmada", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, status: "scheduled", preNoteConfirmedAt: null });
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.desfazerPreNota({ appointmentId: 1 });
+    expect(mocks.desfazerPreNotaDoAgendamento).not.toHaveBeenCalled();
+  });
+
+  it("não deixa o fornecedor desfazer a pré-nota de ninguém", async () => {
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.appointments.desfazerPreNota({ appointmentId: 1 })).rejects.toThrow();
+    expect(mocks.desfazerPreNotaDoAgendamento).not.toHaveBeenCalled();
   });
 
   it("registra as datas anterior e nova quando o operador reagenda", async () => {

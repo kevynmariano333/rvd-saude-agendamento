@@ -850,6 +850,27 @@ export async function confirmAppointmentPreNote(input: { appointmentId: number; 
   return getAppointmentById(input.appointmentId);
 }
 
+/**
+ * Desfaz a confirmação de pré-nota.
+ *
+ * O ícone fica ao lado dos outros na linha e é clicado sem querer; até aqui,
+ * quem errava ficava com a marca para sempre, porque só existia o caminho de
+ * ida. Marca que não se tira obriga a pessoa a conviver com a informação
+ * errada — e informação errada na tela é pior do que marca nenhuma.
+ *
+ * O campo volta a ficar vazio, mas o histórico guarda as duas ações: quem
+ * marcou e quem desmarcou. Desfazer não é apagar o rastro.
+ */
+export async function desfazerPreNotaDoAgendamento(input: { appointmentId: number; status: AppointmentStatus; operatorId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.transaction(async tx => {
+    await tx.update(appointments).set({ preNoteConfirmedAt: null, preNoteConfirmedBy: null, updatedAt: new Date() }).where(eq(appointments.id, input.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({ appointmentId: input.appointmentId, previousStatus: input.status, nextStatus: input.status, handledBy: input.operatorId, eventNote: "Confirmação de pré-nota desfeita pelo operador." });
+  });
+  return getAppointmentById(input.appointmentId);
+}
+
 export async function scheduleAppointment(input: { appointmentId: number; previousStatus: AppointmentStatus; previousScheduledFor: Date; scheduledFor: Date; handledBy: number; rescheduled: boolean; acceptedSuggestionId?: number }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
