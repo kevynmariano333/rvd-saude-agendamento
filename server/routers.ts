@@ -98,7 +98,7 @@ import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, re
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
-import { notaJaRegistrada, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
+import { notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
 import { chaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 import { countAppointments, countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
 import { executarBackup } from "./backup";
@@ -290,7 +290,10 @@ const NOME_DO_STATUS: Record<string, string> = {
  * A mensagem diz qual nota é e em que estado ela está, porque quem está com a
  * mercadoria na mão precisa saber onde continuar, e não só que não pode seguir.
  */
-async function recusarNotaRepetida(nota: { accessKey?: string | null; supplierCnpj?: string | null; invoiceNumber?: string | null }) {
+async function recusarNotaRepetida(
+  nota: { accessKey?: string | null; supplierCnpj?: string | null; invoiceNumber?: string | null },
+  dica?: string,
+) {
   const chave = chaveDeDuplicidade(nota);
   // Sem chave de acesso, sem CNPJ e sem número não dá para reconhecer a nota.
   // Barrar no escuro recusaria nota boa e travaria a entrada da mercadoria.
@@ -304,7 +307,8 @@ async function recusarNotaRepetida(nota: { accessKey?: string | null; supplierCn
     code: "CONFLICT",
     message:
       `Esta nota já está no sistema: NF ${jaExiste.invoiceNumber ?? "sem número"}${fornecedor}, ` +
-      `registrada em ${quando} e hoje ${situacao}. Procure por ela na lista em vez de registrar de novo.`,
+      `registrada em ${quando} e hoje ${situacao}. Procure por ela na lista em vez de registrar de novo.` +
+      (dica ? ` ${dica}` : ""),
   });
 }
 
@@ -852,7 +856,14 @@ export const appRouter = router({
         } catch (error) {
           throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Não foi possível ler o XML." });
         }
-        await recusarNotaRepetida({ accessKey: invoice.accessKey, supplierCnpj: invoice.supplierCnpj, invoiceNumber: invoice.invoiceNumber });
+        // A dica existe porque o reenvio quase sempre tem a mesma causa: a nota
+        // cobre mais de um pedido de compra e o fornecedor manda o mesmo XML
+        // uma vez para cada um. Recusar sem dizer isso não resolve o problema
+        // dele — só o deixa sem saída.
+        await recusarNotaRepetida(
+          { accessKey: invoice.accessKey, supplierCnpj: invoice.supplierCnpj, invoiceNumber: invoice.invoiceNumber },
+          'Se esta nota cobre mais de um pedido de compra, eles vão todos num envio só: use o botão "Outro pedido" antes de enviar. Se faltou incluir um pedido, fale com a equipe de recebimento em vez de enviar a nota de novo.',
+        );
         const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
         const stored = await storagePut(`agendamentos-xml/${ctx.user.id}/${safeName}`, content, "application/xml");
         return createManualXmlAppointment({
@@ -1041,6 +1052,13 @@ export const appRouter = router({
   manutencao: router({
     // Só administrador: o arquivo gerado contém a base inteira.
     gerarBackup: adminProcedure.mutation(async () => executarBackup("manual")),
+    /**
+     * As notas que já entraram repetidas, para separar herança de problema novo.
+     *
+     * A trava recusa duplicata nova, mas não desfaz as antigas. Sem esta lista,
+     * qualquer repetição vista na tela parece falha da trava.
+     */
+    notasRepetidas: adminProcedure.query(async () => notasRepetidas()),
     /** O que a tela mostra para provar que a cópia da madrugada está saindo. */
     situacaoDoBackup: adminProcedure.query(async () => ({
       ultimo: await ultimoBackupConcluido(),

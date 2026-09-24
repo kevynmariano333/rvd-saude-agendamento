@@ -2000,3 +2000,72 @@ export async function notaJaRegistrada(chave: ChaveDeDuplicidade) {
     .limit(1);
   return linhas[0] ?? null;
 }
+
+/**
+ * As notas que já estão repetidas no banco.
+ *
+ * A trava impede novas duplicatas, mas não desfaz as que entraram antes dela —
+ * e sem enxergar as antigas é impossível saber se a trava está funcionando ou
+ * se o que está na tela é herança. Também é o levantamento que precisa vir
+ * antes de o banco passar a recusar repetição por conta própria: uma restrição
+ * criada com duplicata lá dentro não sobe.
+ */
+export async function notasRepetidas(limite = 50) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const chaveNormalizada = sql<string>`RIGHT(REPLACE(REPLACE(${appointments.invoiceAccessKey}, ' ', ''), '-', ''), 44)`;
+  const numeroNormalizado = sql<string>`TRIM(LEADING '0' FROM ${appointments.invoiceNumber})`;
+
+  const porChave = await db
+    .select({ chave: chaveNormalizada, quantas: count() })
+    .from(appointments)
+    .where(and(isNotNull(appointments.invoiceAccessKey), ne(appointments.invoiceAccessKey, "")))
+    .groupBy(chaveNormalizada)
+    .having(sql`count(*) > 1`)
+    .limit(limite);
+
+  const porFornecedor = await db
+    .select({ cnpj: appointments.invoiceSupplierCnpj, numero: numeroNormalizado, quantas: count() })
+    .from(appointments)
+    .where(
+      and(
+        or(isNull(appointments.invoiceAccessKey), eq(appointments.invoiceAccessKey, "")),
+        isNotNull(appointments.invoiceSupplierCnpj),
+        ne(appointments.invoiceSupplierCnpj, ""),
+        isNotNull(appointments.invoiceNumber),
+        ne(appointments.invoiceNumber, ""),
+      ),
+    )
+    .groupBy(appointments.invoiceSupplierCnpj, numeroNormalizado)
+    .having(sql`count(*) > 1`)
+    .limit(limite);
+
+  const colunas = {
+    id: appointments.id,
+    invoiceNumber: appointments.invoiceNumber,
+    invoiceSupplierName: appointments.invoiceSupplierName,
+    invoiceSupplierCnpj: appointments.invoiceSupplierCnpj,
+    status: appointments.status,
+    source: appointments.source,
+    createdAt: appointments.createdAt,
+  };
+
+  type NotaRepetida = { id: number; invoiceNumber: string | null; invoiceSupplierName: string | null; invoiceSupplierCnpj: string | null; status: string; source: string; createdAt: Date };
+  const grupos: { identidade: string; porQue: "chave de acesso" | "fornecedor e número"; notas: NotaRepetida[] }[] = [];
+
+  for (const linha of porChave) {
+    const notas = await db.select(colunas).from(appointments).where(sql`${chaveNormalizada} = ${linha.chave}`).orderBy(asc(appointments.createdAt));
+    grupos.push({ identidade: linha.chave, porQue: "chave de acesso", notas });
+  }
+  for (const linha of porFornecedor) {
+    const notas = await db
+      .select(colunas)
+      .from(appointments)
+      .where(and(eq(appointments.invoiceSupplierCnpj, linha.cnpj ?? ""), sql`${numeroNormalizado} = ${linha.numero}`, or(isNull(appointments.invoiceAccessKey), eq(appointments.invoiceAccessKey, ""))))
+      .orderBy(asc(appointments.createdAt));
+    grupos.push({ identidade: `NF ${linha.numero} · CNPJ ${linha.cnpj}`, porQue: "fornecedor e número", notas });
+  }
+  // A mais recente primeiro: é a que interessa conferir.
+  return grupos.sort((a, b) => (b.notas.at(-1)?.createdAt.getTime() ?? 0) - (a.notas.at(-1)?.createdAt.getTime() ?? 0));
+}
