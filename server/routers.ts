@@ -948,7 +948,9 @@ export const appRouter = router({
     confirmPreNote: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
-        assertSchedulingDesk(ctx.user.role);
+        // A pré-nota é um passo do lançamento da carga recebida: fica com quem
+        // recebe. O planejamento vê a marca, mas não a coloca.
+        assertOperator(ctx.user.role);
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
         if (appointment.preNoteConfirmedAt) return appointment;
@@ -960,7 +962,7 @@ export const appRouter = router({
         // Quem pode marcar pode desmarcar: o erro de clique é de quem usa a
         // tela, e mandar a pessoa pedir para outra desfazer transformaria um
         // engano de um segundo num pedido que fica para depois.
-        assertSchedulingDesk(ctx.user.role);
+        assertOperator(ctx.user.role);
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
         if (!appointment.preNoteConfirmedAt) return appointment;

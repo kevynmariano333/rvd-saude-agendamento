@@ -570,6 +570,16 @@ describe("perfil planejador", () => {
     expect(mocks.updateAppointmentStatus).not.toHaveBeenCalled();
   });
 
+  it("não marca nem desfaz a pré-nota", async () => {
+    // A pré-nota é passo do lançamento da carga recebida: fica com quem recebe.
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "scheduled", preNoteConfirmedAt: null });
+    const caller = appRouter.createCaller(context("planejador"));
+    await expect(caller.appointments.confirmPreNote({ appointmentId: 7 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.appointments.desfazerPreNota({ appointmentId: 7 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.confirmAppointmentPreNote).not.toHaveBeenCalled();
+    expect(mocks.desfazerPreNotaDoAgendamento).not.toHaveBeenCalled();
+  });
+
   it("não resgata uma nota recusada", async () => {
     // Resgatar desfaz a recusa, que é a mesma decisão pelo avesso.
     mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "rejected" });
