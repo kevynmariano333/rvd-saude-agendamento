@@ -1015,7 +1015,9 @@ export const appRouter = router({
     rescue: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
-        assertSchedulingDesk(ctx.user.role);
+        // Resgatar devolve à fila uma nota que foi recusada — desfaz uma
+        // decisão da doca, e por isso é de quem toma essa decisão.
+        assertOperator(ctx.user.role);
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
         if (!canRescueAppointment(appointment.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Apenas itens rejeitados podem ser resgatados." });

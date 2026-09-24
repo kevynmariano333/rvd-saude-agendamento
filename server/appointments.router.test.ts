@@ -559,12 +559,30 @@ describe("perfil planejador", () => {
     expect(mocks.scheduleAppointment).not.toHaveBeenCalled();
   });
 
-  it("conclui o recebimento de uma nota já recebida", async () => {
-    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "received" });
-    mocks.updateAppointmentStatus.mockResolvedValue({ id: 7, status: "completed" });
+  it("não recebe, não recusa e não conclui a nota", async () => {
+    // Receber é dizer que a mercadoria entrou e recusar é dizer que não entra:
+    // são declarações sobre o que aconteceu na doca, de quem responde por ela.
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "scheduled" });
     const caller = appRouter.createCaller(context("planejador"));
-    await caller.appointments.updateStatus({ appointmentId: 7, status: "completed", miroNumber: "5105101642" });
-    expect(mocks.updateAppointmentStatus).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 7, status: "completed", handledBy: 24, miroNumber: "5105101642" }));
+    await expect(caller.appointments.updateStatus({ appointmentId: 7, status: "received" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.appointments.updateStatus({ appointmentId: 7, status: "rejected" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.appointments.updateStatus({ appointmentId: 7, status: "completed", miroNumber: "5105101642" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.updateAppointmentStatus).not.toHaveBeenCalled();
+  });
+
+  it("não resgata uma nota recusada", async () => {
+    // Resgatar desfaz a recusa, que é a mesma decisão pelo avesso.
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "rejected" });
+    const caller = appRouter.createCaller(context("planejador"));
+    await expect(caller.appointments.rescue({ appointmentId: 7 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("continua tratando o backlog, que é o trabalho dele", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "backlog", backlogReasonCode: "divergencia_valor" });
+    mocks.treatBacklogAppointment.mockResolvedValue({ id: 7, status: "completed" });
+    const caller = appRouter.createCaller(context("planejador"));
+    await caller.appointments.tratarBacklog({ appointmentId: 7, miroNumber: "5105101642" });
+    expect(mocks.treatBacklogAppointment).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 7, handledBy: 24 }));
   });
 
   it("fica fora do pátio e do recebimento avulso", async () => {

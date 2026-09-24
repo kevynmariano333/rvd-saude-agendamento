@@ -31,9 +31,16 @@ export function canSuggestSchedule(role: UserRole) {
   return role === "supplier" || role === "planejador";
 }
 
-/** Andar com a nota depois de agendada — receber, concluir, recusar. */
+/**
+ * Andar com a nota — receber, concluir, recusar, mandar para o backlog.
+ *
+ * É do Operador, e só dele. Receber é dizer que a mercadoria entrou, e recusar
+ * é dizer que ela não entra: as duas são declarações sobre o que aconteceu na
+ * doca, e quem responde pela doca é quem opera. O planejamento acompanha a
+ * mesma tela, propõe data e trata o backlog, mas não decide o que entrou.
+ */
 export function canMoveAppointmentStatus(role: UserRole) {
-  return isSchedulingDesk(role);
+  return isOperator(role);
 }
 
 /**

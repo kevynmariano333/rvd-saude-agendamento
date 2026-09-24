@@ -50,7 +50,9 @@ describe("escopo por empresa", () => {
 describe("planejador", () => {
   it("trabalha a agenda, mas não crava a data", () => {
     expect(isSchedulingDesk("planejador")).toBe(true);
-    expect(canMoveAppointmentStatus("planejador")).toBe(true);
+    // Receber e recusar são declarações sobre o que aconteceu na doca: ficam
+    // com quem responde pela doca.
+    expect(canMoveAppointmentStatus("planejador")).toBe(false);
     expect(canSuggestSchedule("planejador")).toBe(true);
     // Agendar é o compromisso com o fornecedor: continua sendo do Operador.
     expect(canConfirmSchedule("planejador")).toBe(false);
