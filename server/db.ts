@@ -2113,3 +2113,92 @@ export async function contarMensagensNaoLidasPorNota(input: { userId: number; is
     .where(and(ne(appointmentMessages.senderId, input.userId), isNull(colunaDeLeitura), ...escopo))
     .groupBy(appointmentMessages.appointmentId);
 }
+
+/**
+ * Todos os fornecedores que o sistema conhece, com e sem login no portal.
+ *
+ * São duas listas que ninguém cruzava: quem tem conta no portal, e quem aparece
+ * nas notas — o acervo trazido do sistema antigo, onde estão fornecedores que
+ * nunca foram chamados para cá. Quem ainda não tem cadastro é justamente a
+ * lista que interessa para chamar; e ela não existe em lugar nenhum hoje.
+ *
+ * O CNPJ é o que junta os dois lados. O e-mail só existe do lado do portal: o
+ * acervo nunca trouxe e-mail nenhum.
+ */
+/** Uma linha do panorama: o fornecedor, tenha ele conta no portal ou não. */
+export type FornecedorDoPanorama = {
+  cnpj: string | null;
+  nome: string | null;
+  temLogin: boolean;
+  contato: string | null;
+  email: string | null;
+  accessStatus: UserAccessStatus | null;
+  lastSignedIn: Date | null;
+  criadoEm: Date | null;
+  notas: number;
+  ultimaNota: Date | null;
+};
+
+export async function panoramaDeFornecedores(): Promise<FornecedorDoPanorama[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const contas = await listSupplierAccounts();
+
+  // O que as notas sabem de cada CNPJ: o nome que o fornecedor usa e quantas
+  // notas já mandou.
+  const nasNotas = await db
+    .select({
+      cnpj: appointments.invoiceSupplierCnpj,
+      nome: sql<string>`MAX(${appointments.invoiceSupplierName})`,
+      notas: count(),
+      ultimaNota: sql<Date>`MAX(${appointments.createdAt})`,
+    })
+    .from(appointments)
+    .where(and(isNotNull(appointments.invoiceSupplierCnpj), ne(appointments.invoiceSupplierCnpj, "")))
+    .groupBy(appointments.invoiceSupplierCnpj);
+
+  const porCnpj = new Map(nasNotas.map(linha => [normalizeCnpj(linha.cnpj ?? "") ?? "", linha]));
+  const comConta = new Set<string>();
+
+  const linhas: FornecedorDoPanorama[] = contas.map(conta => {
+    const cnpj = normalizeCnpj(conta.companyCnpj ?? "") ?? "";
+    if (cnpj) comConta.add(cnpj);
+    const notas = porCnpj.get(cnpj);
+    return {
+      cnpj: cnpj || null,
+      // O nome do cadastro manda: foi ele que a pessoa escreveu ao se
+      // cadastrar. O da nota entra quando o cadastro não tem.
+      nome: conta.companyName || notas?.nome || null,
+      temLogin: true,
+      contato: conta.name,
+      email: conta.email,
+      accessStatus: conta.accessStatus,
+      lastSignedIn: conta.lastSignedIn,
+      criadoEm: conta.createdAt,
+      notas: notas?.notas ?? 0,
+      ultimaNota: notas?.ultimaNota ?? null,
+    };
+  });
+
+  // Os que só aparecem nas notas: sem conta, sem e-mail, com o nome que a nota
+  // trouxe. É a lista de quem falta chamar para o portal.
+  for (const [cnpj, linha] of Array.from(porCnpj.entries())) {
+    if (!cnpj || comConta.has(cnpj)) continue;
+    linhas.push({
+      cnpj,
+      nome: linha.nome ?? null,
+      temLogin: false,
+      contato: null,
+      email: null,
+      accessStatus: null,
+      lastSignedIn: null,
+      criadoEm: null,
+      notas: linha.notas,
+      ultimaNota: linha.ultimaNota,
+    });
+  }
+
+  // Quem tem mais nota primeiro: é quem mais importa ter no portal.
+  return linhas.sort((a, b) => b.notas - a.notas || (a.nome ?? "").localeCompare(b.nome ?? ""));
+}

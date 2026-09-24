@@ -73,6 +73,7 @@ import {
   listAttendancesInRange,
   listStaffUsers,
   listSupplierAccounts,
+  panoramaDeFornecedores,
   razaoSocialConhecida,
   gravarPedidosDoSap,
   situacaoDosPedidos,
@@ -1221,6 +1222,15 @@ export const appRouter = router({
     naoLidasPorNota: protectedProcedure.query(({ ctx }) => contarMensagensNaoLidasPorNota({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
   }),
   reports: router({
+    /**
+     * Todos os fornecedores que o sistema conhece, com e sem login.
+     *
+     * Responde duas perguntas de uma vez: "esse fornecedor já está no portal, e
+     * com qual e-mail?" e "quem ainda manda nota mas nunca foi cadastrado?".
+     * Só administrador: é a relação de contato das empresas parceiras reunida
+     * num arquivo que sai do portal.
+     */
+    fornecedores: adminProcedure.query(async () => panoramaDeFornecedores()),
     /**
      * As notas do relatório, filtradas no banco.
      *
