@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { CalendarClock, CheckCircle2, CircleX, FileText, Loader2, ShieldCheck } from "lucide-react";
+import { MARCA } from "@shared/marca";
 
 function formatDateTime(value: Date | string) {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "full", timeStyle: "short" }).format(new Date(value));
@@ -17,7 +18,7 @@ export default function AppointmentValidation() {
       <section className="mx-auto w-full max-w-xl">
         <div className="mb-6 flex items-center gap-3 px-2">
           <img src="/RVD-Saude.png" alt="RVD Saúde" className="size-14 rounded-2xl bg-surface object-contain p-1 shadow-sm" />
-          <div><p className="text-lg font-extrabold">RVD Saúde</p><p className="text-sm font-medium text-ink-soft">Validação de agendamento</p></div>
+          <div><p className="text-lg font-extrabold">{MARCA.nome}</p><p className="text-sm font-medium text-ink-soft">Validação de agendamento</p></div>
         </div>
         <Card className="overflow-hidden border-line bg-surface shadow-xl shadow-rvd-plum/10">
           <div className={`h-2 ${isValid ? "bg-emerald-500" : "bg-brand"}`} />
@@ -26,7 +27,7 @@ export default function AppointmentValidation() {
               <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-state-go-bg text-state-go"><CheckCircle2 className="size-10" /></div>
               <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-emerald-700">Comprovante validado</p>
               <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Agendamento confirmado</h1>
-              <p className="mt-3 text-sm leading-6 text-ink-soft">Esta nota possui um agendamento ativo no portal RVD Saúde. Apresente o comprovante junto à entrega.</p>
+              <p className="mt-3 text-sm leading-6 text-ink-soft">Esta nota possui um agendamento ativo no {MARCA.nome}. Apresente o comprovante junto à entrega.</p>
               <div className="mt-7 space-y-4 rounded-2xl bg-rvd-plum-pale p-5">
                 <div className="flex gap-3"><FileText className="mt-0.5 size-5 shrink-0 text-rvd-plum" /><div><p className="text-xs font-bold uppercase tracking-wide text-ink-soft">Nota fiscal</p><p className="font-bold">{confirmedAppointment?.invoiceNumber || "Não informado"}</p></div></div>
                 <div className="flex gap-3"><CalendarClock className="mt-0.5 size-5 shrink-0 text-rvd-plum" /><div><p className="text-xs font-bold uppercase tracking-wide text-ink-soft">Entrega confirmada para</p><p className="font-bold leading-6">{confirmedAppointment ? formatDateTime(confirmedAppointment.scheduledFor) : "Não informado"}</p></div></div>
@@ -36,7 +37,7 @@ export default function AppointmentValidation() {
               <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-red-50 text-red-600"><CircleX className="size-10" /></div>
               <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-red-600">Comprovante não validado</p>
               <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Não foi possível confirmar</h1>
-              <p className="mt-3 text-sm leading-6 text-ink-soft">Este QR não é válido, foi alterado ou o agendamento não está mais ativo. Consulte o portal RVD Saúde para confirmar os dados.</p>
+              <p className="mt-3 text-sm leading-6 text-ink-soft">Este QR não é válido, foi alterado ou o agendamento não está mais ativo. Consulte o {MARCA.nome} para confirmar os dados.</p>
             </>}
           </CardContent>
         </Card>

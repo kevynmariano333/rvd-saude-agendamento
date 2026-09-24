@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MARCA } from "../shared/marca";
 import {
   buildResetUrl,
   createResetToken,
@@ -65,7 +66,9 @@ describe("password reset tokens", () => {
   it("puts the link in both the html and the plain-text body", () => {
     const url = "https://app.exemplo.com/redefinir-senha?token=xyz";
     const content = resetEmailContent(url);
-    expect(content.subject).toContain("RVD Saúde");
+    // O assunto leva o nome do sistema, e é dele que o nome sai — não de um
+    // texto copiado aqui, que ficaria para trás no dia em que ele mudar.
+    expect(content.subject).toContain(MARCA.nome);
     expect(content.html).toContain(url);
     expect(content.text).toContain(url);
   });

@@ -14,6 +14,7 @@
 
 import { OPERADOR_LOGISTICO } from "../shared/operadorLogistico";
 import { unidadePorCnpj } from "../shared/recipients";
+import { MARCA } from "../shared/marca";
 
 /**
  * O aviso de para onde a carga vai, escrito para quem já agendou.
@@ -74,7 +75,7 @@ export function conteudoDoAgendamento(dados: DadosDoAviso): { subject: string; h
     : `A entrega da ${nota} está agendada. Anote a data:`;
 
   const text = [
-    `${titulo} · RVD Saúde`,
+    `${titulo} · ${MARCA.nome}`,
     "",
     abertura,
     "",
@@ -92,8 +93,8 @@ export function conteudoDoAgendamento(dados: DadosDoAviso): { subject: string; h
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden">
         <tr><td style="background:#782078;padding:24px 28px">
-          <p style="margin:0;color:#ffffff;font-size:19px;font-weight:bold">RVD Saúde</p>
-          <p style="margin:6px 0 0;color:#c9e1ee;font-size:12px;letter-spacing:1.6px;text-transform:uppercase">Sistema de Agendamento</p>
+          <p style="margin:0;color:#ffffff;font-size:19px;font-weight:bold">${MARCA.nome}</p>
+          <p style="margin:6px 0 0;color:#c9e1ee;font-size:12px;letter-spacing:1.6px;text-transform:uppercase">${MARCA.descricao}</p>
         </td></tr>
         <tr><td style="padding:30px 28px">
           <h1 style="margin:0;color:#782078;font-size:22px">${titulo}</h1>

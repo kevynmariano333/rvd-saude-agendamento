@@ -5,6 +5,7 @@
 // A token is single-use and expires an hour after it is issued.
 
 import { createHash, randomBytes } from "crypto";
+import { MARCA } from "../shared/marca";
 
 export const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
@@ -51,9 +52,9 @@ export function resetEmailContent(resetUrl: string): {
   text: string;
 } {
   return {
-    subject: "Redefinição de senha · RVD Saúde",
+    subject: `Redefinição de senha · ${MARCA.nome}`,
     text: [
-      "Recebemos um pedido para redefinir a senha da sua conta no portal RVD Saúde.",
+      `Recebemos um pedido para redefinir a senha da sua conta no ${MARCA.nome}.`,
       "",
       `Abra este endereço para definir uma nova senha: ${resetUrl}`,
       "",
@@ -66,8 +67,8 @@ export function resetEmailContent(resetUrl: string): {
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden">
         <tr><td style="background:#782078;padding:24px 28px">
-          <p style="margin:0;color:#ffffff;font-size:19px;font-weight:bold">RVD Saúde</p>
-          <p style="margin:6px 0 0;color:#c9e1ee;font-size:12px;letter-spacing:1.6px;text-transform:uppercase">Sistema de Agendamento</p>
+          <p style="margin:0;color:#ffffff;font-size:19px;font-weight:bold">${MARCA.nome}</p>
+          <p style="margin:6px 0 0;color:#c9e1ee;font-size:12px;letter-spacing:1.6px;text-transform:uppercase">${MARCA.descricao}</p>
         </td></tr>
         <tr><td style="padding:30px 28px">
           <h1 style="margin:0;color:#782078;font-size:22px">Redefinição de senha</h1>

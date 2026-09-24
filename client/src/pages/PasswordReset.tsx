@@ -6,6 +6,7 @@ import { CheckCircle2, KeyRound, TriangleAlert } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { MARCA } from "@shared/marca";
 
 export default function PasswordReset() {
   const [, setLocation] = useLocation();
@@ -35,7 +36,7 @@ export default function PasswordReset() {
         <div className="flex items-center gap-3">
           <img src="/RVD-Saude.png" alt="RVD Saúde" className="size-12 rounded-2xl object-contain" />
           <div>
-            <p className="font-display text-lg font-extrabold text-ink">RVD Saúde</p>
+            <p className="font-display text-lg font-extrabold text-ink">{MARCA.nome}</p>
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-ink-faint">
               Sistema de Agendamento
             </p>

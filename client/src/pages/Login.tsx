@@ -12,6 +12,7 @@ import { ArrowLeft, CheckCircle2, ChevronRight, Home as HomeIcon, LockKeyhole, M
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
+import { MARCA } from "@shared/marca";
 
 /**
  * Vindo da home o acesso já está escolhido, e repetir os três cartões só
@@ -183,8 +184,8 @@ export default function Login() {
             </div>
           </div>
           <div className="relative z-10">
-            <p className="font-display text-lg font-extrabold">RVD Saúde</p>
-            <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-on-brand-soft">Portal operacional</p>
+            <p className="font-display text-lg font-extrabold">{MARCA.nome}</p>
+            <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-on-brand-soft">{MARCA.descricao}</p>
           </div>
           <div className="relative z-10 mt-20 max-w-md lg:mt-0">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-on-brand-soft">
@@ -209,7 +210,7 @@ export default function Login() {
           <div className="rvd-reveal mx-auto w-full max-w-md">
             <p className="eyebrow">{registering ? `Cadastro de ${selectedProfileLabel}` : `Acesso ${selectedProfileLabel}`}</p>
             <h2 className="mt-2 font-display text-2xl font-extrabold tracking-tight text-ink">
-              {registering ? "Crie seu acesso" : "Bem-vindo à RVD Saúde"}
+              {registering ? "Crie seu acesso" : `Bem-vindo ao ${MARCA.nome}`}
             </h2>
             <p className="mt-2 text-sm leading-6 text-ink-soft">
               {registering

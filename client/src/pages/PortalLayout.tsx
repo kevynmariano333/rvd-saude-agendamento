@@ -33,6 +33,7 @@ import { useTheme, type ThemeChoice } from "../contexts/ThemeContext";
 import ChangeNameDialog from "../components/ChangeNameDialog";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import { useLocation } from "wouter";
+import { MARCA } from "@shared/marca";
 
 /** Claro, escuro, ou acompanhar o aparelho. */
 const themeOptions: { value: ThemeChoice; label: string; icon: LucideIcon }[] = [
@@ -220,9 +221,9 @@ export default function PortalLayout({
           <button onClick={() => go(homePath)} className="flex shrink-0 items-center gap-2.5 text-left">
             <img src="/RVD-Saude.png" alt="RVD Saúde" className="size-9 rounded-xl object-cover" />
             <span className="hidden min-w-0 sm:block">
-              <span className="block font-display text-sm font-extrabold leading-none text-rvd-plum">RVD Saúde</span>
+              <span className="block font-display text-sm font-extrabold leading-none text-rvd-plum">{MARCA.nome}</span>
               <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">
-                Portal operacional
+                {MARCA.descricao}
               </span>
             </span>
           </button>

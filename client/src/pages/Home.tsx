@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { ArrowRight, Check, ShieldCheck } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
+import { MARCA } from "@shared/marca";
 
 /**
  * Porta da frente do portal. Antes o visitante caía direto num formulário e
@@ -30,9 +31,9 @@ export default function Home() {
               <img src="/RVD-Saude.png" alt="RVD Saúde" className="size-full object-contain" />
             </span>
             <div>
-              <p className="font-display text-lg font-extrabold leading-tight">RVD Saúde</p>
+              <p className="font-display text-lg font-extrabold leading-tight">{MARCA.nome}</p>
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-brand-soft">
-                Portal operacional
+                {MARCA.descricao}
               </p>
             </div>
           </div>

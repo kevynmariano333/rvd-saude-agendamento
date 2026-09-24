@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
 import { CAMPOS_DO_OPERADOR, OPERADOR_LOGISTICO } from "@shared/operadorLogistico";
+import { MARCA } from "@shared/marca";
 
 export type ReceiptCertificateData = {
   invoiceNumber: string | null;
@@ -70,7 +71,7 @@ export async function generateReceiptCertificatePdf(data: ReceiptCertificateData
   doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 46, "F");
   doc.setFillColor(247, 242, 247); doc.roundedRect(11, 5, 40, 32, 5, 5, "F");
   try { doc.addImage(await getRvdLogoDataUrl(), "PNG", 14, 6.5, 34, 29); } catch { doc.setFillColor(...blue); doc.roundedRect(20, 13, 14, 14, 4, 4, "F"); }
-  doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(19); doc.text("RVD Saúde", 57, 20); doc.setFontSize(10); doc.text("AGENDAMENTO · COMPROVANTE PARA ENTREGA", 57, 28);
+  doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(19); doc.text(MARCA.nome, 57, 20); doc.setFontSize(10); doc.text("AGENDAMENTO · COMPROVANTE PARA ENTREGA", 57, 28);
   doc.setFont("helvetica", "normal"); doc.setTextColor(100, 75, 100); doc.setFontSize(8); doc.text("Documento digital de confirmação", 57, 34);
   doc.setFillColor(...plum); doc.rect(0, 42, 210, 4, "F");
   doc.setTextColor(...plum); doc.setFontSize(19); doc.text("Comprovante de agendamento", 16, 64);
@@ -115,6 +116,6 @@ export async function generateReceiptCertificatePdf(data: ReceiptCertificateData
   doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("AGENDAMENTO CONFIRMADO", 22, confirmationY + 14);
   doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(70, 50, 70); doc.text("Apresente este comprovante junto à nota fiscal no momento da entrega.", 22, confirmationY + 23);
   doc.setFontSize(8); doc.text("Aponte a câmera do celular para o QR ao lado", 22, confirmationY + 32); doc.text("e confirme este agendamento no portal RVD Saúde.", 22, confirmationY + 38);
-  doc.setTextColor(120, 100, 120); doc.setFontSize(8); doc.text("RVD Saúde Agendamento · documento emitido pelo portal", 16, 282); doc.text(`Emitido em ${formatDateTime(new Date())}`, 194, 282, { align: "right" });
+  doc.setTextColor(120, 100, 120); doc.setFontSize(8); doc.text(`${MARCA.nome} · documento emitido pelo portal`, 16, 282); doc.text(`Emitido em ${formatDateTime(new Date())}`, 194, 282, { align: "right" });
   doc.save(receiptCertificateFileName(data.invoiceNumber));
 }

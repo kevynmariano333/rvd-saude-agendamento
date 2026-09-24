@@ -1,4 +1,5 @@
 import { Truck } from "lucide-react";
+import { MARCA_COMPLETA } from "@shared/marca";
 
 export default function LoadingTruck({ label = "Organizando seus agendamentos" }: { label?: string }) {
   return (
@@ -14,7 +15,7 @@ export default function LoadingTruck({ label = "Organizando seus agendamentos" }
           </div>
         </div>
         <p className="mt-5 font-display text-lg font-extrabold text-ink">{label}</p>
-        <p className="mt-2 text-sm text-ink-soft">RVD Saúde Agendamento</p>
+        <p className="mt-2 text-sm text-ink-soft">{MARCA_COMPLETA}</p>
       </div>
     </div>
   );
