@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   deleteAppointmentById: vi.fn(),
   scheduleAppointment: vi.fn(),
   createUnscheduledReceipt: vi.fn(),
+  notaJaRegistrada: vi.fn(),
   listApprovedCompanyUserIds: vi.fn(),
   listPendingAccessRequests: vi.fn(),
   setUserAccessStatus: vi.fn(),
@@ -65,6 +66,9 @@ describe("procedures de agendamento", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createAppointment.mockResolvedValue({ id: 1, status: "pending" });
+    // Por padrão a nota é inédita: os testes que tratam de repetição dizem o
+    // contrário explicitamente.
+    mocks.notaJaRegistrada.mockResolvedValue(null);
     mocks.confirmAppointmentPreNote.mockResolvedValue({ id: 1, status: "scheduled", preNoteConfirmedAt: new Date() });
     mocks.listAppointmentHistory.mockResolvedValue([]);
     mocks.listAppointmentMessages.mockResolvedValue([]);
@@ -300,6 +304,62 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("operator"));
     await caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml });
     expect(mocks.createUnscheduledReceipt).toHaveBeenCalledWith(expect.objectContaining({ operatorId: 24, invoiceNumber: "987654", invoiceSupplierName: "Fornecedor XML", recipientCnpj: "12345678000199" }));
+  });
+
+  it("recusa o mesmo XML enviado duas vezes", async () => {
+    // A mesma nota entrando duas vezes vira dois recebimentos, duas
+    // conferências e dois lançamentos no SAP. Desfazer depois é muito mais
+    // caro do que recusar agora.
+    mocks.notaJaRegistrada.mockResolvedValue({
+      id: 7,
+      invoiceNumber: "987654",
+      invoiceSupplierName: "Fornecedor XML",
+      status: "scheduled",
+      source: "portal",
+      createdAt: new Date("2026-09-20T12:00:00.000Z"),
+      scheduledFor: new Date("2026-09-25T13:00:00.000Z"),
+    });
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>987654</nNF></ide><emit><xNome>Fornecedor XML</xNome></emit><dest><CNPJ>12.345.678/0001-99</CNPJ></dest></infNFe></NFe>').toString("base64");
+    const caller = appRouter.createCaller(context("operator"));
+    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml })).rejects.toThrow(/já está no sistema/i);
+    expect(mocks.createUnscheduledReceipt).not.toHaveBeenCalled();
+  });
+
+  it("diz qual é a nota repetida e em que estado ela está", async () => {
+    // Dizer só "duplicada" manda quem está com a mercadoria na mão procurar no
+    // escuro.
+    mocks.notaJaRegistrada.mockResolvedValue({
+      id: 7,
+      invoiceNumber: "987654",
+      invoiceSupplierName: "Fornecedor XML",
+      status: "received",
+      source: "portal",
+      createdAt: new Date("2026-09-20T12:00:00.000Z"),
+      scheduledFor: new Date("2026-09-25T13:00:00.000Z"),
+    });
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>987654</nNF></ide><emit><xNome>Fornecedor XML</xNome></emit></infNFe></NFe>').toString("base64");
+    const caller = appRouter.createCaller(context("operator"));
+    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml })).rejects.toThrow(/NF 987654 de Fornecedor XML.*20\/09\/2026.*recebida/i);
+  });
+
+  it("recusa também pela porta do fornecedor", async () => {
+    // A trava vale para as duas entradas: o XML do fornecedor e o recebimento
+    // avulso da portaria levam a mesma nota para dentro.
+    mocks.notaJaRegistrada.mockResolvedValue({ id: 7, invoiceNumber: "123456", invoiceSupplierName: null, status: "pending", source: "portal", createdAt: new Date("2026-09-20T12:00:00.000Z"), scheduledFor: new Date() });
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide></infNFe></NFe>').toString("base64");
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: "4504748409" })).rejects.toThrow(/já está no sistema/i);
+    expect(mocks.createManualXmlAppointment).not.toHaveBeenCalled();
+  });
+
+  it("não guarda o arquivo da nota recusada", async () => {
+    // Nota repetida não deve nem ocupar espaço no armazenamento.
+    const { storagePut } = await import("./storage");
+    mocks.notaJaRegistrada.mockResolvedValue({ id: 7, invoiceNumber: "987654", invoiceSupplierName: null, status: "scheduled", source: "portal", createdAt: new Date(), scheduledFor: new Date() });
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>987654</nNF></ide></infNFe></NFe>').toString("base64");
+    const caller = appRouter.createCaller(context("operator"));
+    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml })).rejects.toThrow();
+    expect(storagePut).not.toHaveBeenCalled();
   });
 
   it("permite ao fornecedor enviar XML com sugestão opcional de data e horário", async () => {

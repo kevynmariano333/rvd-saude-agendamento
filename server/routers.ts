@@ -98,7 +98,8 @@ import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, re
 import { isMailerConfigured, sendMail } from "./_core/mailer";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
-import { ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
+import { notaJaRegistrada, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
+import { chaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 import { countAppointments, countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
 import { executarBackup } from "./backup";
 import { decodificarCsv, importarAcervo } from "./agilizaImport";
@@ -265,6 +266,46 @@ async function getAccessibleAppointment(user: ScopedUser, appointmentId: number)
     throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode acessar as mensagens deste agendamento." });
   }
   return appointment;
+}
+
+/** Como cada status aparece na mensagem de nota repetida. */
+const NOME_DO_STATUS: Record<string, string> = {
+  pending: "aguardando agendamento",
+  scheduled: "agendada",
+  received: "recebida",
+  completed: "concluída",
+  backlog: "em backlog",
+  rejected: "recusada",
+};
+
+/**
+ * Barra a nota que já está no sistema.
+ *
+ * Duas portas levam a mesma nota para dentro: o fornecedor que envia o XML e a
+ * portaria que registra um recebimento sem agendamento. Quando o mesmo
+ * documento entra pelas duas, passam a existir dois registros do mesmo
+ * recebimento — duas conferências, dois lançamentos no SAP —, e desfazer isso
+ * depois é muito mais caro do que recusar agora.
+ *
+ * A mensagem diz qual nota é e em que estado ela está, porque quem está com a
+ * mercadoria na mão precisa saber onde continuar, e não só que não pode seguir.
+ */
+async function recusarNotaRepetida(nota: { accessKey?: string | null; supplierCnpj?: string | null; invoiceNumber?: string | null }) {
+  const chave = chaveDeDuplicidade(nota);
+  // Sem chave de acesso, sem CNPJ e sem número não dá para reconhecer a nota.
+  // Barrar no escuro recusaria nota boa e travaria a entrada da mercadoria.
+  if (!chave) return;
+  const jaExiste = await notaJaRegistrada(chave);
+  if (!jaExiste) return;
+  const situacao = NOME_DO_STATUS[jaExiste.status] ?? jaExiste.status;
+  const quando = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "America/Sao_Paulo" }).format(jaExiste.createdAt);
+  const fornecedor = jaExiste.invoiceSupplierName ? ` de ${jaExiste.invoiceSupplierName}` : "";
+  throw new TRPCError({
+    code: "CONFLICT",
+    message:
+      `Esta nota já está no sistema: NF ${jaExiste.invoiceNumber ?? "sem número"}${fornecedor}, ` +
+      `registrada em ${quando} e hoje ${situacao}. Procure por ela na lista em vez de registrar de novo.`,
+  });
 }
 
 function decodeXmlBase64(value: string) {
@@ -811,6 +852,7 @@ export const appRouter = router({
         } catch (error) {
           throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Não foi possível ler o XML." });
         }
+        await recusarNotaRepetida({ accessKey: invoice.accessKey, supplierCnpj: invoice.supplierCnpj, invoiceNumber: invoice.invoiceNumber });
         const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
         const stored = await storagePut(`agendamentos-xml/${ctx.user.id}/${safeName}`, content, "application/xml");
         return createManualXmlAppointment({
@@ -845,6 +887,9 @@ export const appRouter = router({
         const content = decodeXmlBase64(input.xmlBase64);
         let invoice;
         try { invoice = parseInvoiceXml(content); } catch (error) { throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Não foi possível ler o XML." }); }
+        // Antes de guardar o arquivo: nota repetida não deve nem ocupar espaço
+        // no armazenamento.
+        await recusarNotaRepetida({ accessKey: invoice.accessKey, supplierCnpj: invoice.supplierCnpj, invoiceNumber: invoice.invoiceNumber });
         const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
         const stored = await storagePut(`recebimentos-avulsos/${ctx.user.id}/${safeName}`, content, "application/xml");
         return createUnscheduledReceipt({ operatorId: ctx.user.id, xmlStorageKey: stored.key, xmlUrl: stored.url, xmlFileName: safeName, invoiceNumber: invoice.invoiceNumber, invoiceAccessKey: invoice.accessKey, purchaseOrder: invoice.purchaseOrder, invoiceSupplierName: invoice.supplierName, invoiceSupplierCnpj: invoice.supplierCnpj, recipientCnpj: invoice.recipientCnpj, invoiceIssuedAt: invoice.issuedAt, serviceDescription: invoice.serviceDescription, invoiceTotalCents: invoice.totalCents, invoiceItemsJson: JSON.stringify(invoice.items), invoiceVolumeCount: invoice.volumeCount });

@@ -31,6 +31,7 @@ import { normalizeCnpj } from "./fiscalFilters";
 import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 import { getReceiptTimestampForStatus } from "./receiptStatus";
 import { getSaoPauloDayRange } from "../shared/dateFilters";
+import type { ChaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 
 /**
  * Como o portal segura a conexão com o banco o dia inteiro.
@@ -1960,4 +1961,42 @@ export async function ultimasTentativasDeBackup(quantas = 5) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(backupRuns).orderBy(desc(backupRuns.startedAt)).limit(quantas);
+}
+
+/**
+ * A nota já está no sistema?
+ *
+ * Procura pelo critério que a identifica — chave de acesso, ou CNPJ do emitente
+ * com o número —, e devolve o registro que já existe para a tela poder dizer
+ * qual é e onde encontrá-lo. Dizer só "duplicada" mandaria a pessoa procurar
+ * no escuro.
+ */
+export async function notaJaRegistrada(chave: ChaveDeDuplicidade) {
+  const db = await getDb();
+  if (!db) return null;
+  const condicao =
+    chave.tipo === "chaveDeAcesso"
+      ? // Os últimos 44 caracteres, porque alguns XML gravam a chave com o
+        // prefixo "NFe" na frente. Sem `REGEXP_REPLACE`, que exige MySQL 8.
+        sql`RIGHT(REPLACE(REPLACE(${appointments.invoiceAccessKey}, ' ', ''), '-', ''), 44) = ${chave.chave}`
+      : and(
+          eq(appointments.invoiceSupplierCnpj, chave.cnpj),
+          // Compara sem os zeros da frente: "000123" e "123" são a mesma nota.
+          sql`TRIM(LEADING '0' FROM ${appointments.invoiceNumber}) = ${chave.numero}`,
+        );
+  const linhas = await db
+    .select({
+      id: appointments.id,
+      invoiceNumber: appointments.invoiceNumber,
+      invoiceSupplierName: appointments.invoiceSupplierName,
+      status: appointments.status,
+      source: appointments.source,
+      createdAt: appointments.createdAt,
+      scheduledFor: appointments.scheduledFor,
+    })
+    .from(appointments)
+    .where(condicao)
+    .orderBy(desc(appointments.createdAt))
+    .limit(1);
+  return linhas[0] ?? null;
 }
