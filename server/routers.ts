@@ -341,8 +341,11 @@ async function avisarFornecedorDoAgendamento(agendamento: { id: number; supplier
   };
 
   if (!isMailerConfigured()) {
-    console.error("[Agendamento] RESEND_API_KEY ou MAIL_FROM ausentes — o fornecedor não foi avisado por e-mail.");
-    await registrar("Aviso de agendamento não enviado: envio de e-mail não configurado.");
+    // Nada no histórico da nota: o envio estar desligado não é um evento
+    // daquela nota, é o estado do sistema. Escrever a mesma linha em toda nota
+    // encheria o histórico de ruído e esconderia o que de fato aconteceu com
+    // ela. Fica no log do servidor, que é onde se olha o estado do sistema.
+    console.warn("[Agendamento] envio de e-mail desligado (falta RESEND_API_KEY ou MAIL_FROM) — o fornecedor não foi avisado.");
     return;
   }
   const fornecedor = await getUserById(agendamento.supplierId);
@@ -1164,6 +1167,11 @@ export const appRouter = router({
         // Sem isto, descobrir por que elas não entram é tentativa e erro na
         // tela de login, que é o pior lugar para investigar qualquer coisa.
         contasDeTeste: { ligadas: contas.ligadas, motivo: contas.ligadas ? null : contas.motivo },
+        // O aviso ao fornecedor depende de o envio de e-mail estar configurado.
+        // Desligado, o agendamento funciona e ninguém é avisado — e isso não
+        // pode ser descoberto pela reclamação de um fornecedor que perdeu a
+        // data. Fica escrito onde se olha o estado do sistema.
+        avisoPorEmail: isMailerConfigured(),
       };
     }),
     /**

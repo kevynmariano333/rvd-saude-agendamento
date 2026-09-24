@@ -340,6 +340,20 @@ describe("procedures de agendamento", () => {
     expect(mocks.registrarNoHistorico).toHaveBeenCalledWith(expect.objectContaining({ eventNote: expect.stringContaining("não entregue") }));
   });
 
+  it("não suja o histórico da nota quando o envio está desligado", async () => {
+    // Envio desligado é estado do sistema, não evento da nota: a mesma linha em
+    // toda nota esconderia o que de fato aconteceu com ela.
+    const mailer = await import("./_core/mailer");
+    const configurado = vi.spyOn(mailer, "isMailerConfigured").mockReturnValue(false);
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "pending", scheduledFor: new Date() });
+    mocks.scheduleAppointment.mockResolvedValue({ id: 7, supplierId: 12, status: "scheduled", invoiceNumber: "1", purchaseOrder: null, scheduledFor: new Date(), recipientCnpj: null, invoiceSupplierName: null });
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.schedule({ appointmentId: 7, scheduledFor: new Date(Date.now() + 86_400_000).toISOString() });
+    await new Promise(resolve => setImmediate(resolve));
+    expect(mocks.registrarNoHistorico).not.toHaveBeenCalled();
+    configurado.mockRestore();
+  });
+
   it("registra quando o fornecedor não tem e-mail para avisar", async () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "pending", scheduledFor: new Date() });
     mocks.scheduleAppointment.mockResolvedValue({ id: 7, supplierId: 12, status: "scheduled", invoiceNumber: "1", purchaseOrder: null, scheduledFor: new Date(), recipientCnpj: null, invoiceSupplierName: null });

@@ -46,6 +46,16 @@ export default function EstadoDoSistemaCard() {
               Contas de teste: {estado.data.contasDeTeste.ligadas ? "ligadas" : `desligadas — ${estado.data.contasDeTeste.motivo}`}
             </span>
           )}
+          {/* O envio desligado é silencioso por natureza: o agendamento
+              funciona e ninguém é avisado. Dito aqui, não vira surpresa. */}
+          {estado.data && (
+            <span
+              title={estado.data.avisoPorEmail ? "O fornecedor recebe o dia, a hora e o local ao ser agendado" : "Falta RESEND_API_KEY e MAIL_FROM — o agendamento funciona, mas o fornecedor não é avisado"}
+              className={`rounded-full px-4 py-2 text-xs font-bold ${estado.data.avisoPorEmail ? "bg-state-go-bg text-state-go" : "bg-sunken text-rvd-plum"}`}
+            >
+              Aviso ao fornecedor por e-mail: {estado.data.avisoPorEmail ? "ligado" : "desligado"}
+            </span>
+          )}
         </div>
       </div>
     </section>
