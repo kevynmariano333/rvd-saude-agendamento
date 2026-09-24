@@ -2202,3 +2202,22 @@ export async function panoramaDeFornecedores(): Promise<FornecedorDoPanorama[]> 
   // Quem tem mais nota primeiro: é quem mais importa ter no portal.
   return linhas.sort((a, b) => b.notas - a.notas || (a.nome ?? "").localeCompare(b.nome ?? ""));
 }
+
+/**
+ * Uma linha no histórico da nota que não muda o status dela.
+ *
+ * Serve para registrar o que o sistema fez sozinho — avisar o fornecedor, por
+ * exemplo. Sem isso, "o fornecedor foi avisado?" seria pergunta sem resposta, e
+ * quem cobra a entrega não teria como saber se o aviso saiu.
+ */
+export async function registrarNoHistorico(input: { appointmentId: number; status: AppointmentStatus; handledBy: number; eventNote: string }) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(appointmentStatusHistory).values({
+    appointmentId: input.appointmentId,
+    previousStatus: input.status,
+    nextStatus: input.status,
+    handledBy: input.handledBy,
+    eventNote: input.eventNote,
+  });
+}

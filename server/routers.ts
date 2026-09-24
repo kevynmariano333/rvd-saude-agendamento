@@ -61,6 +61,7 @@ import {
   createPasswordResetToken,
   getPasswordResetToken,
   getUserById,
+  registrarNoHistorico,
   createAttendance,
   decideAttendanceEntry,
   executeAttendanceAction,
@@ -99,6 +100,7 @@ import { estadoDasContasDeTeste } from "./contasDeTeste";
 import { createAppointmentValidationToken, readAppointmentValidationToken } from "./appointmentValidation";
 import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
 import { isMailerConfigured, sendMail } from "./_core/mailer";
+import { conteudoDoAgendamento } from "./emailDeAgendamento";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
 import { notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
@@ -313,6 +315,56 @@ async function recusarNotaRepetida(
       `registrada em ${quando} e hoje ${situacao}. Procure por ela na lista em vez de registrar de novo.` +
       (dica ? ` ${dica}` : ""),
   });
+}
+
+/**
+ * Avisa o fornecedor da data marcada.
+ *
+ * Quem envia a nota não fica com o portal aberto: a confirmação vem horas ou
+ * dias depois, e sem aviso ele só descobre se voltar para olhar. Entrega que
+ * chega no dia errado custa a viagem, a doca ocupada à toa e a nota de volta.
+ *
+ * Não trava o agendamento: a marcação já está gravada quando isto roda, e um
+ * problema no envio não pode desfazer o que a doca combinou. Fica registrado no
+ * histórico da nota — inclusive a falha —, porque "o fornecedor foi avisado?"
+ * precisa ter resposta.
+ */
+async function avisarFornecedorDoAgendamento(agendamento: { id: number; supplierId: number; status: AppointmentStatus; invoiceNumber: string | null; purchaseOrder: string | null; scheduledFor: Date; recipientCnpj: string | null; invoiceSupplierName: string | null }, remarcado: boolean, operadorId: number) {
+  const registrar = async (nota: string) => {
+    try {
+      await registrarNoHistorico({ appointmentId: agendamento.id, status: agendamento.status, handledBy: operadorId, eventNote: nota });
+    } catch (erro) {
+      // O histórico é o registro do aviso, não o aviso: falhar aqui não pode
+      // apagar o e-mail que já saiu.
+      console.error("[Agendamento] falha ao registrar o aviso no histórico:", erro);
+    }
+  };
+
+  if (!isMailerConfigured()) {
+    console.error("[Agendamento] RESEND_API_KEY ou MAIL_FROM ausentes — o fornecedor não foi avisado por e-mail.");
+    await registrar("Aviso de agendamento não enviado: envio de e-mail não configurado.");
+    return;
+  }
+  const fornecedor = await getUserById(agendamento.supplierId);
+  if (!fornecedor?.email) {
+    await registrar("Aviso de agendamento não enviado: o fornecedor não tem e-mail cadastrado.");
+    return;
+  }
+  const conteudo = conteudoDoAgendamento({
+    invoiceNumber: agendamento.invoiceNumber,
+    purchaseOrder: agendamento.purchaseOrder,
+    scheduledFor: agendamento.scheduledFor,
+    recipientCnpj: agendamento.recipientCnpj,
+    supplierName: agendamento.invoiceSupplierName,
+    remarcado,
+  });
+  try {
+    await sendMail({ to: fornecedor.email, ...conteudo });
+    await registrar(`${remarcado ? "Remarcação" : "Agendamento"} avisado por e-mail para ${fornecedor.email}.`);
+  } catch (erro) {
+    console.error("[Agendamento] falha ao enviar o aviso ao fornecedor:", erro);
+    await registrar(`Aviso de agendamento não entregue em ${fornecedor.email}.`);
+  }
 }
 
 function decodeXmlBase64(value: string) {
@@ -984,7 +1036,12 @@ export const appRouter = router({
           const suggestion = await getSuggestionById(input.acceptedSuggestionId);
           if (!suggestion || suggestion.appointmentId !== appointment.id || suggestion.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "A sugestão selecionada não está disponível." });
         }
-        return scheduleAppointment({ appointmentId: appointment.id, previousStatus: appointment.status, previousScheduledFor: appointment.scheduledFor, scheduledFor, handledBy: ctx.user.id, rescheduled: appointment.status === "scheduled", acceptedSuggestionId: input.acceptedSuggestionId });
+        const remarcado = appointment.status === "scheduled";
+        const agendado = await scheduleAppointment({ appointmentId: appointment.id, previousStatus: appointment.status, previousScheduledFor: appointment.scheduledFor, scheduledFor, handledBy: ctx.user.id, rescheduled: remarcado, acceptedSuggestionId: input.acceptedSuggestionId });
+        // Sem esperar o e-mail: a data já está marcada, e quem está na tela não
+        // precisa aguardar o servidor de mensagens para seguir com a fila.
+        if (agendado) void avisarFornecedorDoAgendamento(agendado, remarcado, ctx.user.id);
+        return agendado;
       }),
     tratarBacklog: protectedProcedure
       .input(z.object({

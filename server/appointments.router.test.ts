@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   deleteAppointmentById: vi.fn(),
   scheduleAppointment: vi.fn(),
   createUnscheduledReceipt: vi.fn(),
+  getUserById: vi.fn(),
+  registrarNoHistorico: vi.fn(),
   notaJaRegistrada: vi.fn(),
   listApprovedCompanyUserIds: vi.fn(),
   listPendingAccessRequests: vi.fn(),
@@ -49,6 +51,7 @@ vi.mock("./session", () => ({
   clearRvdSession: vi.fn(),
   createRvdSession: vi.fn(),
 }));
+vi.mock("./_core/mailer", () => ({ isMailerConfigured: () => true, sendMail: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("./storage", () => ({ storagePut: vi.fn().mockResolvedValue({ key: "recebimentos-avulsos/teste.xml", url: "https://storage.example/recebimentos-avulsos/teste.xml" }) }));
 
 import { appRouter } from "./routers";
@@ -301,6 +304,50 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("supplier"));
     await expect(caller.appointments.desfazerPreNota({ appointmentId: 1 })).rejects.toThrow();
     expect(mocks.desfazerPreNotaDoAgendamento).not.toHaveBeenCalled();
+  });
+
+  it("avisa o fornecedor por e-mail com o dia, a hora e o local", async () => {
+    // Quem enviou a nota não fica com o portal aberto esperando a confirmação:
+    // sem o aviso, só descobre a data se voltar para olhar.
+    const { sendMail } = await import("./_core/mailer");
+    const marcado = new Date(Date.UTC(2026, 9, 15, 17, 30, 0));
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "pending", scheduledFor: new Date() });
+    mocks.scheduleAppointment.mockResolvedValue({ id: 7, supplierId: 12, status: "scheduled", invoiceNumber: "8511146", purchaseOrder: "4504887156", scheduledFor: marcado, recipientCnpj: null, invoiceSupplierName: "FORNECEDOR" });
+    mocks.getUserById.mockResolvedValue({ id: 12, email: "fornecedor@exemplo.com" });
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.schedule({ appointmentId: 7, scheduledFor: marcado.toISOString() });
+    // O envio não trava a resposta, então a asserção espera a fila esvaziar.
+    await new Promise(resolve => setImmediate(resolve));
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: "fornecedor@exemplo.com" }));
+    const mensagem = (sendMail as unknown as { mock: { calls: { text: string }[][] } }).mock.calls[0][0];
+    expect(mensagem.text).toContain("15/10/2026");
+    expect(mensagem.text).toContain("14:30");
+    expect(mensagem.text).toContain("Rua Antônio Mestriner, 194");
+  });
+
+  it("não deixa uma falha de e-mail derrubar o agendamento", async () => {
+    // A data já está gravada quando o aviso sai: problema no envio não pode
+    // desfazer o que a doca combinou.
+    const { sendMail } = await import("./_core/mailer");
+    (sendMail as unknown as { mockRejectedValueOnce: (erro: Error) => void }).mockRejectedValueOnce(new Error("servidor de e-mail fora do ar"));
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "pending", scheduledFor: new Date() });
+    mocks.scheduleAppointment.mockResolvedValue({ id: 7, supplierId: 12, status: "scheduled", invoiceNumber: "1", purchaseOrder: null, scheduledFor: new Date(), recipientCnpj: null, invoiceSupplierName: null });
+    mocks.getUserById.mockResolvedValue({ id: 12, email: "fornecedor@exemplo.com" });
+    const caller = appRouter.createCaller(context("operator"));
+    await expect(caller.appointments.schedule({ appointmentId: 7, scheduledFor: new Date(Date.now() + 86_400_000).toISOString() })).resolves.toBeTruthy();
+    await new Promise(resolve => setImmediate(resolve));
+    // A falha fica escrita no histórico da nota, para alguém poder cobrar.
+    expect(mocks.registrarNoHistorico).toHaveBeenCalledWith(expect.objectContaining({ eventNote: expect.stringContaining("não entregue") }));
+  });
+
+  it("registra quando o fornecedor não tem e-mail para avisar", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "pending", scheduledFor: new Date() });
+    mocks.scheduleAppointment.mockResolvedValue({ id: 7, supplierId: 12, status: "scheduled", invoiceNumber: "1", purchaseOrder: null, scheduledFor: new Date(), recipientCnpj: null, invoiceSupplierName: null });
+    mocks.getUserById.mockResolvedValue({ id: 12, email: null });
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.schedule({ appointmentId: 7, scheduledFor: new Date(Date.now() + 86_400_000).toISOString() });
+    await new Promise(resolve => setImmediate(resolve));
+    expect(mocks.registrarNoHistorico).toHaveBeenCalledWith(expect.objectContaining({ eventNote: expect.stringContaining("não tem e-mail") }));
   });
 
   it("registra as datas anterior e nova quando o operador reagenda", async () => {
