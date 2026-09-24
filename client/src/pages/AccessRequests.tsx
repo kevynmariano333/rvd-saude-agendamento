@@ -11,6 +11,7 @@ import { useLocation } from "wouter";
 import PortalLayout from "./PortalLayout";
 import BackupCard from "../components/BackupCard";
 import NotasRepetidasCard from "../components/NotasRepetidasCard";
+import CartazDaPortariaCard from "../components/CartazDaPortariaCard";
 import EstadoDoSistemaCard from "../components/EstadoDoSistemaCard";
 
 type PendingRequest = {
@@ -356,6 +357,7 @@ export default function AccessRequests() {
         )}
 
         <EstadoDoSistemaCard />
+      <CartazDaPortariaCard />
       <NotasRepetidasCard />
       <BackupCard />
       </div>

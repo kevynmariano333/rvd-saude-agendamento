@@ -24,7 +24,7 @@ export function receiptCertificateFileName(invoiceNumber: string | null) {
 
 let logoDataUrlPromise: Promise<string> | undefined;
 
-function getRvdLogoDataUrl() {
+export function getRvdLogoDataUrl() {
   if (logoDataUrlPromise) return logoDataUrlPromise;
   logoDataUrlPromise = fetch("/RVD-Saude.png")
     .then(async response => {
