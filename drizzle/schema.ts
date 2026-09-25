@@ -191,6 +191,18 @@ export const appointments = mysqlTable(
     notes: text("notes"),
     rejectionReason: text("rejectionReason"),
     source: mysqlEnum("source", appointmentSources).default("portal").notNull(),
+    /**
+     * Quando alguém do planejamento marcou esta nota como prioridade.
+     *
+     * A urgência normal vem do número do pedido: a faixa 4000 do ERP marca a
+     * nota sozinha. Mas existe a entrega que o ERP não sabe que virou urgente —
+     * o estoque acabou, a cirurgia foi antecipada — e aí quem sabe é o
+     * planejamento. Marcar à mão não substitui a regra do pedido: soma.
+     */
+    urgenteMarcadoEm: datetime("urgenteMarcadoEm", { mode: "date" }),
+    urgenteMarcadoPor: int("urgenteMarcadoPor"),
+    /** Por que essa nota não pode esperar. Sai na tela, ao lado da marca. */
+    urgenteMotivo: varchar("urgenteMotivo", { length: 255 }),
     preNoteConfirmedAt: datetime("preNoteConfirmedAt", { mode: "date" }),
     preNoteConfirmedBy: int("preNoteConfirmedBy").references(() => users.id, { onDelete: "set null" }),
     xmlStorageKey: varchar("xmlStorageKey", { length: 512 }),

@@ -262,7 +262,12 @@ function condicoesDeBusca(filtros: AppointmentFilters) {
   }
   // Pedido que começa com 4000 é urgência — a mesma regra que ordena a fila e
   // pinta o selo na linha.
-  if (filtros.onlyUrgent) condicoes.push(sql`${appointments.purchaseOrder} REGEXP '(^|[^0-9])4000'`);
+  // Urgente é o que o pedido diz (faixa 4000 do ERP) ou o que o planejamento
+  // marcou. Filtrar só pela regra do pedido esconderia justamente as que alguém
+  // precisou marcar à mão.
+  if (filtros.onlyUrgent) {
+    condicoes.push(or(sql`${appointments.purchaseOrder} REGEXP '(^|[^0-9])4000'`, isNotNull(appointments.urgenteMarcadoEm))!);
+  }
   if (filtros.preNote === "done") condicoes.push(isNotNull(appointments.preNoteConfirmedAt));
   if (filtros.preNote === "pending") condicoes.push(isNull(appointments.preNoteConfirmedAt));
   const inicio = getSaoPauloDayRange(filtros.dateStart ?? "");
@@ -352,6 +357,8 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
       scheduledFor: appointments.scheduledFor,
       notes: appointments.notes,
       source: appointments.source,
+      urgenteMarcadoEm: appointments.urgenteMarcadoEm,
+      urgenteMotivo: appointments.urgenteMotivo,
       preNoteConfirmedAt: appointments.preNoteConfirmedAt,
       preNoteConfirmedBy: appointments.preNoteConfirmedBy,
       xmlUrl: appointments.xmlUrl,
@@ -528,6 +535,8 @@ export async function listAppointmentsBetween(start: Date, end: Date, status?: A
       scheduledFor: appointments.scheduledFor,
       notes: appointments.notes,
       source: appointments.source,
+      urgenteMarcadoEm: appointments.urgenteMarcadoEm,
+      urgenteMotivo: appointments.urgenteMotivo,
       preNoteConfirmedAt: appointments.preNoteConfirmedAt,
       preNoteConfirmedBy: appointments.preNoteConfirmedBy,
       xmlUrl: appointments.xmlUrl,
@@ -2227,4 +2236,39 @@ export async function registrarNoHistorico(input: { appointmentId: number; statu
     handledBy: input.handledBy,
     eventNote: input.eventNote,
   });
+}
+
+/**
+ * Marca (ou desmarca) a nota como prioridade do planejamento.
+ *
+ * A urgência que vem do número do pedido continua valendo e não é apagada por
+ * isto: são duas origens para o mesmo aviso. Esta existe para a entrega que o
+ * ERP não sabe que virou urgente — o estoque acabou, a cirurgia foi
+ * antecipada — e quem sabe disso é quem planeja.
+ *
+ * Fica no histórico da nota com quem marcou: prioridade que aparece sem dono é
+ * prioridade que ninguém revisa.
+ */
+export async function marcarUrgencia(input: { appointmentId: number; status: AppointmentStatus; urgente: boolean; motivo: string | null; handledBy: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const agora = new Date();
+  await db.transaction(async tx => {
+    await tx
+      .update(appointments)
+      .set(
+        input.urgente
+          ? { urgenteMarcadoEm: agora, urgenteMarcadoPor: input.handledBy, urgenteMotivo: input.motivo, updatedAt: agora }
+          : { urgenteMarcadoEm: null, urgenteMarcadoPor: null, urgenteMotivo: null, updatedAt: agora },
+      )
+      .where(eq(appointments.id, input.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({
+      appointmentId: input.appointmentId,
+      previousStatus: input.status,
+      nextStatus: input.status,
+      handledBy: input.handledBy,
+      eventNote: input.urgente ? `Marcada como urgente pelo planejamento${input.motivo ? `: ${input.motivo}` : "."}` : "Urgência retirada pelo planejamento.",
+    });
+  });
+  return getAppointmentById(input.appointmentId);
 }

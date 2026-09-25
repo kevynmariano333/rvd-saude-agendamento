@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   deleteAppointmentById: vi.fn(),
   scheduleAppointment: vi.fn(),
   createUnscheduledReceipt: vi.fn(),
+  marcarUrgencia: vi.fn(),
   getUserById: vi.fn(),
   registrarNoHistorico: vi.fn(),
   notaJaRegistrada: vi.fn(),
@@ -298,6 +299,12 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("operator"));
     await caller.appointments.desfazerPreNota({ appointmentId: 1 });
     expect(mocks.desfazerPreNotaDoAgendamento).not.toHaveBeenCalled();
+  });
+
+  it("não deixa o fornecedor marcar urgência", async () => {
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.appointments.marcarUrgencia({ appointmentId: 1, urgente: true })).rejects.toThrow();
+    expect(mocks.marcarUrgencia).not.toHaveBeenCalled();
   });
 
   it("não deixa o fornecedor desfazer a pré-nota de ninguém", async () => {
@@ -639,6 +646,16 @@ describe("perfil planejador", () => {
     await expect(caller.appointments.desfazerPreNota({ appointmentId: 7 })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(mocks.confirmAppointmentPreNote).not.toHaveBeenCalled();
     expect(mocks.desfazerPreNotaDoAgendamento).not.toHaveBeenCalled();
+  });
+
+  it("marca a nota como urgente, que é trabalho de quem planeja", async () => {
+    // Prioridade não é andamento: não recebe, não recusa, não conclui. É dizer
+    // que essa entrega não pode esperar, e quem sabe disso é o planejamento.
+    mocks.getAppointmentById.mockResolvedValue({ id: 7, supplierId: 12, status: "scheduled" });
+    mocks.marcarUrgencia.mockResolvedValue({ id: 7 });
+    const caller = appRouter.createCaller(context("planejador"));
+    await caller.appointments.marcarUrgencia({ appointmentId: 7, urgente: true, motivo: "estoque zerado" });
+    expect(mocks.marcarUrgencia).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 7, urgente: true, motivo: "estoque zerado", handledBy: 24 }));
   });
 
   it("não resgata uma nota recusada", async () => {

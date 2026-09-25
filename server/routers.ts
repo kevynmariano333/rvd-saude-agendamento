@@ -61,6 +61,7 @@ import {
   createPasswordResetToken,
   getPasswordResetToken,
   getUserById,
+  marcarUrgencia,
   registrarNoHistorico,
   createAttendance,
   decideAttendanceEntry,
@@ -1010,6 +1011,28 @@ export const appRouter = router({
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
         if (appointment.preNoteConfirmedAt) return appointment;
         return confirmAppointmentPreNote({ appointmentId: appointment.id, status: appointment.status, operatorId: ctx.user.id });
+      }),
+    /**
+     * A urgência que o planejamento enxerga e o pedido de compra não.
+     *
+     * Marcar prioridade é trabalho de quem planeja a semana, e por isso fica
+     * com a mesa de agendamento inteira — planejador incluído. Não é mexer no
+     * andamento da nota: não recebe, não recusa, não conclui. Só diz que essa
+     * não pode esperar.
+     */
+    marcarUrgencia: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive(), urgente: z.boolean(), motivo: z.string().max(255).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        assertSchedulingDesk(ctx.user.role);
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+        return marcarUrgencia({
+          appointmentId: appointment.id,
+          status: appointment.status,
+          urgente: input.urgente,
+          motivo: input.motivo?.trim() || null,
+          handledBy: ctx.user.id,
+        });
       }),
     desfazerPreNota: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))

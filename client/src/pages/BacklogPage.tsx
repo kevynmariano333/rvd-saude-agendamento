@@ -106,7 +106,7 @@ export default function BacklogPage() {
                 return <tr key={item.id} className="border-t border-line align-top text-sm">
                   <td className="px-3 py-3">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-state-wait-bg px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-state-wait"><AlertTriangle className="size-3" />Backlog</span>
-                    <UrgenciaBadge purchaseOrder={item.purchaseOrder} className="mt-1.5 flex w-fit" />
+                    <UrgenciaBadge purchaseOrder={item.purchaseOrder} marcadaEm={item.urgenteMarcadoEm} motivo={item.urgenteMotivo} className="mt-1.5 flex w-fit" />
                     <p className="mt-1.5 inline-flex rounded bg-rvd-plum-pale px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">{curtoDoMotivo(item.backlogReasonCode)}</p>
                     <p className="mt-1 line-clamp-3 max-w-44 text-[11px] leading-4 text-ink-soft">{item.backlogReason || "Sem descrição"}</p>
                   </td>
