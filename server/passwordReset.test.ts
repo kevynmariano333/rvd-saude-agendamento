@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MARCA } from "../shared/marca";
 import {
   buildResetUrl,
+  enderecoDoPortal,
   createResetToken,
   hashResetToken,
   isResetTokenUsable,
@@ -71,5 +72,31 @@ describe("password reset tokens", () => {
     expect(content.subject).toContain(MARCA.nome);
     expect(content.html).toContain(url);
     expect(content.text).toContain(url);
+  });
+});
+
+describe("endereço do portal para os links de e-mail", () => {
+  it("usa o APP_URL quando ele existe, sem barra sobrando", () => {
+    expect(enderecoDoPortal({ appUrl: "https://portal.exemplo.com/", host: "outro.com" })).toBe("https://portal.exemplo.com");
+  });
+
+  it("cai no endereço da própria requisição quando ninguém configurou APP_URL", () => {
+    // É o que impedia a recuperação de senha inteira: sem a variável, o
+    // e-mail não era nem enviado.
+    expect(enderecoDoPortal({ appUrl: "", proto: "https", host: "agendamento.rvdsaude.com.br" })).toBe("https://agendamento.rvdsaude.com.br");
+  });
+
+  it("assume HTTPS quando o proxy não diz o protocolo", () => {
+    expect(enderecoDoPortal({ appUrl: "", host: "portal.exemplo.com" })).toBe("https://portal.exemplo.com");
+  });
+
+  it("fica com o primeiro da cadeia quando o proxy encadeia os cabeçalhos", () => {
+    expect(enderecoDoPortal({ appUrl: "", proto: "https, http", host: "portal.exemplo.com, interno:8080" })).toBe("https://portal.exemplo.com");
+  });
+
+  it("recusa um host estranho em vez de montar um link para qualquer lugar", () => {
+    expect(enderecoDoPortal({ appUrl: "", host: "site-do-atacante.com/@outro" })).toBeNull();
+    expect(enderecoDoPortal({ appUrl: "", host: "" })).toBeNull();
+    expect(enderecoDoPortal({ appUrl: "" })).toBeNull();
   });
 });

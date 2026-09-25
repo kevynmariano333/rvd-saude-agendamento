@@ -41,6 +41,30 @@ export function isResetTokenUsable(
   return stored.expiresAt.getTime() > now.getTime();
 }
 
+/**
+ * O endereço do portal, para montar um link que sai por e-mail.
+ *
+ * Vale o que está em APP_URL. Sem ela, o pedido de senha morria em silêncio: o
+ * servidor registrava "APP_URL não configurada" no log e a pessoa ficava
+ * esperando um e-mail que nunca foi enviado — uma variável esquecida derrubava
+ * a recuperação de senha inteira.
+ *
+ * A reserva é o próprio endereço pelo qual a pessoa chegou, que o navegador
+ * informa em cada requisição. Só entra quando APP_URL está vazia, e só por
+ * isso: quem controla esse cabeçalho é quem faz a requisição, então com a
+ * variável configurada ela é que manda.
+ */
+export function enderecoDoPortal(entrada: { appUrl: string; proto?: string | null; host?: string | null }): string | null {
+  const configurado = entrada.appUrl.trim().replace(/\/+$/, "");
+  if (configurado) return configurado;
+  // Atrás de um proxy os dois cabeçalhos podem vir com a cadeia inteira,
+  // separada por vírgula; o primeiro é quem falou com o navegador.
+  const host = (entrada.host ?? "").split(",")[0].trim();
+  if (!host || !/^[A-Za-z0-9.\-]+(:\d+)?$/.test(host)) return null;
+  const proto = (entrada.proto ?? "").split(",")[0].trim();
+  return `${proto === "http" ? "http" : "https"}://${host}`;
+}
+
 export function buildResetUrl(baseUrl: string, token: string): string {
   const root = baseUrl.replace(/\/+$/, "");
   return `${root}/redefinir-senha?token=${encodeURIComponent(token)}`;

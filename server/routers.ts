@@ -99,7 +99,7 @@ import { ENV } from "./_core/env";
 import { limparFalhas, registrarFalha, segundosDeEspera } from "./loginThrottle";
 import { estadoDasContasDeTeste } from "./contasDeTeste";
 import { createAppointmentValidationToken, readAppointmentValidationToken } from "./appointmentValidation";
-import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
+import { buildResetUrl, createResetToken, enderecoDoPortal, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
 import { caminhoDoEnvio, descricaoDoDestino, isMailerConfigured, remetente, sendMail } from "./_core/mailer";
 import { conteudoDoAcessoLiberado } from "./emailDeAcesso";
 import { conteudoDoTeste, motivoDaFalha } from "./emailDeTeste";
@@ -373,6 +373,18 @@ async function avisarFornecedorDoAgendamento(agendamento: { id: number; supplier
   }
 }
 
+/** O que basta saber da requisição para montar um link: os cabeçalhos. */
+type ComCabecalhos = { headers: Record<string, string | string[] | undefined> };
+
+/** O endereço do portal visto por quem fez esta requisição. */
+function enderecoDoPortalDaRequisicao(req: ComCabecalhos): string | null {
+  return enderecoDoPortal({
+    appUrl: ENV.appUrl,
+    proto: req.headers["x-forwarded-proto"] as string | undefined,
+    host: (req.headers["x-forwarded-host"] ?? req.headers.host) as string | undefined,
+  });
+}
+
 /**
  * Avisa a pessoa de que o login dela passou a valer.
  *
@@ -384,14 +396,14 @@ async function avisarFornecedorDoAgendamento(agendamento: { id: number; supplier
  *
  * Devolve se o aviso saiu, para a tela de quem liberou poder dizer.
  */
-async function avisarAcessoLiberado(usuario: { name: string | null; email: string | null; role: UserRole }, reativado = false): Promise<boolean> {
+async function avisarAcessoLiberado(usuario: { name: string | null; email: string | null; role: UserRole }, req: ComCabecalhos, reativado = false): Promise<boolean> {
   if (!usuario.email) return false;
   if (!isMailerConfigured()) {
     console.warn("[Acesso] envio de e-mail desligado (falta o SMTP da empresa ou a chave do Resend) — a pessoa não foi avisada de que o login está ativo.");
     return false;
   }
   try {
-    const conteudo = conteudoDoAcessoLiberado({ nome: usuario.name, email: usuario.email, role: usuario.role, appUrl: ENV.appUrl || null, reativado });
+    const conteudo = conteudoDoAcessoLiberado({ nome: usuario.name, email: usuario.email, role: usuario.role, appUrl: enderecoDoPortalDaRequisicao(req), reativado });
     await sendMail({ to: usuario.email, ...conteudo });
     return true;
   } catch (erro) {
@@ -541,7 +553,7 @@ export const appRouter = router({
 
         // Cadastro que já entra liberado leva o aviso na hora: é o comprovante
         // de que a conta existe e com qual login se volta a ela.
-        await avisarAcessoLiberado(user);
+        await avisarAcessoLiberado(user, ctx.req);
         await createRvdSession(ctx.res, user);
         return { pending: false, ...publicUser(user) } as const;
       }),
@@ -558,7 +570,7 @@ export const appRouter = router({
       }),
     requestPasswordReset: publicProcedure
       .input(z.object({ email: z.string().trim().email("Informe um e-mail válido.") }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const email = input.email.trim().toLowerCase();
         const user = await getUserByEmail(email);
 
@@ -568,9 +580,13 @@ export const appRouter = router({
           const { token, tokenHash } = createResetToken();
           await createPasswordResetToken({ userId: user.id, tokenHash, expiresAt: resetTokenExpiry() });
 
-          const baseUrl = ENV.appUrl;
+          const baseUrl = enderecoDoPortal({
+            appUrl: ENV.appUrl,
+            proto: ctx.req.headers["x-forwarded-proto"] as string | undefined,
+            host: (ctx.req.headers["x-forwarded-host"] as string | undefined) ?? ctx.req.headers.host,
+          });
           if (!baseUrl) {
-            console.error("[PasswordReset] APP_URL não configurada — não foi possível montar o link.");
+            console.error("[PasswordReset] sem APP_URL e sem host na requisição — não foi possível montar o link.");
           } else if (!isMailerConfigured()) {
             console.error("[PasswordReset] envio de e-mail não configurado — e-mail não enviado.");
           } else {
@@ -1349,7 +1365,7 @@ export const appRouter = router({
         // Aprovar sem avisar é deixar a pessoa esperando por algo que já
         // aconteceu: ela não tem como saber, e a maioria não tenta de novo.
         const solicitante = input.approve ? await getUserById(input.userId) : null;
-        const avisado = solicitante ? await avisarAcessoLiberado(solicitante) : false;
+        const avisado = solicitante ? await avisarAcessoLiberado(solicitante, ctx.req) : false;
         return { success: true, avisado } as const;
       }),
   }),
@@ -1648,7 +1664,7 @@ export const appRouter = router({
         razaoSocial: z.string().trim().max(255).optional(),
         cnpj: z.string().trim().max(20).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const email = input.email.toLowerCase();
         if (await getUserByEmail(email)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe uma conta com esse e-mail." });
@@ -1670,7 +1686,7 @@ export const appRouter = router({
         });
         // A conta nasce valendo; quem vai usá-la precisa saber disso e com que
         // login entra — senão o administrador vira o canal de recado.
-        const avisado = await avisarAcessoLiberado(criado);
+        const avisado = await avisarAcessoLiberado(criado, ctx.req);
         return { ...publicUser(criado), avisado };
       }),
     setRole: adminProcedure
@@ -1699,7 +1715,7 @@ export const appRouter = router({
         // Desbloquear é a mesma notícia que aprovar, só que para quem já
         // conhece o portal.
         const desbloqueado = input.allowed ? await getUserById(input.userId) : null;
-        const avisado = desbloqueado ? await avisarAcessoLiberado(desbloqueado, true) : false;
+        const avisado = desbloqueado ? await avisarAcessoLiberado(desbloqueado, ctx.req, true) : false;
         return { success: true, avisado } as const;
       }),
   }),
