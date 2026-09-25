@@ -384,9 +384,16 @@ export default function Login() {
                 Voltar para a escolha de acesso
               </button>
             </div>
-            <p className="mt-6 border-t border-line pt-4 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-ink-faint">
-              Mariano System
-            </p>
+            <div className="mt-6 border-t border-line pt-4">
+              <div className="flex items-center justify-center gap-4">
+                <img src="/RVD-Saude.png" alt="RVD Saúde" className="h-8 w-auto object-contain" />
+                <span aria-hidden className="h-7 w-px bg-line" />
+                <img src="/LLT.png" alt="LLT Consultoria" className="h-8 w-auto object-contain" />
+              </div>
+              <p className="mt-3 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-ink-faint">
+                Desenvolvido por Mariano System
+              </p>
+            </div>
           </div>
         </section>
       </div>

@@ -152,7 +152,19 @@ function vitePluginManusDebugCollector(): Plugin {
 
 const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
 
+/**
+ * Qual versão está no ar, gravada no pacote na hora da build.
+ *
+ * "Atualizei e não mudou nada" não tinha resposta para quem não é
+ * administrador: o número do commit só existia no cartão de manutenção. Aqui
+ * ele entra no rodapé de todo mundo — e quem pergunta se a correção já subiu
+ * confere sozinho, sem abrir chamado.
+ */
+const versaoDoAplicativo =
+  (process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 7) || "desenvolvimento";
+
 export default defineConfig({
+  define: { __VERSAO_DO_APP__: JSON.stringify(versaoDoAplicativo) },
   plugins,
   resolve: {
     alias: {

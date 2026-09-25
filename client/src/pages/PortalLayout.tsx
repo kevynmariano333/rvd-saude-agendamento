@@ -558,6 +558,24 @@ export default function PortalLayout({
           <div>{children}</div>
         </div>
       </main>
+      {/* Quem é dono do sistema e quem o fez: a pergunta aparece na primeira
+          semana de uso e não tinha resposta em lugar nenhum da tela. Fica no
+          rodapé, que é onde se procura, e não disputa espaço com o trabalho. */}
+      <footer className="mt-4 border-t border-line bg-surface">
+        <div className="mx-auto flex max-w-[1440px] flex-col items-center gap-5 px-5 py-6 sm:flex-row sm:justify-between sm:px-8 lg:px-10">
+          <div className="flex items-center gap-4">
+            <img src="/RVD-Saude.png" alt="RVD Saúde" className="h-10 w-auto object-contain" />
+            <span aria-hidden className="h-8 w-px bg-line" />
+            <img src="/LLT.png" alt="LLT Consultoria" className="h-10 w-auto object-contain" />
+          </div>
+          <div className="text-center sm:text-right">
+            <p className="font-display text-[13px] font-extrabold text-ink">{MARCA.nome}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-faint">{MARCA.descricao}</p>
+            <p className="mt-1.5 text-[11px] text-ink-soft">Desenvolvido por Mariano System</p>
+            <p className="text-[11px] text-ink-faint">Versão {__VERSAO_DO_APP__}</p>
+          </div>
+        </div>
+      </footer>
       <ChangeNameDialog open={nameOpen} onOpenChange={setNameOpen} currentName={user.name ?? ""} />
       <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
     </div>
