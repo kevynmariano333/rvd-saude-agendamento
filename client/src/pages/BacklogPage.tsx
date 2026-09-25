@@ -5,7 +5,9 @@ import { rotuloDoDestinatario } from "@shared/recipients";
 import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
 import UrgenciaBadge from "../components/UrgenciaBadge";
 import { curtoDoMotivo } from "@shared/backlogReasons";
-import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardCheck, FileText } from "lucide-react";
+import { baixarPlanilha, nomeDaPlanilha } from "@/lib/planilha";
+import { COLUNAS_DA_FILA_DO_BACKLOG, toBacklogQueueRows } from "@/lib/reports";
+import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardCheck, Download, FileText } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,6 +75,17 @@ export default function BacklogPage() {
   const notas = backlog.data ?? [];
   // Quem crava data é o Operador; o planejador trata, mas não agenda.
   const podeAgendar = isPortalOperator(auth.data.role as PortalRole);
+  // A planilha sai do que está na tela: o que a fila mostra é o que o arquivo
+  // leva, sem uma segunda consulta que pudesse trazer outro conjunto.
+  const exportarFila = () => {
+    if (!notas.length) return toast.error("Não há nota em backlog para exportar.");
+    baixarPlanilha({
+      linhas: toBacklogQueueRows(notas),
+      colunas: COLUNAS_DA_FILA_DO_BACKLOG,
+      aba: "Backlog em aberto",
+      arquivo: nomeDaPlanilha("backlog-em-aberto"),
+    });
+  };
 
   return <PortalLayout user={auth.data} title="Backlog" subtitle="Notas que não fecharam no recebimento e esperam tratativa." onLogout={() => logout.mutate()}>
     <section className="panel p-5 sm:p-7">
@@ -84,7 +97,13 @@ export default function BacklogPage() {
             <p className="mt-1 max-w-xl text-[13px] leading-5 text-ink-soft">Trate as notas que não foram finalizadas com sucesso. Cada tratativa registra o lançamento no SAP e os documentos do HIS.</p>
           </div>
         </div>
-        <span className="inline-flex h-fit shrink-0 items-center gap-2 rounded-full bg-rvd-plum-pale px-3 py-1 text-[11px] font-bold text-rvd-plum">{notas.length} {notas.length === 1 ? "nota" : "notas"} em aberto</span>
+        <div className="flex h-fit shrink-0 items-center gap-3">
+          <span className="inline-flex items-center gap-2 rounded-full bg-rvd-plum-pale px-3 py-1 text-[11px] font-bold text-rvd-plum">{notas.length} {notas.length === 1 ? "nota" : "notas"} em aberto</span>
+          {/* Exportar daqui, e não só dos Relatórios: quem trata o backlog
+              trabalha nesta tela o dia inteiro, e a fila costuma sair em
+              planilha para ser acertada no SAP com a lista do lado. */}
+          <Button onClick={exportarFila} disabled={!notas.length} variant="outline" className="h-9 rounded-xl border-line bg-surface px-3.5 text-[11px] font-bold text-rvd-plum hover:bg-rvd-plum-pale"><Download className="size-3.5" />Exportar Excel</Button>
+        </div>
       </div>
 
       {backlog.isLoading ? <div className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando backlog...</div>

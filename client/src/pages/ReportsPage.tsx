@@ -5,11 +5,11 @@ import { Label } from "@/components/ui/label";
 import { COLUNAS_DO_BACKLOG, filterBacklogReport, reportColumns, toBacklogReportRows, toConsolidatedReportRows, toDetailedReportRows, type ReportFilters } from "@/lib/reports";
 import { cnpjsDoDestinatario } from "@shared/recipients";
 import SeletorDeDestinatario from "@/components/SeletorDeDestinatario";
+import { baixarPlanilha, nomeDaPlanilha } from "@/lib/planilha";
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, CalendarRange, ClipboardList, Download, FileSpreadsheet, Filter, RefreshCw, Search, TableProperties, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
 import { useLocation } from "wouter";
 import PortalLayout from "./PortalLayout";
 
@@ -68,11 +68,7 @@ export default function ReportsPage() {
   const setFilter = <K extends keyof ReportFilters>(key: K, value: ReportFilters[K]) => setFilters(current => ({ ...current, [key]: value }));
   /** Monta e baixa a planilha a partir das linhas recebidas. */
   const baixarExcel = (linhas: Record<string, string>[]) => {
-    const worksheet = XLSX.utils.json_to_sheet(linhas);
-    worksheet["!cols"] = colunas.map(coluna => ({ wch: Math.max(16, coluna.length + 6) }));
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, tituloDaVisao);
-    XLSX.writeFile(workbook, `relatorio-${tituloDaVisao.toLowerCase()}-rvd-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    baixarPlanilha({ linhas, colunas, aba: tituloDaVisao, arquivo: nomeDaPlanilha(`relatorio-${tituloDaVisao.toLowerCase()}`) });
   };
 
   const exportExcel = async () => {

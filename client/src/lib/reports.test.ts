@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COLUNAS_DO_BACKLOG, cnpjDoRemetente, filterBacklogReport, reportColumns, toBacklogReportRows, toConsolidatedReportRows, toDetailedReportRows, type BacklogReportAppointment, type ReportAppointment } from "./reports";
+import { COLUNAS_DA_FILA_DO_BACKLOG, COLUNAS_DO_BACKLOG, cnpjDoRemetente, filterBacklogReport, reportColumns, toBacklogQueueRows, toBacklogReportRows, toConsolidatedReportRows, toDetailedReportRows, type BacklogQueueAppointment, type BacklogReportAppointment, type ReportAppointment } from "./reports";
 
 const nota = (extra: Partial<ReportAppointment>): ReportAppointment => ({
   id: 1, invoiceNumber: "100", supplierName: "Fornecedor RVD", invoiceSupplierName: null,
@@ -135,5 +135,36 @@ describe("motivo do backlog no relatório", () => {
   it("junta rótulo e descrição das notas novas", () => {
     const [linha] = toBacklogReportRows([noBacklog({ backlogReason: "Valor acima do pedido." })]);
     expect(linha.Motivo).toBe("Divergência de preço — Valor acima do pedido.");
+  });
+});
+
+describe("fila do backlog em planilha", () => {
+  const naFila = (extra: Partial<BacklogQueueAppointment> = {}): BacklogQueueAppointment => ({
+    invoiceNumber: "8511146", purchaseOrder: "4504748409", invoiceSupplierName: "Onco Distribuidora",
+    supplierName: "Login do fornecedor", supplierEmail: "contato@onco.com.br",
+    invoiceSupplierCnpj: "11222333000181", supplierCnpj: null, recipientCnpj: "06033403000113",
+    invoiceVolumeCount: 8, backlogReasonCode: "DIVERGENCIA_PRECO", backlogReason: "Valor acima do pedido.",
+    scheduledFor: "2026-08-10T13:00:00.000Z", urgenteMarcadoEm: null, ...extra,
+  });
+
+  it("leva o que a tela mostra: nota, pedido, fornecedor, destino e motivo", () => {
+    const [linha] = toBacklogQueueRows([naFila()]);
+    expect(linha["Número da Nota"]).toBe("8511146");
+    expect(linha["Número do Pedido"]).toBe("4504748409");
+    expect(linha["CNPJ Fornecedor"]).toBe("11.222.333/0001-81");
+    expect(linha["Nome Fornecedor"]).toBe("Onco Distribuidora");
+    expect(linha.Destinatário).toContain("HSH");
+    expect(linha.Motivo).toBe("Divergência de preço — Valor acima do pedido.");
+    expect(linha.Volumes).toBe("8");
+  });
+
+  it("marca urgente pela faixa do pedido e por quem marcou na mão", () => {
+    expect(toBacklogQueueRows([naFila()])[0].Urgente).toBe("Não");
+    expect(toBacklogQueueRows([naFila({ purchaseOrder: "4000123456" })])[0].Urgente).toBe("Sim");
+    expect(toBacklogQueueRows([naFila({ urgenteMarcadoEm: "2026-09-01T10:00:00.000Z" })])[0].Urgente).toBe("Sim");
+  });
+
+  it("tem as mesmas colunas que o cabeçalho da planilha anuncia", () => {
+    expect(Object.keys(toBacklogQueueRows([naFila()])[0])).toEqual(COLUNAS_DA_FILA_DO_BACKLOG);
   });
 });

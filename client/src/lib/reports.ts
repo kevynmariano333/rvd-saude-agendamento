@@ -1,6 +1,7 @@
 import { type PortalStatus, statusCopy } from "./portal";
 import { apenasDigitos, formatarCnpj, unidadePorCnpj } from "@shared/recipients";
 import { rotuloDoMotivo } from "@shared/backlogReasons";
+import { notaEhUrgente } from "@shared/purchaseOrders";
 
 export type ReportAppointment = {
   id: number;
@@ -273,5 +274,73 @@ export const COLUNAS_DO_BACKLOG = Object.keys(
     id: 0, createdAt: new Date(0), enteredBacklogAt: null, leftBacklogAt: null, status: "backlog",
     invoiceNumber: null, invoiceSupplierName: null, supplierName: null, supplierCnpj: null, loginCnpj: null,
     miroNumber: null, backlogReasonCode: null, backlogReason: null, comments: [],
+  }])[0],
+);
+
+/** Uma nota da fila do backlog, como a tela de tratativa a recebe. */
+export type BacklogQueueAppointment = {
+  invoiceNumber: string | null;
+  purchaseOrder: string | null;
+  invoiceSupplierName: string | null;
+  supplierName: string | null;
+  supplierEmail: string | null;
+  invoiceSupplierCnpj: string | null;
+  supplierCnpj: string | null;
+  recipientCnpj: string | null;
+  invoiceVolumeCount: number | null;
+  backlogReasonCode: string | null;
+  backlogReason: string | null;
+  scheduledFor: Date | string;
+  urgenteMarcadoEm?: Date | string | null;
+};
+
+/** A fila que está na tela, linha por linha. */
+export type BacklogQueueRow = {
+  "Número da Nota": string;
+  "Número do Pedido": string;
+  "CNPJ Fornecedor": string;
+  "Nome Fornecedor": string;
+  "E-mail Fornecedor": string;
+  Destinatário: string;
+  Motivo: string;
+  Volumes: string;
+  "Data de Agendamento": string;
+  Urgente: string;
+};
+
+/**
+ * A fila aberta do backlog, para a planilha.
+ *
+ * Não é o mesmo que o relatório de backlog: aquele conta a história — entrada,
+ * saída, comentários — de tudo que já passou por lá. Este é a fila de agora,
+ * a que está na tela de tratativa, com o que o planejamento precisa para
+ * trabalhar fora do portal: quem mandou, para qual unidade, por que travou.
+ */
+export function toBacklogQueueRows(notas: BacklogQueueAppointment[]): BacklogQueueRow[] {
+  return notas.map(item => {
+    const rotulo = rotuloDoMotivo(item.backlogReasonCode);
+    const cnpj = cnpjDoRemetente(item);
+    return {
+      "Número da Nota": item.invoiceNumber || "—",
+      "Número do Pedido": item.purchaseOrder || "—",
+      "CNPJ Fornecedor": cnpj ? formatarCnpj(cnpj) : "—",
+      "Nome Fornecedor": item.invoiceSupplierName || item.supplierName || "—",
+      "E-mail Fornecedor": item.supplierEmail || "—",
+      Destinatário: unitLabel(item.recipientCnpj),
+      Motivo: [rotulo, descricaoSemRotulo(rotulo, item.backlogReason)].filter(Boolean).join(" — "),
+      Volumes: item.invoiceVolumeCount === null ? "—" : String(item.invoiceVolumeCount),
+      "Data de Agendamento": formatReportDate(item.scheduledFor),
+      // A urgência vem do pedido (faixa 4000) ou de quem marcou na mão; as duas
+      // chegam aqui já resolvidas pela tela, então basta dizer sim ou não.
+      Urgente: item.urgenteMarcadoEm || notaEhUrgente(item.purchaseOrder) ? "Sim" : "Não",
+    };
+  });
+}
+
+export const COLUNAS_DA_FILA_DO_BACKLOG = Object.keys(
+  toBacklogQueueRows([{
+    invoiceNumber: null, purchaseOrder: null, invoiceSupplierName: null, supplierName: null, supplierEmail: null,
+    invoiceSupplierCnpj: null, supplierCnpj: null, recipientCnpj: null, invoiceVolumeCount: null,
+    backlogReasonCode: null, backlogReason: null, scheduledFor: new Date(0), urgenteMarcadoEm: null,
   }])[0],
 );
