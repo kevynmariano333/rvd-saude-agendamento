@@ -111,6 +111,30 @@ export default function OperatorDashboard() {
   const [rejeitarPendente, setRejeitarPendente] = useState<Appointment | null>(null);
   // "Data inicial/final" é intervalo; "Hoje" e "Amanhã" continuam sendo um dia
   // só, por isso vão num campo separado em vez de virar um intervalo de um dia.
+  /**
+   * Alguém está procurando uma nota, e não folheando a fila.
+   *
+   * A aba "Todos" esconde o backlog de propósito: a fila do dia não é lugar
+   * para nota que está em tratativa. Mas quando se digita um número de nota,
+   * esconder vira mentira — quem procura conclui que a nota não existe, e vai
+   * atrás de reimportar o que já está lá dentro. Procurando, procura em tudo.
+   */
+  const buscando = Boolean(
+    invoiceNumber.trim() ||
+      supplierName.trim() ||
+      purchaseOrder.trim() ||
+      sapCode.trim() ||
+      supplierCnpj.trim() ||
+      recipientCnpj ||
+      itemCount.trim() ||
+      date ||
+      dateEnd ||
+      dailyFilterDate ||
+      tomorrowFilterDate ||
+      onlyUrgent ||
+      somenteServico ||
+      preNote !== "all",
+  );
   const listInput = useMemo(() => ({
     limit: POR_PAGINA,
     offset: (pagina - 1) * POR_PAGINA,
@@ -119,7 +143,7 @@ export default function OperatorDashboard() {
     dateStart: date || undefined,
     dateEnd: dateEnd || undefined,
     status: activeStatus === "all" ? undefined : activeStatus,
-    excludeBacklog: activeStatus === "all",
+    excludeBacklog: activeStatus === "all" && !buscando,
     invoiceNumber: invoiceNumber || undefined,
     supplierName: supplierName || undefined,
     recipientCnpjs: cnpjsDoDestinatario(recipientCnpj),
@@ -130,7 +154,7 @@ export default function OperatorDashboard() {
     itemCount: itemCount.trim() ? Number(itemCount) : undefined,
     onlyUrgent: onlyUrgent || undefined,
     preNote: preNote === "all" ? undefined : preNote,
-  }), [activeStatus, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, pagina, preNote, purchaseOrder, recipientCnpj, sapCode, somenteServico, supplierCnpj, supplierName, tomorrowFilterDate]);
+  }), [activeStatus, buscando, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, pagina, preNote, purchaseOrder, recipientCnpj, sapCode, somenteServico, supplierCnpj, supplierName, tomorrowFilterDate]);
   // Trocar de aba ou de filtro recomeça a contagem: a página 3 de uma busca não
   // é a página 3 da seguinte.
   useEffect(() => { setPagina(1); }, [activeStatus, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, preNote, purchaseOrder, recipientCnpj, sapCode, supplierCnpj, supplierName, tomorrowFilterDate]);
