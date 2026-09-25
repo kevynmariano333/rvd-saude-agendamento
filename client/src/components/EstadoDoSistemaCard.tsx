@@ -1,5 +1,7 @@
+import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { GitCommitHorizontal } from "lucide-react";
+import { GitCommitHorizontal, Send } from "lucide-react";
+import { toast } from "sonner";
 
 /**
  * O que está rodando agora, em números conferíveis.
@@ -11,6 +13,16 @@ import { GitCommitHorizontal } from "lucide-react";
  */
 export default function EstadoDoSistemaCard() {
   const estado = trpc.manutencao.estadoDoSistema.useQuery(undefined, { refetchInterval: 60000 });
+  // O teste manda para o e-mail de quem está logado. A recusa do provedor vem
+  // escrita aqui, e não no log do servidor: quem configurou a caixa é quem
+  // precisa ler "senha de aplicativo inválida".
+  const teste = trpc.manutencao.enviarEmailDeTeste.useMutation({
+    onSuccess: resultado => {
+      if (resultado.enviado) toast.success(`E-mail de teste enviado para ${resultado.para}. Confira a caixa de entrada — e o lixo eletrônico.`);
+      else toast.error(`O e-mail de teste não saiu: ${resultado.motivo}`, { duration: 12_000 });
+    },
+    onError: erro => toast.error(erro.message),
+  });
   return (
     <section className="panel p-5 shadow-sm sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -55,6 +67,20 @@ export default function EstadoDoSistemaCard() {
             >
               Aviso ao fornecedor por e-mail: {estado.data.avisoPorEmail ? "ligado" : "desligado"}
             </span>
+          )}
+          {/* A etiqueta acima só sabe que as variáveis chegaram. Se o provedor
+              aceita a mensagem, só o envio responde — e sem este botão o teste
+              seria um fornecedor esperando um aviso que não chegou. */}
+          {estado.data?.avisoPorEmail && (
+            <Button
+              onClick={() => teste.mutate()}
+              disabled={teste.isPending}
+              variant="outline"
+              className="h-9 rounded-full border-line bg-surface px-4 text-xs font-bold text-rvd-plum hover:bg-rvd-plum-pale"
+            >
+              <Send className="size-3.5" />
+              {teste.isPending ? "Enviando..." : "Enviar e-mail de teste"}
+            </Button>
           )}
         </div>
       </div>

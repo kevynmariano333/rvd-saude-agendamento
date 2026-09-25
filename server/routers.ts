@@ -100,8 +100,9 @@ import { limparFalhas, registrarFalha, segundosDeEspera } from "./loginThrottle"
 import { estadoDasContasDeTeste } from "./contasDeTeste";
 import { createAppointmentValidationToken, readAppointmentValidationToken } from "./appointmentValidation";
 import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
-import { isMailerConfigured, sendMail } from "./_core/mailer";
+import { caminhoDoEnvio, isMailerConfigured, remetente, sendMail } from "./_core/mailer";
 import { conteudoDoAcessoLiberado } from "./emailDeAcesso";
+import { conteudoDoTeste, motivoDaFalha } from "./emailDeTeste";
 import { conteudoDoAgendamento } from "./emailDeAgendamento";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
@@ -1227,6 +1228,29 @@ export const appRouter = router({
         // data. Fica escrito onde se olha o estado do sistema.
         avisoPorEmail: isMailerConfigured(),
       };
+    }),
+    /**
+     * Manda um e-mail de teste para quem pediu.
+     *
+     * O destino é sempre o e-mail do próprio administrador logado: assim o
+     * portal não vira um jeito de mandar mensagem para endereço de terceiro, e
+     * quem testa recebe na própria caixa, que é onde ele consegue conferir.
+     *
+     * Não estoura em caso de falha — devolve o motivo. A recusa do provedor é
+     * a resposta do teste, não um erro do sistema, e é ela que diz o que
+     * ajustar: senha de aplicativo errada, SMTP bloqueado, remetente proibido.
+     */
+    enviarEmailDeTeste: adminProcedure.mutation(async ({ ctx }) => {
+      const caminho = caminhoDoEnvio();
+      if (!caminho) return { enviado: false as const, para: null, motivo: "O envio de e-mail não está configurado neste servidor." };
+      if (!ctx.user.email) return { enviado: false as const, para: null, motivo: "A sua conta não tem e-mail cadastrado para receber o teste." };
+      try {
+        await sendMail({ to: ctx.user.email, ...conteudoDoTeste({ caminho, remetente: remetente(), quando: new Date() }) });
+        return { enviado: true as const, para: ctx.user.email, motivo: null };
+      } catch (erro) {
+        console.error("[E-mail de teste] o provedor recusou o envio:", erro);
+        return { enviado: false as const, para: ctx.user.email, motivo: motivoDaFalha(erro) };
+      }
     }),
     /**
      * Importa o acervo do sistema anterior a partir dos CSVs exportados de lá.
