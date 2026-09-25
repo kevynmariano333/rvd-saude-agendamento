@@ -84,6 +84,13 @@ function transporteSmtp(): Transporter {
     auth: { user: ENV.smtpUser, pass: ENV.smtpPassword },
     pool: true,
     maxConnections: 2,
+    // Sem estes tempos, uma porta bloqueada pela hospedagem não dá erro: a
+    // conexão fica pendurada até o TCP desistir, dois minutos depois, e quem
+    // clicou recebe do proxy um "upstream error" em vez do motivo. Falhar em
+    // segundos, com a razão escrita, é melhor do que esperar em silêncio.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
   });
   return transporte;
 }

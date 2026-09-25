@@ -7,7 +7,7 @@ import superjson from "superjson";
 import App from "./App";
 import { startLogin } from "./const";
 import { realtimeQueryDefaults } from "./lib/realtime";
-import { isUnexpectedHtmlApiResponse } from "./lib/apiResponse";
+import { isUnexpectedHtmlApiResponse, mensagemDeRespostaNaoJson } from "./lib/apiResponse";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -88,6 +88,13 @@ const trpcClient = trpc.createClient({
           await new Promise(resolve => setTimeout(resolve, 150));
           response = await globalThis.fetch(input, requestInit);
         }
+
+        // Resposta que não é da API é do proxy da hospedagem — servidor
+        // reiniciando, ou a requisição passou do tempo dele. Vira um erro com
+        // texto de gente; sem isto, a tela tentava ler "upstream error" como
+        // JSON e mostrava "Unexpected token 'u'".
+        const aviso = mensagemDeRespostaNaoJson(response);
+        if (aviso) throw new Error(aviso);
 
         return response;
       },
