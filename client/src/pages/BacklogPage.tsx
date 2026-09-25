@@ -1,18 +1,19 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { canTreatBacklogPortal, formatAppointmentDate, homePathFor, isPortalOperator, type PortalRole } from "@/lib/portal";
-import { rotuloDoDestinatario } from "@shared/recipients";
+import { cnpjsDoDestinatario, rotuloDoDestinatario } from "@shared/recipients";
+import SeletorDeDestinatario from "../components/SeletorDeDestinatario";
 import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
 import UrgenciaBadge from "../components/UrgenciaBadge";
 import { curtoDoMotivo } from "@shared/backlogReasons";
 import { baixarPlanilha, nomeDaPlanilha } from "@/lib/planilha";
 import { COLUNAS_DA_FILA_DO_BACKLOG, toBacklogQueueRows } from "@/lib/reports";
-import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardCheck, Download, FileText } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardCheck, Download, FileText, Filter, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import type { AppointmentDetail } from "../components/AppointmentDetailsDialog";
 import AppointmentDetailsDialog from "../components/AppointmentDetailsDialog";
@@ -29,12 +30,53 @@ import PortalLayout from "./PortalLayout";
  * a carga já chegou. O que falta é acertar o lançamento, e isso é trabalho do
  * planejamento, que é quem enxerga esta tela.
  */
+/** Os filtros da fila, vazios. É também o estado do "Limpar filtros". */
+const FILTROS_VAZIOS = {
+  busca: "",
+  supplierCnpj: "",
+  invoiceNumber: "",
+  recipientCnpj: "",
+  itemCountOperator: ">=" as ">=" | "<=" | "=",
+  itemCount: "",
+  dateStart: "",
+  dateEnd: "",
+  backlogStart: "",
+  backlogEnd: "",
+  onlyUrgent: false,
+};
+type FiltrosDoBacklog = typeof FILTROS_VAZIOS;
+
 export default function BacklogPage() {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
   const utils = trpc.useUtils();
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
-  const backlog = trpc.appointments.list.useQuery({ status: "backlog" });
+  // A fila cresce e vira rolagem: com trezentas notas em aberto, achar a de um
+  // fornecedor ou a que entrou na semana passada era trabalho de olho. Os
+  // filtros são os mesmos da agenda, mais o período de entrada no backlog, que
+  // só existe aqui.
+  const [filtros, setFiltros] = useState<FiltrosDoBacklog>(FILTROS_VAZIOS);
+  const [mostrarFiltros, setMostrarFiltros] = useState(true);
+  const mudar = <C extends keyof FiltrosDoBacklog>(campo: C, valor: FiltrosDoBacklog[C]) => setFiltros(atual => ({ ...atual, [campo]: valor }));
+  const filtrando = useMemo(
+    () => (Object.keys(FILTROS_VAZIOS) as (keyof FiltrosDoBacklog)[]).some(campo => filtros[campo] !== FILTROS_VAZIOS[campo]),
+    [filtros],
+  );
+  const consulta = useMemo(() => ({
+    status: "backlog" as const,
+    busca: filtros.busca.trim() || undefined,
+    supplierCnpj: filtros.supplierCnpj.trim() || undefined,
+    invoiceNumber: filtros.invoiceNumber.trim() || undefined,
+    recipientCnpjs: cnpjsDoDestinatario(filtros.recipientCnpj),
+    itemCountOperator: filtros.itemCount.trim() ? filtros.itemCountOperator : undefined,
+    itemCount: filtros.itemCount.trim() ? Number(filtros.itemCount) : undefined,
+    dateStart: filtros.dateStart || undefined,
+    dateEnd: filtros.dateEnd || undefined,
+    backlogStart: filtros.backlogStart || undefined,
+    backlogEnd: filtros.backlogEnd || undefined,
+    onlyUrgent: filtros.onlyUrgent || undefined,
+  }), [filtros]);
+  const backlog = trpc.appointments.list.useQuery(consulta, { placeholderData: anterior => anterior });
   const [tratando, setTratando] = useState<AppointmentDetail | null>(null);
   const [detalhes, setDetalhes] = useState<AppointmentDetail | null>(null);
   const [historico, setHistorico] = useState<AppointmentDetail | null>(null);
@@ -98,13 +140,46 @@ export default function BacklogPage() {
           </div>
         </div>
         <div className="flex h-fit shrink-0 items-center gap-3">
-          <span className="inline-flex items-center gap-2 rounded-full bg-rvd-plum-pale px-3 py-1 text-[11px] font-bold text-rvd-plum">{notas.length} {notas.length === 1 ? "nota" : "notas"} em aberto</span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-rvd-plum-pale px-3 py-1 text-[11px] font-bold text-rvd-plum">{notas.length} {notas.length === 1 ? "nota" : "notas"} {filtrando ? (notas.length === 1 ? "encontrada" : "encontradas") : "em aberto"}</span>
           {/* Exportar daqui, e não só dos Relatórios: quem trata o backlog
               trabalha nesta tela o dia inteiro, e a fila costuma sair em
               planilha para ser acertada no SAP com a lista do lado. */}
           <Button onClick={exportarFila} disabled={!notas.length} variant="outline" className="h-9 rounded-xl border-line bg-surface px-3.5 text-[11px] font-bold text-rvd-plum hover:bg-rvd-plum-pale"><Download className="size-3.5" />Exportar Excel</Button>
+          <Button onClick={() => setMostrarFiltros(valor => !valor)} variant="outline" className={`h-9 rounded-xl border-line px-3.5 text-[11px] font-bold hover:bg-rvd-plum-pale ${mostrarFiltros ? "bg-rvd-plum-pale text-rvd-plum" : "bg-surface text-rvd-plum"}`}><Filter className="size-3.5" />Filtros{filtrando ? " (ativos)" : ""}</Button>
         </div>
       </div>
+
+      {mostrarFiltros && <div className="mt-6 rounded-2xl bg-sunken p-5">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <CampoDoFiltro label="Busca geral" value={filtros.busca} onChange={valor => mudar("busca", valor)} placeholder="Fornecedor, nota ou pedido..." comLupa />
+          <CampoDoFiltro label="CNPJ fornecedor" value={filtros.supplierCnpj} onChange={valor => mudar("supplierCnpj", valor)} placeholder="00.000.000/0000-00" />
+          <CampoDoFiltro label="Número da nota" value={filtros.invoiceNumber} onChange={valor => mudar("invoiceNumber", valor)} placeholder="NF-e..." />
+          <SeletorDeDestinatario value={filtros.recipientCnpj} onChange={valor => mudar("recipientCnpj", valor)} />
+          <div>
+            <Label className="text-[10px] font-bold uppercase tracking-wide text-rvd-plum">Qtd. itens na nota</Label>
+            <div className="mt-2 flex gap-2">
+              <select value={filtros.itemCountOperator} onChange={evento => mudar("itemCountOperator", evento.target.value as FiltrosDoBacklog["itemCountOperator"])} className="h-10 shrink-0 rounded-xl border border-line bg-surface px-2 text-sm font-bold text-rvd-plum focus:outline-none focus:ring-2 focus:ring-rvd-blue"><option value=">=">≥</option><option value="<=">≤</option><option value="=">=</option></select>
+              <Input type="number" min={0} value={filtros.itemCount} onChange={evento => mudar("itemCount", evento.target.value)} placeholder="0" className="border-line bg-surface text-rvd-plum" />
+            </div>
+          </div>
+          <CampoDeData label="Data inicial" value={filtros.dateStart} onChange={valor => mudar("dateStart", valor)} />
+          <CampoDeData label="Data final" value={filtros.dateEnd} onChange={valor => mudar("dateEnd", valor)} />
+          {/* Este par não é o do agendamento: é o dia em que a nota caiu no
+              backlog, que é como o planejamento cobra a própria fila ("o que
+              travou esta semana"). */}
+          <CampoDeData label="Entrou em backlog — de" value={filtros.backlogStart} onChange={valor => mudar("backlogStart", valor)} />
+          <CampoDeData label="Entrou em backlog — até" value={filtros.backlogEnd} onChange={valor => mudar("backlogEnd", valor)} />
+          <div className="flex items-end">
+            <button type="button" role="switch" aria-checked={filtros.onlyUrgent} onClick={() => mudar("onlyUrgent", !filtros.onlyUrgent)} className="inline-flex h-10 items-center gap-3 text-xs font-bold uppercase tracking-wide text-rvd-plum">
+              <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${filtros.onlyUrgent ? "bg-state-stop" : "bg-line"}`}><span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${filtros.onlyUrgent ? "left-[1.375rem]" : "left-0.5"}`} /></span>
+              Apenas urgentes
+            </button>
+          </div>
+          <div className="flex items-end">
+            <Button onClick={() => setFiltros(FILTROS_VAZIOS)} disabled={!filtrando} variant="ghost" className="h-10 text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum disabled:opacity-40"><X className="size-4" />Limpar filtros</Button>
+          </div>
+        </div>
+      </div>}
 
       {backlog.isLoading ? <div className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando backlog...</div>
         : notas.length ? <div className="mt-6 overflow-x-auto"><table className="w-full text-left">
@@ -159,6 +234,12 @@ export default function BacklogPage() {
               })}
             </tbody>
           </table></div>
+        : filtrando ? <div className="mt-7 rounded-2xl bg-rvd-plum-pale px-6 py-16 text-center">
+            <Search className="mx-auto size-7 text-rvd-plum" />
+            <h3 className="mt-4 font-display text-lg font-extrabold text-ink">Nenhuma nota com esses filtros</h3>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-ink-soft">A fila pode ter notas — só não estas. Ajuste os campos ou limpe os filtros.</p>
+            <Button onClick={() => setFiltros(FILTROS_VAZIOS)} variant="ghost" className="mt-4 text-rvd-plum hover:bg-rvd-plum-soft hover:text-rvd-plum"><X className="size-4" />Limpar filtros</Button>
+          </div>
         : <div className="mt-7 rounded-2xl bg-rvd-plum-pale px-6 py-16 text-center">
             <CheckCircle2 className="mx-auto size-8 text-rvd-plum" />
             <h3 className="mt-4 font-display text-lg font-extrabold text-ink">Nada em backlog</h3>
@@ -203,4 +284,22 @@ export default function BacklogPage() {
       </DialogContent>
     </Dialog>
   </PortalLayout>;
+}
+
+/** Um campo de texto do filtro, no formato que o resto do portal usa. */
+function CampoDoFiltro({ label, value, onChange, placeholder, comLupa = false }: { label: string; value: string; onChange: (valor: string) => void; placeholder: string; comLupa?: boolean }) {
+  return <div>
+    <Label className="text-[10px] font-bold uppercase tracking-wide text-rvd-plum">{label}</Label>
+    <div className="relative mt-2">
+      {comLupa && <Search className="pointer-events-none absolute left-3 top-3 size-4 text-rvd-plum" />}
+      <Input value={value} onChange={evento => onChange(evento.target.value)} placeholder={placeholder} className={`border-line bg-surface text-rvd-plum placeholder:text-ink-soft ${comLupa ? "pl-9" : ""}`} />
+    </div>
+  </div>;
+}
+
+function CampoDeData({ label, value, onChange }: { label: string; value: string; onChange: (valor: string) => void }) {
+  return <div>
+    <Label className="text-[10px] font-bold uppercase tracking-wide text-rvd-plum">{label}</Label>
+    <Input type="date" value={value} onChange={evento => onChange(evento.target.value)} className="mt-2 border-line bg-surface text-rvd-plum" />
+  </div>;
 }

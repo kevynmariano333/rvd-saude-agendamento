@@ -138,7 +138,7 @@ const localProfileSchema = z.enum(["operator", "supplier", "portaria", "operacao
 const statusSchema = z.enum(appointmentStatuses);
 
 /** Os filtros da agenda: a lista e a contagem das páginas leem os mesmos. */
-const filtrosDaLista = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional(), recipientCnpjs: z.array(z.string().max(40)).max(20).optional(), purchaseOrder: z.string().max(100).optional(), sapCode: z.string().max(60).optional(), supplierCnpj: z.string().max(20).optional(), itemCountOperator: z.enum([">=", "<=", "="]).optional(), itemCount: z.number().int().min(0).max(100000).optional(), dateStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), dateEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), onlyUrgent: z.boolean().optional(), preNote: z.enum(["done", "pending"]).optional(), excludeBacklog: z.boolean().optional(), source: z.enum(appointmentSources).optional(), limit: z.number().int().positive().max(500).optional(), offset: z.number().int().min(0).optional() }).optional();
+const filtrosDaLista = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.").optional(), status: statusSchema.optional(), invoiceNumber: z.string().max(100).optional(), supplierName: z.string().max(255).optional(), recipientCnpj: z.string().max(20).optional(), recipientCnpjs: z.array(z.string().max(40)).max(20).optional(), purchaseOrder: z.string().max(100).optional(), sapCode: z.string().max(60).optional(), supplierCnpj: z.string().max(20).optional(), itemCountOperator: z.enum([">=", "<=", "="]).optional(), itemCount: z.number().int().min(0).max(100000).optional(), dateStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), dateEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), busca: z.string().max(255).optional(), backlogStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), backlogEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), onlyUrgent: z.boolean().optional(), preNote: z.enum(["done", "pending"]).optional(), excludeBacklog: z.boolean().optional(), source: z.enum(appointmentSources).optional(), limit: z.number().int().positive().max(500).optional(), offset: z.number().int().min(0).optional() }).optional();
 const demoLogin = "admin";
 const demoPassword = "admin";
 
@@ -676,7 +676,7 @@ export const appRouter = router({
           date: input?.date, status: input?.status as AppointmentStatus | undefined, source: input?.source, invoiceNumber: input?.invoiceNumber, supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj, recipientCnpjs: input?.recipientCnpjs,
           purchaseOrder: input?.purchaseOrder, sapCode: input?.sapCode, supplierCnpj: input?.supplierCnpj,
           itemCountOperator: input?.itemCountOperator, itemCount: input?.itemCount,
-          dateStart: input?.dateStart, dateEnd: input?.dateEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote, excludeBacklog: input?.excludeBacklog };
+          dateStart: input?.dateStart, dateEnd: input?.dateEnd, busca: input?.busca, backlogStart: input?.backlogStart, backlogEnd: input?.backlogEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote, excludeBacklog: input?.excludeBacklog };
         if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
         return listAppointments(filters);
       }),
@@ -695,7 +695,7 @@ export const appRouter = router({
           supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj, recipientCnpjs: input?.recipientCnpjs,
           purchaseOrder: input?.purchaseOrder, sapCode: input?.sapCode, supplierCnpj: input?.supplierCnpj,
           itemCountOperator: input?.itemCountOperator, itemCount: input?.itemCount,
-          dateStart: input?.dateStart, dateEnd: input?.dateEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote, excludeBacklog: input?.excludeBacklog };
+          dateStart: input?.dateStart, dateEnd: input?.dateEnd, busca: input?.busca, backlogStart: input?.backlogStart, backlogEnd: input?.backlogEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote, excludeBacklog: input?.excludeBacklog };
         if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
         return countAppointments(filters);
       }),
@@ -804,7 +804,7 @@ export const appRouter = router({
           supplierName: input?.supplierName, recipientCnpj: input?.recipientCnpj, recipientCnpjs: input?.recipientCnpjs,
           purchaseOrder: input?.purchaseOrder, sapCode: input?.sapCode, supplierCnpj: input?.supplierCnpj,
           itemCountOperator: input?.itemCountOperator, itemCount: input?.itemCount,
-          dateStart: input?.dateStart, dateEnd: input?.dateEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote };
+          dateStart: input?.dateStart, dateEnd: input?.dateEnd, busca: input?.busca, backlogStart: input?.backlogStart, backlogEnd: input?.backlogEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote };
         if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
         return countAppointmentsByStatus(filters);
       }),

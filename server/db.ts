@@ -227,6 +227,11 @@ export type AppointmentFilters = {
   /** Intervalo de datas do agendamento, em dias de São Paulo. */
   dateStart?: string;
   dateEnd?: string;
+  /** Uma busca só, para quem não sabe em qual campo o que procura está. */
+  busca?: string;
+  /** Quando a nota entrou no backlog, em dias de São Paulo. */
+  backlogStart?: string;
+  backlogEnd?: string;
   /** Só notas com pedido de urgência. */
   onlyUrgent?: boolean;
   /** Pré-nota: confirmada, pendente, ou tanto faz. */
@@ -274,6 +279,21 @@ function condicoesDeBusca(filtros: AppointmentFilters) {
   const fim = getSaoPauloDayRange(filtros.dateEnd ?? "");
   if (inicio) condicoes.push(gte(appointments.scheduledFor, inicio.start));
   if (fim) condicoes.push(lte(appointments.scheduledFor, fim.end));
+  // Quando a nota entrou no backlog só existe no histórico: a nota guarda o
+  // estado de agora, não o dia em que ele mudou. O EXISTS pergunta por um
+  // evento de entrada dentro do período — uma nota que entrou, saiu e voltou
+  // casa pela vez que caiu no intervalo, que é o que se está procurando.
+  const entradaInicio = getSaoPauloDayRange(filtros.backlogStart ?? "");
+  const entradaFim = getSaoPauloDayRange(filtros.backlogEnd ?? "");
+  if (entradaInicio || entradaFim) {
+    const limites = [
+      entradaInicio ? sql`AND h.createdAt >= ${entradaInicio.start}` : sql``,
+      entradaFim ? sql`AND h.createdAt <= ${entradaFim.end}` : sql``,
+    ];
+    condicoes.push(
+      sql`EXISTS (SELECT 1 FROM ${appointmentStatusHistory} h WHERE h.appointmentId = ${appointments.id} AND h.nextStatus = 'backlog' ${limites[0]} ${limites[1]})`,
+    );
+  }
   return condicoes;
 }
 
@@ -300,6 +320,21 @@ function condicoesDaLista(filters: AppointmentFilters) {
   if (filters.supplierName) {
     const supplierName = `%${filters.supplierName.trim()}%`;
     conditions.push(or(like(users.name, supplierName), like(appointments.invoiceSupplierName, supplierName)));
+  }
+  // A busca geral é para quem tem um número na mão e não sabe se ele é da nota
+  // ou do pedido — e para quem só lembra do nome do fornecedor. Procura nos
+  // três, porque perguntar "em qual campo isso está?" é justamente o que ela
+  // evita.
+  if (filters.busca?.trim()) {
+    const procurado = `%${filters.busca.trim()}%`;
+    conditions.push(
+      or(
+        like(users.name, procurado),
+        like(appointments.invoiceSupplierName, procurado),
+        like(appointments.invoiceNumber, procurado),
+        like(appointments.purchaseOrder, procurado),
+      ),
+    );
   }
   const cnpjsDestinatario = filters.recipientCnpjs?.map(normalizeCnpj).filter(Boolean) ?? [];
   if (cnpjsDestinatario.length) conditions.push(or(...cnpjsDestinatario.map(cnpj => like(appointments.recipientCnpj, `%${cnpj}%`))));
