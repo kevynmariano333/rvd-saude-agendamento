@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { escolherCaminho } from "./mailer";
+import { enderecoIPv4, escolherCaminho } from "./mailer";
 
 const vazio = { smtpHost: "", smtpUser: "", smtpPassword: "", resendApiKey: "", mailFrom: "" };
 
@@ -31,5 +31,17 @@ describe("por onde o e-mail sai", () => {
     // É o remetente que o fornecedor reconhece; o Resend fica de reserva.
     const config = { ...vazio, smtpHost: "smtp.office365.com", smtpUser: "a@b.com", smtpPassword: "x", resendApiKey: "re_123", mailFrom: "portal@empresa.com" };
     expect(escolherCaminho(config)).toBe("smtp");
+  });
+});
+
+describe("endereço do servidor de e-mail", () => {
+  it("devolve o próprio valor quando já é um IP", async () => {
+    // Quem configurou o host com o endereço direto não precisa de DNS.
+    await expect(enderecoIPv4("127.0.0.1")).resolves.toBe("127.0.0.1");
+    await expect(enderecoIPv4("::1")).resolves.toBe("::1");
+  });
+
+  it("devolve nulo quando o nome não resolve, para o envio cair no nome mesmo", async () => {
+    await expect(enderecoIPv4("nao-existe.invalid")).resolves.toBeNull();
   });
 });

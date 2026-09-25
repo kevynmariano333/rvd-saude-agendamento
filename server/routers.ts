@@ -100,7 +100,7 @@ import { limparFalhas, registrarFalha, segundosDeEspera } from "./loginThrottle"
 import { estadoDasContasDeTeste } from "./contasDeTeste";
 import { createAppointmentValidationToken, readAppointmentValidationToken } from "./appointmentValidation";
 import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
-import { caminhoDoEnvio, isMailerConfigured, remetente, sendMail } from "./_core/mailer";
+import { caminhoDoEnvio, descricaoDoDestino, isMailerConfigured, remetente, sendMail } from "./_core/mailer";
 import { conteudoDoAcessoLiberado } from "./emailDeAcesso";
 import { conteudoDoTeste, motivoDaFalha } from "./emailDeTeste";
 import { conteudoDoAgendamento } from "./emailDeAgendamento";
@@ -1249,7 +1249,7 @@ export const appRouter = router({
         return { enviado: true as const, para: ctx.user.email, motivo: null };
       } catch (erro) {
         console.error("[E-mail de teste] o provedor recusou o envio:", erro);
-        return { enviado: false as const, para: ctx.user.email, motivo: motivoDaFalha(erro) };
+        return { enviado: false as const, para: ctx.user.email, motivo: `${motivoDaFalha(erro)} (tentou ${descricaoDoDestino()})` };
       }
     }),
     /**
