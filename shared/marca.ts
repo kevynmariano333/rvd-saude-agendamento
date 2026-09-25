@@ -11,7 +11,7 @@
  */
 export const MARCA = {
   /** O nome do sistema, como as pessoas falam dele. */
-  nome: "RVD Recebe",
+  nome: "RVDlog+",
   /** O que ele é, embaixo do nome. */
   descricao: "Sistema de Agendamento",
   /** A empresa por trás. */
