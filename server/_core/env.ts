@@ -24,6 +24,11 @@ export const ENV = {
   s3AccessKeyId: str("S3_ACCESS_KEY_ID"),
   s3SecretAccessKey: str("S3_SECRET_ACCESS_KEY"),
   s3ForcePathStyle: str("S3_FORCE_PATH_STYLE") === "true",
+  /**
+   * O Brevo manda por HTTPS, que passa onde a porta de SMTP é bloqueada — e o
+   * remetente é confirmado por um link na própria caixa, sem mexer no DNS.
+   */
+  brevoApiKey: str("BREVO_API_KEY"),
   resendApiKey: str("RESEND_API_KEY"),
   /**
    * A caixa de e-mail da empresa, quando o envio sai por ela.

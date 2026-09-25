@@ -27,7 +27,9 @@ function escapar(valor: string): string {
 
 /** Como o caminho é chamado por quem lê, e não por quem configurou. */
 export function nomeDoCaminho(caminho: string): string {
-  return caminho === "smtp" ? "a caixa de e-mail da empresa (SMTP)" : "o Resend";
+  if (caminho === "smtp") return "a caixa de e-mail da empresa (SMTP)";
+  if (caminho === "brevo") return "o Brevo (envio por HTTPS)";
+  return "o Resend (envio por HTTPS)";
 }
 
 export function conteudoDoTeste(dados: DadosDoTeste): { subject: string; html: string; text: string } {

@@ -1,39 +1,55 @@
-// Transactional e-mail. Dois caminhos, porque nem toda empresa consegue os dois:
+// Transactional e-mail. Três caminhos, porque nenhum serve a toda empresa:
 //
-// - SMTP, para mandar pela própria caixa da empresa (Outlook/Microsoft 365,
-//   Google Workspace). Não depende de mexer no DNS do domínio, que foi
-//   justamente o que travou aqui — quem tem a conta de e-mail já tem tudo.
-// - Resend, pela API HTTP, quando o domínio estiver verificado lá.
+// - Brevo, por HTTPS. O remetente é confirmado por um link que chega na própria
+//   caixa — sem DNS e sem administrador de domínio, que foi o que travou aqui.
+// - Resend, por HTTPS, quando o domínio estiver verificado lá.
+// - SMTP, pela caixa da empresa (Microsoft 365, Google Workspace).
 //
-// SMTP tem prioridade: se alguém configurou os dois, o que manda é a caixa da
-// empresa, que é a que o fornecedor reconhece no remetente.
+// A ordem é essa de propósito. SMTP parece o mais direto, mas muitas
+// hospedagens bloqueiam a porta de saída — a Railway bloqueia, e foi assim que
+// se descobriu: a conexão morria em "Connection timeout" sem nunca chegar na
+// Microsoft. O que sai por HTTPS passa onde o SMTP não passa, então ele vem
+// primeiro; o SMTP fica para quem hospeda em outro lugar.
 
 import { resolve4 } from "node:dns/promises";
 import { isIP } from "node:net";
 import nodemailer, { type Transporter } from "nodemailer";
+import { MARCA } from "../../shared/marca";
 import { ENV } from "./env";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
+const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
-export type CaminhoDoEnvio = "smtp" | "resend" | null;
+export type CaminhoDoEnvio = "brevo" | "resend" | "smtp" | null;
 
-/** O que está configurado de verdade — não o que se pretendia configurar. */
+/**
+ * O que está configurado de verdade — não o que se pretendia configurar.
+ *
+ * Os dois caminhos por HTTPS vêm antes do SMTP: onde a hospedagem bloqueia a
+ * porta de e-mail, o SMTP configurado é uma promessa que não se cumpre, e
+ * quem deixou as duas coisas ligadas quer que o aviso saia.
+ */
 export function escolherCaminho(config: {
+  brevoApiKey: string;
   smtpHost: string;
   smtpUser: string;
   smtpPassword: string;
   resendApiKey: string;
   mailFrom: string;
 }): CaminhoDoEnvio {
+  // Sem remetente confirmado, as duas APIs recusam o envio — chave sozinha não
+  // manda nada.
+  if (config.brevoApiKey && config.mailFrom) return "brevo";
+  if (config.resendApiKey && config.mailFrom) return "resend";
   // A senha entra na conta: host e usuário sem ela é configuração pela metade,
   // e uma conexão que vai falhar na autenticação não é "configurado".
   if (config.smtpHost && config.smtpUser && config.smtpPassword) return "smtp";
-  if (config.resendApiKey && config.mailFrom) return "resend";
   return null;
 }
 
 export function caminhoDoEnvio(): CaminhoDoEnvio {
   return escolherCaminho({
+    brevoApiKey: ENV.brevoApiKey,
     smtpHost: ENV.smtpHost,
     smtpUser: ENV.smtpUser,
     smtpPassword: ENV.smtpPassword,
@@ -67,8 +83,11 @@ export function remetente(): string {
  * servidor no ar ainda é o antigo. Nunca inclui a senha.
  */
 export function descricaoDoDestino(): string {
-  if (caminhoDoEnvio() === "smtp") return `${ENV.smtpHost}:${Number(ENV.smtpPort) || 587}`;
-  return "api.resend.com";
+  const caminho = caminhoDoEnvio();
+  if (caminho === "smtp") return `${ENV.smtpHost}:${Number(ENV.smtpPort) || 587}`;
+  if (caminho === "brevo") return "api.brevo.com";
+  if (caminho === "resend") return "api.resend.com";
+  return "nenhum servidor configurado";
 }
 
 export type SendMailInput = {
@@ -205,6 +224,30 @@ export async function sendMail(input: SendMailInput): Promise<void> {
     return;
   }
 
+  if (caminho === "brevo") {
+    const resposta = await comLimiteDeTempo(
+      fetch(BREVO_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "api-key": ENV.brevoApiKey,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({
+          sender: { name: MARCA.nome, email: remetente() },
+          to: [{ email: input.to }],
+          subject: input.subject,
+          htmlContent: input.html,
+          textContent: input.text,
+        }),
+        signal: AbortSignal.timeout(LIMITE_DO_ENVIO_MS),
+      }),
+      LIMITE_DO_ENVIO_MS,
+    );
+    if (!resposta.ok) throw new Error(await recusa("Brevo", resposta));
+    return;
+  }
+
   const response = await comLimiteDeTempo(
     fetch(RESEND_ENDPOINT, {
       method: "POST",
@@ -224,10 +267,24 @@ export async function sendMail(input: SendMailInput): Promise<void> {
     LIMITE_DO_ENVIO_MS,
   );
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(
-      `Resend recusou o envio (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`,
-    );
+  if (!response.ok) throw new Error(await recusa("Resend", response));
+}
+
+/**
+ * A recusa da API, com o motivo que ela mesma deu.
+ *
+ * As duas respondem o erro em JSON — "remetente não verificado", "chave
+ * inválida" —, e é essa frase que diz o que arrumar. Sem ela sobra o número do
+ * status, que não ajuda ninguém a resolver nada.
+ */
+async function recusa(provedor: string, resposta: Response): Promise<string> {
+  const corpo = await resposta.text().catch(() => "");
+  let detalhe = corpo;
+  try {
+    const json = JSON.parse(corpo);
+    detalhe = json?.message || json?.error?.message || corpo;
+  } catch {
+    // Não era JSON; fica o texto puro mesmo.
   }
+  return `${provedor} recusou o envio (${resposta.status} ${resposta.statusText})${detalhe ? `: ${detalhe}` : ""}`;
 }
