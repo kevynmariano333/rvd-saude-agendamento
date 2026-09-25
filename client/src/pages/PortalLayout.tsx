@@ -83,6 +83,10 @@ export default function PortalLayout({
   const notifications = trpc.messages.notifications.useQuery(undefined, { refetchInterval: 15_000 });
   const utils = trpc.useUtils();
   const logoutMutation = trpc.auth.logout.useMutation();
+  // Qual versão o servidor está servindo agora. Pergunta de novo de minuto em
+  // minuto: assim, depois de um deploy, o rodapé passa a mostrar o código novo
+  // sem ninguém precisar limpar o navegador.
+  const versaoNoAr = trpc.manutencao.versaoNoAr.useQuery(undefined, { refetchInterval: 60_000, staleTime: 30_000 });
   const unreadCount = notifications.data?.length ?? 0;
 
   // Um caminhão parado no portão espera a Operação aceitar o recebimento, e
@@ -572,7 +576,7 @@ export default function PortalLayout({
             <p className="font-display text-[13px] font-extrabold text-ink">{MARCA.nome}</p>
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-faint">{MARCA.descricao}</p>
             <p className="mt-1.5 text-[11px] text-ink-soft">Desenvolvido por Mariano System</p>
-            <p className="text-[11px] text-ink-faint">Versão {__VERSAO_DO_APP__}</p>
+            <p className="text-[11px] text-ink-faint">Versão {versaoNoAr.data?.commit ?? __VERSAO_DO_APP__}</p>
           </div>
         </div>
       </footer>

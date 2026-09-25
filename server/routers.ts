@@ -1209,6 +1209,18 @@ export const appRouter = router({
      * qualquer repetição vista na tela parece falha da trava.
      */
     notasRepetidas: adminProcedure.query(async () => notasRepetidas()),
+    /**
+     * Qual versão está rodando, para o rodapé de qualquer perfil.
+     *
+     * Separada do estado do sistema porque aquele é do administrador e traz o
+     * banco inteiro; esta responde uma coisa só, e é a que todo mundo precisa
+     * quando pergunta "já atualizou?". Vem do processo no ar, e não da build
+     * do navegador: é o servidor que sabe qual código está servindo.
+     */
+    versaoNoAr: protectedProcedure.query(() => ({
+      commit: (process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 7) || null,
+      subidoHaSegundos: Math.round(process.uptime()),
+    })),
     /** O que a tela mostra para provar que a cópia da madrugada está saindo. */
     situacaoDoBackup: adminProcedure.query(async () => ({
       ultimo: await ultimoBackupConcluido(),
