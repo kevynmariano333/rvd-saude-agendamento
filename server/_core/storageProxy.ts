@@ -10,7 +10,7 @@ import { isS3Configured } from "./s3Client";
  * lista é de permissão, e não de bloqueio, para que o que for guardado ali
  * amanhã não fique exposto por esquecimento.
  */
-const PREFIXOS_PERMITIDOS = ["agendamentos-xml/", "recebimentos-avulsos/"];
+const PREFIXOS_PERMITIDOS = ["agendamentos-xml/", "notas-servico/", "recebimentos-avulsos/"];
 
 export function chavePermitida(chave: string): boolean {
   // Uma chave com ".." poderia sair do prefixo depois de normalizada pelo S3.

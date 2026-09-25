@@ -5,6 +5,9 @@ describe("chaves que o proxy de arquivos entrega", () => {
   it("entrega os anexos das notas", () => {
     expect(chavePermitida("agendamentos-xml/12/nota_a1b2c3d4.xml")).toBe(true);
     expect(chavePermitida("recebimentos-avulsos/12/nota_a1b2c3d4.xml")).toBe(true);
+    // O PDF da nota de serviço mora em outra pasta, e ficava de fora: o clipe
+    // da linha abria e respondia "Arquivo não encontrado".
+    expect(chavePermitida("notas-servico/12/nota_a1b2c3d4.pdf")).toBe(true);
   });
 
   it("recusa os backups do banco", () => {
