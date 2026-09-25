@@ -11,6 +11,7 @@ import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { cnpjsDoDestinatario, rotuloDoDestinatario } from "@shared/recipients";
 import SeletorDeDestinatario from "../components/SeletorDeDestinatario";
 import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
+import { MOTIVOS_DE_RECUSA, recusaExigeDescricao, textoDaRecusa } from "@shared/motivosDeRecusa";
 import { MIRO_DIGITS, normalizeMiroNumber } from "@shared/miro";
 import { numerosDasPaginas } from "@/lib/paginacao";
 import UrgenciaBadge from "../components/UrgenciaBadge";
@@ -331,17 +332,16 @@ export default function OperatorDashboard() {
       carregando={updateStatus.isPending}
       onConfirmar={() => { if (confirmarRecebimento) { updateStatus.mutate({ appointmentId: confirmarRecebimento.id, status: "received" }); setConfirmarRecebimento(null); } }}
     />
-    <ConfirmacaoDialog
+    <RecusaDialog
+      item={rejeitarPendente}
       aberto={Boolean(rejeitarPendente)}
       onFechar={() => setRejeitarPendente(null)}
-      icone={XCircle}
-      perigo
-      titulo="Rejeitar esta nota?"
-      descricao={rejeitarPendente ? `NF ${rejeitarPendente.invoiceNumber || "não identificada"} · ${rejeitarPendente.invoiceSupplierName || rejeitarPendente.supplierName || "Fornecedor"}` : ""}
-      corpo="A nota sai da fila de agendamento e o fornecedor passa a vê-la como recusada. Dá para voltar atrás: nota rejeitada ganha o botão Resgatar."
-      rotulo="Rejeitar a nota"
       carregando={updateStatus.isPending}
-      onConfirmar={() => { if (rejeitarPendente) { updateStatus.mutate({ appointmentId: rejeitarPendente.id, status: "rejected", rejectionReason: "Recusado pelo operador" }); setRejeitarPendente(null); } }}
+      onConfirmar={motivo => {
+        if (!rejeitarPendente) return;
+        updateStatus.mutate({ appointmentId: rejeitarPendente.id, status: "rejected", rejectionReason: motivo });
+        setRejeitarPendente(null);
+      }}
     />
 
     <ConfirmacaoDialog
@@ -445,7 +445,7 @@ function AguardandoOperador({ texto }: { texto: string }) {
   return <span className="whitespace-nowrap text-xs font-bold text-ink-faint">{texto}</span>;
 }
 
-function PrimaryAction({ status, canConfirm, onSchedule, onUpdate, onRescue, onFinalize, onRejeitar }: { status: PortalStatus; canConfirm: boolean; onSchedule: () => void; onUpdate: (status: Exclude<PortalStatus, "pending">, reason?: string) => void; onRescue: () => void; onFinalize: () => void; onRejeitar: () => void }) { const buttonClass = "h-9 shrink-0 rounded-xl px-3 text-xs font-bold"; if (status === "pending") return <div className="flex justify-end gap-2"><Button onClick={onSchedule} className={`${buttonClass} bg-brand text-white hover:bg-brand`}>{canConfirm ? "Agendar" : "Sugerir data"}</Button>{canConfirm && <Button onClick={onRejeitar} variant="ghost" className={`${buttonClass} border border-line text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum`}>Rejeitar</Button>}</div>; if (status === "scheduled") return canConfirm ? <div className="flex justify-end gap-2"><Button onClick={() => onUpdate("received")} className={`${buttonClass} bg-brand text-white hover:bg-brand`}>Receber</Button><Button onClick={() => onUpdate("rejected", "Recusado pelo operador")} variant="ghost" className={`${buttonClass} border border-line text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum`}>Rejeitar</Button></div> : <AguardandoOperador texto="Aguardando recebimento" />; if (status === "received") return canConfirm ? <Button onClick={onFinalize} className={`${buttonClass} bg-brand text-white hover:bg-brand`}>Concluir</Button> : <AguardandoOperador texto="Aguardando lançamento" />; if (status === "backlog") return <span className="whitespace-nowrap text-xs font-bold text-rvd-plum">Em tratativa</span>; if (status === "rejected") return canConfirm ? <Button onClick={onRescue} className={`${buttonClass} bg-rvd-blue text-rvd-plum hover:bg-rvd-blue-pale`}><RefreshCw className="size-3.5" />Resgatar</Button> : <AguardandoOperador texto="Recusada" />; return <span className="text-xs font-bold text-rvd-plum">Consulta</span>; }
+function PrimaryAction({ status, canConfirm, onSchedule, onUpdate, onRescue, onFinalize, onRejeitar }: { status: PortalStatus; canConfirm: boolean; onSchedule: () => void; onUpdate: (status: Exclude<PortalStatus, "pending">, reason?: string) => void; onRescue: () => void; onFinalize: () => void; onRejeitar: () => void }) { const buttonClass = "h-9 shrink-0 rounded-xl px-3 text-xs font-bold"; if (status === "pending") return <div className="flex justify-end gap-2"><Button onClick={onSchedule} className={`${buttonClass} bg-brand text-white hover:bg-brand`}>{canConfirm ? "Agendar" : "Sugerir data"}</Button>{canConfirm && <Button onClick={onRejeitar} variant="ghost" className={`${buttonClass} border border-line text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum`}>Rejeitar</Button>}</div>; if (status === "scheduled") return canConfirm ? <div className="flex justify-end gap-2"><Button onClick={() => onUpdate("received")} className={`${buttonClass} bg-brand text-white hover:bg-brand`}>Receber</Button><Button onClick={onRejeitar} variant="ghost" className={`${buttonClass} border border-line text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum`}>Rejeitar</Button></div> : <AguardandoOperador texto="Aguardando recebimento" />; if (status === "received") return canConfirm ? <Button onClick={onFinalize} className={`${buttonClass} bg-brand text-white hover:bg-brand`}>Concluir</Button> : <AguardandoOperador texto="Aguardando lançamento" />; if (status === "backlog") return <span className="whitespace-nowrap text-xs font-bold text-rvd-plum">Em tratativa</span>; if (status === "rejected") return canConfirm ? <Button onClick={onRescue} className={`${buttonClass} bg-rvd-blue text-rvd-plum hover:bg-rvd-blue-pale`}><RefreshCw className="size-3.5" />Resgatar</Button> : <AguardandoOperador texto="Recusada" />; return <span className="text-xs font-bold text-rvd-plum">Consulta</span>; }
 
 type ScheduleSuggestion = { id: number; suggestedFor: Date; notes: string | null; supplierName: string | null; createdByRole?: string | null };
 
@@ -649,6 +649,93 @@ function BarraDePaginas({ pagina, totalDePaginas, total, primeira, ultima, onPag
  * acontece com ela depois. Por isso a NF e a consequência vêm escritas, em vez
  * de um "tem certeza?" solto.
  */
+/**
+ * Recusar uma nota, dizendo por quê.
+ *
+ * O sistema gravava sempre "Recusado pelo operador": o relatório de recusas
+ * virava uma coluna de frases iguais, e não dava para cobrar de ninguém o que
+ * não se sabe. Os motivos são os que a doca encontra de verdade, e a descrição
+ * é opcional — exigir texto em toda recusa faria a operação escrever "x" para
+ * o botão liberar.
+ */
+function RecusaDialog({ item, aberto, onFechar, carregando, onConfirmar }: { item: Appointment | null; aberto: boolean; onFechar: () => void; carregando: boolean; onConfirmar: (motivo: string) => void }) {
+  const [codigo, setCodigo] = useState("");
+  const [descricao, setDescricao] = useState("");
+  // Cada nota começa do zero: o motivo da anterior não pode vir marcado na
+  // seguinte, que é como uma recusa ganha o motivo errado.
+  useEffect(() => {
+    if (aberto) {
+      setCodigo("");
+      setDescricao("");
+    }
+  }, [aberto]);
+
+  const faltaDescricao = recusaExigeDescricao(codigo) && !descricao.trim();
+  const podeConfirmar = Boolean(codigo) && !faltaDescricao;
+
+  return (
+    <Dialog open={aberto} onOpenChange={valor => !valor && onFechar()}>
+      <DialogContent className="w-[calc(100%-1rem)] rounded-[1.5rem] !border !border-line !bg-surface p-0 sm:!max-w-lg">
+        <DialogHeader className="border-b border-line px-6 py-5">
+          <div className="flex items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-state-stop-bg text-state-stop"><XCircle className="size-5" /></span>
+            <div>
+              <DialogTitle className="font-display text-lg font-extrabold text-ink">Rejeitar esta nota?</DialogTitle>
+              <DialogDescription className="mt-0.5 text-[13px] font-bold text-rvd-plum">
+                {item ? `NF ${item.invoiceNumber || "não identificada"} · ${item.invoiceSupplierName || item.supplierName || "Fornecedor"}` : ""}
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+        <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
+          <p className="text-[13px] leading-5 text-ink-soft">A nota sai da fila e o fornecedor passa a vê-la como recusada. Dá para voltar atrás: nota rejeitada ganha o botão Resgatar.</p>
+          <Label className="mt-5 block text-xs font-bold uppercase tracking-[0.14em] text-ink-faint">Motivo da recusa *</Label>
+          <div className="mt-3 grid gap-2">
+            {MOTIVOS_DE_RECUSA.map(motivo => {
+              const escolhido = codigo === motivo.codigo;
+              return (
+                <button
+                  key={motivo.codigo}
+                  type="button"
+                  onClick={() => setCodigo(motivo.codigo)}
+                  aria-pressed={escolhido}
+                  className={`rounded-xl border px-4 py-2.5 text-left transition ${escolhido ? "border-rvd-plum bg-rvd-plum-pale" : "border-line bg-surface hover:bg-sunken"}`}
+                >
+                  <span className={`block text-[13px] font-bold ${escolhido ? "text-rvd-plum" : "text-ink"}`}>{motivo.rotulo}</span>
+                  <span className="mt-0.5 block text-[11px] leading-4 text-ink-soft">{motivo.quando}</span>
+                </button>
+              );
+            })}
+          </div>
+          <Label htmlFor="recusa-descricao" className="mt-5 block text-xs font-bold uppercase tracking-[0.14em] text-ink-faint">
+            Detalhe {recusaExigeDescricao(codigo) ? "*" : "(opcional)"}
+          </Label>
+          <Textarea
+            id="recusa-descricao"
+            value={descricao}
+            onChange={evento => setDescricao(evento.target.value)}
+            maxLength={500}
+            placeholder="O que aconteceu, em uma frase."
+            className="mt-2 min-h-20 border-line bg-surface text-rvd-plum"
+          />
+        </div>
+        <footer className="flex items-center justify-end gap-3 border-t border-line px-6 py-4">
+          <Button type="button" variant="ghost" onClick={onFechar} className="font-bold text-ink-soft hover:bg-sunken">Cancelar</Button>
+          <Button
+            type="button"
+            onClick={() => onConfirmar(textoDaRecusa(codigo, descricao))}
+            disabled={carregando || !podeConfirmar}
+            title={podeConfirmar ? undefined : faltaDescricao ? "Descreva o motivo" : "Escolha o motivo da recusa"}
+            className="h-10 rounded-xl bg-state-stop px-5 text-sm font-bold text-white hover:bg-state-stop disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {carregando ? "Rejeitando..." : "Rejeitar a nota"}
+          </Button>
+        </footer>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ConfirmacaoDialog({ aberto, onFechar, icone: Icone, titulo, descricao, corpo, rotulo, carregando, perigo = false, onConfirmar }: { aberto: boolean; onFechar: () => void; icone: typeof ClipboardCheck; titulo: string; descricao: string; corpo: string; rotulo: string; carregando: boolean; perigo?: boolean; onConfirmar: () => void }) {
   return (
     <Dialog open={aberto} onOpenChange={valor => !valor && onFechar()}>
