@@ -59,6 +59,12 @@ export const STATUS_AGILIZA = {
   // Operador como qualquer outra, que é o ponto de trazer o acervo para cá.
   Agendada: "scheduled",
   Backlog: "backlog",
+  // Estas duas nunca chegaram a ter data marcada, e por isso vinham com "-" na
+  // coluna de agendamento e eram recusadas em bloco — 425 notas de um arquivo
+  // de 4.296, jogadas fora sem ninguém perceber, porque o relatório de recusas
+  // diz o número da linha e não o da nota.
+  Rejeitada: "rejected",
+  Pendente: "pending",
 } as const satisfies Record<string, AppointmentStatus>;
 
 const CABECALHO_ITENS = [
@@ -277,7 +283,8 @@ function lerPedidos(valor: string) {
   return pedidos.length ? pedidos.join(", ") : null;
 }
 
-type Recusa = { linha: number; motivo: string };
+/** Uma linha que ficou de fora, com a nota para quem for procurar na planilha. */
+type Recusa = { linha: number; nota?: string; motivo: string };
 type Aviso = { linha: number; texto: string };
 
 /** "14.626,50" -> 1462650. Centavos, como o resto do sistema guarda dinheiro. */
@@ -451,11 +458,26 @@ const DataAgiliza = z
   .refine(valor => lerDataSaoPaulo(valor) !== null, "data fora do formato dd/mm/aaaa, hh:mm:ss")
   .transform(valor => lerDataSaoPaulo(valor)!);
 
+/**
+ * A data de agendamento de uma nota que talvez nunca tenha sido agendada.
+ *
+ * Nota pendente ou recusada nunca teve data marcada, e o Agiliza escreve "-"
+ * nessa coluna. Exigir uma data dessas linhas é exigir o que não existe.
+ */
+const DataDeAgendamento = z
+  .string()
+  .transform(valor => valor.trim())
+  .refine(valor => valor === "" || valor === "-" || lerDataSaoPaulo(valor) !== null, "data fora do formato dd/mm/aaaa, hh:mm:ss")
+  .transform(valor => (valor === "" || valor === "-" ? null : lerDataSaoPaulo(valor)!));
+
 const EsquemaLinha = z.object({
   dataCriacao: DataAgiliza,
-  ultimoStatus: z.enum(["Concluída", "Recebida", "Agendada", "Backlog"]),
+  // Tirada do próprio mapa de tradução, e não escrita de novo aqui: era essa
+  // segunda lista que ficava para trás. Um status acrescentado lá e esquecido
+  // aqui recusa a linha inteira, e o motivo da recusa não diz qual nota é.
+  ultimoStatus: z.enum(Object.keys(STATUS_AGILIZA) as [keyof typeof STATUS_AGILIZA, ...(keyof typeof STATUS_AGILIZA)[]]),
   dataUltimoStatus: DataAgiliza,
-  dataAgendamento: DataAgiliza,
+  dataAgendamento: DataDeAgendamento,
   numeroNota: z
     .string()
     .transform(valor => valor.trim())
@@ -549,6 +571,22 @@ export function montarEventos(dados: LinhaValidada, status: AppointmentStatus, e
     nota: `Registro criado no sistema ${ORIGEM}.`,
   });
 
+  // Nota que nunca foi marcada não tem passo de agendamento: ela ficou
+  // pendente, ou foi recusada antes de virar data. Inventar um agendamento aqui
+  // encheria o histórico de um evento que não aconteceu.
+  if (!dados.dataAgendamento) {
+    if (status === "rejected") {
+      eventos.push({
+        anterior: "pending",
+        proximo: "rejected",
+        quando: emOrdem(dados.dataUltimoStatus),
+        agendadoPara: null,
+        nota: `Nota recusada no sistema ${ORIGEM}.`,
+      });
+    }
+    return eventos;
+  }
+
   eventos.push({
     anterior: "pending",
     proximo: "scheduled",
@@ -559,6 +597,16 @@ export function montarEventos(dados: LinhaValidada, status: AppointmentStatus, e
     nota: `Data agendada no sistema ${ORIGEM}.`,
   });
   if (status === "scheduled") return eventos;
+  if (status === "rejected") {
+    eventos.push({
+      anterior: "scheduled",
+      proximo: "rejected",
+      quando: emOrdem(dados.dataUltimoStatus),
+      agendadoPara: null,
+      nota: `Nota recusada no sistema ${ORIGEM}.`,
+    });
+    return eventos;
+  }
 
   // A passagem pelo backlog só é conhecida quando o relatório de backlog entra
   // junto. Sem ele, a nota concluída conta a história curta: agendada, recebida,
@@ -776,7 +824,7 @@ export type RelatorioDaImportacao = {
   motivosDesconhecidos: { codigo: string; quantidade: number }[];
   porStatus: Record<string, number>;
   avisos: { linha: number; texto: string }[];
-  recusas: { linha: number; motivo: string }[];
+  recusas: { linha: number; nota?: string; motivo: string }[];
   /** Sem banco não dá para saber o que já existe; a contagem vira estimativa. */
   semBanco: boolean;
 };
@@ -875,7 +923,10 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
     });
     if (!resultado.success) {
       const motivo = resultado.error.issues.map(problema => `${problema.path.join(".") || "linha"}: ${problema.message}`).join("; ");
-      recusas.push({ linha: numeroDaLinha, motivo });
+      // O número da nota vai junto mesmo quando o resto da linha é inválido: é
+      // por ele que se procura na planilha, e "linha 2127" obriga a abrir o
+      // arquivo e contar. Sem ele, a lista de recusas não é acionável.
+      recusas.push({ linha: numeroDaLinha, nota: colunas[4]?.trim() || undefined, motivo });
       return;
     }
     lidas.push({ numero: numeroDaLinha, dados: resultado.data });
@@ -900,24 +951,24 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
     if (cnpj.length !== 14) {
       const reconstruido = reconstruirCnpj(cnpj, cnpjsConhecidos);
       if (!reconstruido) {
-        recusas.push({ linha: numero, motivo: `CNPJ do fornecedor incompleto e sem reconstrução possível: ${cnpj} (${dados.nomeFornecedor})` });
+        recusas.push({ linha: numero, nota: dados.numeroNota, motivo: `CNPJ do fornecedor incompleto e sem reconstrução possível: ${cnpj} (${dados.nomeFornecedor})` });
         continue;
       }
       avisos.push({ linha: numero, texto: `CNPJ do fornecedor reconstruído: ${cnpj} -> ${reconstruido} (${dados.nomeFornecedor})` });
       cnpj = reconstruido;
     }
     if (!cnpjValido(cnpj)) {
-      recusas.push({ linha: numero, motivo: `CNPJ do fornecedor com dígito verificador inválido: ${cnpj} (${dados.nomeFornecedor})` });
+      recusas.push({ linha: numero, nota: dados.numeroNota, motivo: `CNPJ do fornecedor com dígito verificador inválido: ${cnpj} (${dados.nomeFornecedor})` });
       continue;
     }
     if (CNPJS_DA_RVD.has(cnpj)) {
-      recusas.push({ linha: numero, motivo: `CNPJ do fornecedor é o da própria RVD (${CNPJS_DA_RVD.get(cnpj)}): colunas trocadas na origem` });
+      recusas.push({ linha: numero, nota: dados.numeroNota, motivo: `CNPJ do fornecedor é o da própria RVD (${CNPJS_DA_RVD.get(cnpj)}): colunas trocadas na origem` });
       continue;
     }
 
     const chave = `${cnpj}|${dados.numeroNota}`;
     if (paresVistos.has(chave)) {
-      recusas.push({ linha: numero, motivo: `nota repetida no próprio arquivo para o mesmo fornecedor: ${dados.numeroNota}` });
+      recusas.push({ linha: numero, nota: dados.numeroNota, motivo: "nota repetida no próprio arquivo para o mesmo fornecedor" });
       continue;
     }
     paresVistos.add(chave);
@@ -945,7 +996,7 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
     if (itens && dados.totalLinhas !== null && itens.linhas !== dados.totalLinhas) {
       avisos.push({ linha: numero, texto: `o consolidado diz ${dados.totalLinhas} linha(s) e o detalhado trouxe ${itens.linhas} para a nota ${dados.numeroNota}` });
     }
-    if (dados.dataAgendamento < dados.dataCriacao) {
+    if (dados.dataAgendamento && dados.dataAgendamento < dados.dataCriacao) {
       const atraso = Math.round((dados.dataCriacao.getTime() - dados.dataAgendamento.getTime()) / 1000);
       if (atraso > 60) {
         avisos.push({
@@ -1064,7 +1115,11 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
             // Mesmo formato curto que o portal usa em createUnscheduledReceipt:
             // este texto vira a coluna "Item recebido" do relatório.
             serviceType: `Recebimento NF ${plano.dados.numeroNota}`.slice(0, 80),
-            scheduledFor: plano.dados.dataAgendamento,
+            // A coluna não aceita vazio, e a nota sem agendamento precisa de
+            // algum instante: a criação é o único que ela tem. A tela não o
+            // mostra como data marcada — pendente e recusada aparecem como
+            // "aguardando confirmação".
+            scheduledFor: plano.dados.dataAgendamento ?? plano.dados.dataCriacao,
             notes: montarObservacao(plano),
             source: "importado",
             invoiceNumber: plano.dados.numeroNota,

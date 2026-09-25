@@ -25,7 +25,7 @@ type Relatorio = {
   motivosDesconhecidos: { codigo: string; quantidade: number }[];
   porStatus: Record<string, number>;
   avisos: { linha: number; texto: string }[];
-  recusas: { linha: number; motivo: string }[];
+  recusas: { linha: number; nota?: string; motivo: string }[];
   semBanco: boolean;
 };
 
@@ -328,7 +328,12 @@ export default function ImportarAcervo() {
             </p>
           )}
 
-          <ListaDeOcorrencias titulo="Recusadas" tom="recusa" itens={relatorio.recusas.map(recusa => ({ linha: recusa.linha, texto: recusa.motivo }))} />
+          <ListaDeOcorrencias titulo="Recusadas" tom="recusa" itens={relatorio.recusas.map(recusa => ({
+              linha: recusa.linha,
+              // A nota na frente do motivo: é por ela que se procura na
+              // planilha. "Linha 2127" obriga a abrir o arquivo e contar.
+              texto: recusa.nota ? `NF ${recusa.nota} — ${recusa.motivo}` : recusa.motivo,
+            }))} />
           <ListaDeOcorrencias titulo="Avisos" tom="aviso" itens={relatorio.avisos} />
         </section>
       )}

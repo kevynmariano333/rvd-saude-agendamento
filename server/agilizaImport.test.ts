@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MOTIVOS_DE_BACKLOG } from "../shared/backlogReasons";
 import { canTransitionAppointment } from "./permissions";
-import { decodificarCsv, lerComentarios, lerDataSaoPaulo, lerDinheiroEmCentavos, montarEventos, MOTIVOS_DO_AGILIZA, STATUS_AGILIZA, type EpisodioDeBacklog, type LinhaValidada } from "./agilizaImport";
+import { decodificarCsv, importarAcervo, lerComentarios, lerDataSaoPaulo, lerDinheiroEmCentavos, montarEventos, MOTIVOS_DO_AGILIZA, STATUS_AGILIZA, type EpisodioDeBacklog, type LinhaValidada } from "./agilizaImport";
 import type { AppointmentStatus } from "../drizzle/schema";
 
 const linha = (extra: Partial<LinhaValidada> = {}): LinhaValidada => ({
@@ -132,7 +132,21 @@ describe("linha do tempo reconstruída", () => {
 
 describe("tradução do acervo", () => {
   it("todo status da origem vira um status do portal", () => {
-    expect(Object.values(STATUS_AGILIZA).sort()).toEqual(["backlog", "completed", "received", "scheduled"]);
+    expect(Object.values(STATUS_AGILIZA).sort()).toEqual(["backlog", "completed", "pending", "received", "rejected", "scheduled"]);
+  });
+
+  it("lê a nota que nunca foi agendada, que vem com traço no lugar da data", async () => {
+    // Pendente e recusada nunca tiveram data marcada: o Agiliza escreve "-" na
+    // coluna. Exigir data dessas linhas recusava 425 notas de um arquivo de
+    // 4.296 — e o relatório de recusas diz o número da linha, não o da nota,
+    // então ninguém percebia o que tinha ficado de fora.
+    const cabecalho = '"Data de Criação";"Último Status";"Data do Último Status";"Data de Agendamento";"Número da Nota";"Número do Pedido";"CNPJ Fornecedor";"Nome Fornecedor";"Total de Linhas";"CNPJ Destino";"Descrição Destino"';
+    const linha = (status: string, nota: string) =>
+      `"23/09/2026, 08:00:00";"${status}";"24/09/2026, 17:00:00";"-";"${nota}";"4504885869";"43.301.230/0001-01";"FORNECEDOR TESTE";"2";"06.033.403/0001-13";"HSH - HOSPITAL"`;
+    const relatorio = await importarAcervo({ consolidado: [cabecalho, linha("Pendente", "10170"), linha("Rejeitada", "10171")].join("\n") });
+    expect(relatorio.recusas).toEqual([]);
+    expect(relatorio.porStatus.pending).toBe(1);
+    expect(relatorio.porStatus.rejected).toBe(1);
   });
 
   it("todo motivo traduzido existe na lista fechada do portal", () => {
