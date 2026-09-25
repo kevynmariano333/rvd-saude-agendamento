@@ -8,7 +8,8 @@ import {
 } from "@/lib/accessProfiles";
 import { homePathFor, type PortalRole } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, CheckCircle2, ChevronRight, Home as HomeIcon, LockKeyhole, Mail, UserPlus } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowLeft, CheckCircle2, ChevronRight, Home as HomeIcon, KeyRound, LockKeyhole, Mail, Send, UserPlus } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
@@ -92,6 +93,7 @@ export default function Login() {
   const routeProfile = parseAccessProfile(params.profile);
   const [profile, setProfile] = useState<AccessProfile>(routeProfile ?? "supplier");
   const [mode, setMode] = useState<"login" | "register">("login");
+  const [recuperando, setRecuperando] = useState(false);
   const registrandoFornecedor = mode === "register" && profile === "supplier";
   const [companyName, setCompanyName] = useState("");
   const [companyCnpj, setCompanyCnpj] = useState("");
@@ -296,6 +298,19 @@ export default function Login() {
                     className={`${fieldClass} pl-10`}
                   />
                 </div>
+                {/* Sem este link, quem esquecia a senha só tinha um caminho:
+                    ligar para a operação e pedir que alguém trocasse por ele.
+                    Fica embaixo da senha, que é onde a pessoa percebe que não
+                    lembra dela. */}
+                {!registering && (
+                  <button
+                    type="button"
+                    onClick={() => setRecuperando(true)}
+                    className="justify-self-end text-xs font-bold text-rvd-plum underline-offset-2 hover:underline"
+                  >
+                    Esqueci minha senha
+                  </button>
+                )}
               </div>
               {registering && (
                 <div className="grid gap-1.5">
@@ -375,6 +390,109 @@ export default function Login() {
           </div>
         </section>
       </div>
+      <RecuperarSenhaDialog
+        open={recuperando}
+        onOpenChange={setRecuperando}
+        emailInicial={email}
+      />
     </main>
+  );
+}
+
+/**
+ * Pedir um link para trocar a senha.
+ *
+ * A resposta é a mesma para e-mail cadastrado e não cadastrado, de propósito:
+ * dizer "essa conta não existe" entregaria a quem tentasse adivinhar uma lista
+ * de quem é cliente da casa. Quem tem conta recebe o link; quem não tem lê a
+ * mesma frase e não descobre nada.
+ */
+function RecuperarSenhaDialog({
+  open,
+  onOpenChange,
+  emailInicial,
+}: {
+  open: boolean;
+  onOpenChange: (aberto: boolean) => void;
+  emailInicial: string;
+}) {
+  const [email, setEmail] = useState(emailInicial);
+  const [enviado, setEnviado] = useState(false);
+  // O e-mail já digitado no login entra aqui sozinho: quem esqueceu a senha
+  // não deve ter que digitar o endereço de novo.
+  useEffect(() => {
+    if (open) {
+      setEmail(emailInicial);
+      setEnviado(false);
+    }
+  }, [open, emailInicial]);
+
+  const pedir = trpc.auth.requestPasswordReset.useMutation({
+    onSuccess: () => setEnviado(true),
+    onError: erro => toast.error(erro.message),
+  });
+
+  function enviar(evento: FormEvent) {
+    evento.preventDefault();
+    const endereco = email.trim();
+    if (!endereco) return toast.error("Informe o seu e-mail.");
+    pedir.mutate({ email: endereco });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[calc(100%-2rem)] rounded-3xl !border !border-line !bg-surface p-0 sm:max-w-md">
+        <DialogHeader className="border-b border-line px-6 py-5">
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-rvd-plum-pale text-rvd-plum">
+              <KeyRound className="size-5" />
+            </span>
+            <div>
+              <DialogTitle className="font-display text-lg font-extrabold text-ink">Esqueci minha senha</DialogTitle>
+              <DialogDescription className="text-[13px] text-ink-soft">
+                Enviamos um link para você criar uma senha nova.
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+        {enviado ? (
+          <div className="px-6 py-8 text-center">
+            <CheckCircle2 className="mx-auto size-9 text-state-go" />
+            <p className="mt-4 text-sm font-bold text-ink">Se existir uma conta com esse e-mail, o link já está a caminho.</p>
+            <p className="mt-2 text-[13px] leading-6 text-ink-soft">
+              Confira a caixa de entrada e o lixo eletrônico. O link vale por pouco tempo — se demorar para usar, é só pedir outro.
+            </p>
+            <Button onClick={() => onOpenChange(false)} className="mt-6 h-11 w-full rounded-xl bg-brand font-bold text-white hover:bg-brand">
+              Entendi
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={enviar} className="px-6 py-6">
+            <label htmlFor="email-recuperacao" className="text-xs font-bold uppercase tracking-[0.08em] text-ink-soft">
+              Seu e-mail
+            </label>
+            <div className="relative mt-2">
+              <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-faint" />
+              <input
+                id="email-recuperacao"
+                type="email"
+                required
+                value={email}
+                onChange={evento => setEmail(evento.target.value)}
+                placeholder="voce@empresa.com.br"
+                className={`${fieldClass} pl-10`}
+              />
+            </div>
+            <p className="mt-3 text-[12px] leading-5 text-ink-soft">
+              Use o mesmo e-mail com que você entra no portal.
+            </p>
+            <Button type="submit" disabled={pedir.isPending} className="mt-5 h-12 w-full rounded-xl bg-brand font-bold text-white hover:bg-brand">
+              <Send className="size-4" />
+              {pedir.isPending ? "Enviando..." : "Enviar o link"}
+            </Button>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
