@@ -199,7 +199,9 @@ function NovoUsuarioDialog({ open, onOpenChange, onCriado }: { open: boolean; on
 
   const criar = trpc.staff.criarUsuario.useMutation({
     onSuccess: usuario => {
-      toast.success(`Conta de ${usuario.name || usuario.email} criada. Ela já pode entrar.`);
+      toast.success(usuario.avisado
+        ? `Conta de ${usuario.name || usuario.email} criada. Avisamos por e-mail que o login está ativo.`
+        : `Conta de ${usuario.name || usuario.email} criada. Ela já pode entrar — o aviso por e-mail não saiu, avise a pessoa.`);
       setNome(""); setEmail(""); setSenha(""); setRazaoSocial(""); setCnpj("");
       onCriado();
       onOpenChange(false);

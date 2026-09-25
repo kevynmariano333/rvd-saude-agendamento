@@ -101,6 +101,7 @@ import { estadoDasContasDeTeste } from "./contasDeTeste";
 import { createAppointmentValidationToken, readAppointmentValidationToken } from "./appointmentValidation";
 import { buildResetUrl, createResetToken, hashResetToken, isResetTokenUsable, resetEmailContent, resetTokenExpiry } from "./passwordReset";
 import { isMailerConfigured, sendMail } from "./_core/mailer";
+import { conteudoDoAcessoLiberado } from "./emailDeAcesso";
 import { conteudoDoAgendamento } from "./emailDeAgendamento";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
@@ -371,6 +372,33 @@ async function avisarFornecedorDoAgendamento(agendamento: { id: number; supplier
   }
 }
 
+/**
+ * Avisa a pessoa de que o login dela passou a valer.
+ *
+ * Vale para os três caminhos que liberam um acesso — o cadastro aprovado pelo
+ * administrador, a conta criada já liberada e o desbloqueio —, porque para
+ * quem recebe são a mesma notícia. Nunca derruba a ação que a gerou: o acesso
+ * já está liberado no banco quando esta função roda, e um e-mail que não sai
+ * não pode desfazer isso.
+ *
+ * Devolve se o aviso saiu, para a tela de quem liberou poder dizer.
+ */
+async function avisarAcessoLiberado(usuario: { name: string | null; email: string | null; role: UserRole }, reativado = false): Promise<boolean> {
+  if (!usuario.email) return false;
+  if (!isMailerConfigured()) {
+    console.warn("[Acesso] envio de e-mail desligado (falta RESEND_API_KEY ou MAIL_FROM) — a pessoa não foi avisada de que o login está ativo.");
+    return false;
+  }
+  try {
+    const conteudo = conteudoDoAcessoLiberado({ nome: usuario.name, email: usuario.email, role: usuario.role, appUrl: ENV.appUrl || null, reativado });
+    await sendMail({ to: usuario.email, ...conteudo });
+    return true;
+  } catch (erro) {
+    console.error("[Acesso] falha ao avisar que o login está ativo:", erro);
+    return false;
+  }
+}
+
 function decodeXmlBase64(value: string) {
   const normalized = value.replace(/\s/g, "");
   if (!normalized || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
@@ -510,6 +538,9 @@ export const appRouter = router({
         const user = await createLocalUser({ email, name: input.companyName.trim(), companyName: input.companyName.trim(), companyCnpj, role: "supplier", passwordHash: hashPassword(input.password), accessStatus });
         if (accessStatus === "pending") return { pending: true } as const;
 
+        // Cadastro que já entra liberado leva o aviso na hora: é o comprovante
+        // de que a conta existe e com qual login se volta a ela.
+        await avisarAcessoLiberado(user);
         await createRvdSession(ctx.res, user);
         return { pending: false, ...publicUser(user) } as const;
       }),
@@ -1291,7 +1322,11 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode alterar o próprio acesso." });
         }
         await setUserAccessStatus({ userId: input.userId, accessStatus: input.approve ? "approved" : "rejected" });
-        return { success: true } as const;
+        // Aprovar sem avisar é deixar a pessoa esperando por algo que já
+        // aconteceu: ela não tem como saber, e a maioria não tenta de novo.
+        const solicitante = input.approve ? await getUserById(input.userId) : null;
+        const avisado = solicitante ? await avisarAcessoLiberado(solicitante) : false;
+        return { success: true, avisado } as const;
       }),
   }),
   messages: router({
@@ -1609,7 +1644,10 @@ export const appRouter = router({
           companyCnpj: cnpj || undefined,
           accessStatus: "approved",
         });
-        return publicUser(criado);
+        // A conta nasce valendo; quem vai usá-la precisa saber disso e com que
+        // login entra — senão o administrador vira o canal de recado.
+        const avisado = await avisarAcessoLiberado(criado);
+        return { ...publicUser(criado), avisado };
       }),
     setRole: adminProcedure
       .input(z.object({ userId: z.number().int().positive(), role: z.enum(["admin", "operator", "portaria", "operacao", "planejador"]) }))
@@ -1634,7 +1672,11 @@ export const appRouter = router({
           userId: input.userId,
           accessStatus: input.allowed ? "approved" : "rejected",
         });
-        return { success: true } as const;
+        // Desbloquear é a mesma notícia que aprovar, só que para quem já
+        // conhece o portal.
+        const desbloqueado = input.allowed ? await getUserById(input.userId) : null;
+        const avisado = desbloqueado ? await avisarAcessoLiberado(desbloqueado, true) : false;
+        return { success: true, avisado } as const;
       }),
   }),
   analytics: router({

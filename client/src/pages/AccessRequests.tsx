@@ -26,6 +26,19 @@ type PendingRequest = {
 /** Perfis internos que o administrador pode atribuir a uma conta já existente. */
 const assignableRoles = ["admin", "operator", "planejador", "portaria"] as const;
 
+/**
+ * O que a tela diz depois de liberar um acesso.
+ *
+ * Quem libera precisa saber se a pessoa foi avisada: sem o e-mail, o recado de
+ * que o login está valendo continua sendo trabalho do administrador — e é
+ * melhor ele descobrir aqui do que pelo fornecedor ligando semana que vem.
+ */
+function avisoDeLiberacao(avisado: boolean) {
+  return avisado
+    ? "Acesso liberado. Avisamos por e-mail que o login está ativo."
+    : "Acesso liberado. O aviso por e-mail não saiu — avise a pessoa de que o login já funciona.";
+}
+
 export default function AccessRequests() {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
@@ -37,8 +50,8 @@ export default function AccessRequests() {
   const [buscaDeFornecedor, setBuscaDeFornecedor] = useState("");
 
   const decide = trpc.accessRequests.decide.useMutation({
-    onSuccess: (_result, variables) => {
-      toast.success(variables.approve ? "Acesso liberado." : "Acesso recusado.");
+    onSuccess: (result, variables) => {
+      toast.success(variables.approve ? avisoDeLiberacao(result.avisado) : "Acesso recusado.");
       utils.accessRequests.listPending.invalidate();
       utils.staff.list.invalidate();
     },
@@ -54,8 +67,8 @@ export default function AccessRequests() {
   });
 
   const setAccess = trpc.staff.setAccess.useMutation({
-    onSuccess: (_result, variables) => {
-      toast.success(variables.allowed ? "Acesso liberado." : "Acesso bloqueado. A conta não entra mais no sistema.");
+    onSuccess: (result, variables) => {
+      toast.success(variables.allowed ? avisoDeLiberacao(result.avisado) : "Acesso bloqueado. A conta não entra mais no sistema.");
       utils.staff.list.invalidate();
       utils.staff.fornecedores.invalidate();
     },
