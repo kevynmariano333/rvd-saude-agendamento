@@ -347,7 +347,7 @@ async function avisarFornecedorDoAgendamento(agendamento: { id: number; supplier
     // daquela nota, é o estado do sistema. Escrever a mesma linha em toda nota
     // encheria o histórico de ruído e esconderia o que de fato aconteceu com
     // ela. Fica no log do servidor, que é onde se olha o estado do sistema.
-    console.warn("[Agendamento] envio de e-mail desligado (falta RESEND_API_KEY ou MAIL_FROM) — o fornecedor não foi avisado.");
+    console.warn("[Agendamento] envio de e-mail desligado (falta o SMTP da empresa ou a chave do Resend) — o fornecedor não foi avisado.");
     return;
   }
   const fornecedor = await getUserById(agendamento.supplierId);
@@ -386,7 +386,7 @@ async function avisarFornecedorDoAgendamento(agendamento: { id: number; supplier
 async function avisarAcessoLiberado(usuario: { name: string | null; email: string | null; role: UserRole }, reativado = false): Promise<boolean> {
   if (!usuario.email) return false;
   if (!isMailerConfigured()) {
-    console.warn("[Acesso] envio de e-mail desligado (falta RESEND_API_KEY ou MAIL_FROM) — a pessoa não foi avisada de que o login está ativo.");
+    console.warn("[Acesso] envio de e-mail desligado (falta o SMTP da empresa ou a chave do Resend) — a pessoa não foi avisada de que o login está ativo.");
     return false;
   }
   try {
@@ -571,7 +571,7 @@ export const appRouter = router({
           if (!baseUrl) {
             console.error("[PasswordReset] APP_URL não configurada — não foi possível montar o link.");
           } else if (!isMailerConfigured()) {
-            console.error("[PasswordReset] RESEND_API_KEY ou MAIL_FROM ausentes — e-mail não enviado.");
+            console.error("[PasswordReset] envio de e-mail não configurado — e-mail não enviado.");
           } else {
             const content = resetEmailContent(buildResetUrl(baseUrl, token));
             try {

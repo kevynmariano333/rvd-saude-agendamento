@@ -25,6 +25,17 @@ export const ENV = {
   s3SecretAccessKey: str("S3_SECRET_ACCESS_KEY"),
   s3ForcePathStyle: str("S3_FORCE_PATH_STYLE") === "true",
   resendApiKey: str("RESEND_API_KEY"),
+  /**
+   * A caixa de e-mail da empresa, quando o envio sai por ela.
+   *
+   * É o caminho de quem não mexe no DNS do domínio: com o endereço e a senha
+   * de aplicativo do Outlook ou do Google, o sistema manda pela conta que já
+   * existe — e o fornecedor recebe de um remetente que ele reconhece.
+   */
+  smtpHost: str("SMTP_HOST"),
+  smtpPort: str("SMTP_PORT"),
+  smtpUser: str("SMTP_USER"),
+  smtpPassword: str("SMTP_PASSWORD"),
   mailFrom: str("MAIL_FROM"),
   appUrl: str("APP_URL").replace(/\/+$/, ""),
 };
