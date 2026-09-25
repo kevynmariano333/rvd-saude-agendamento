@@ -35,7 +35,7 @@ import {
   listAppointmentInternalNotes,
   listAppointmentSuggestions,
   listBacklogReportRows,
-  contarMensagensNaoLidasPorNota,
+  contarMensagensPorNota,
   listUnreadAppointmentMessages,
   listSupplierActiveAppointments,
   markAppointmentMessagesRead,
@@ -1310,8 +1310,8 @@ export const appRouter = router({
         return { id };
       }),
     notifications: protectedProcedure.query(({ ctx }) => listUnreadAppointmentMessages({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
-    /** Quantas mensagens novas em cada nota, para marcar a conversa certa. */
-    naoLidasPorNota: protectedProcedure.query(({ ctx }) => contarMensagensNaoLidasPorNota({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
+    /** Quantas mensagens cada nota tem, e quantas são novas, para marcar a conversa certa. */
+    porNota: protectedProcedure.query(({ ctx }) => contarMensagensPorNota({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
   }),
   reports: router({
     /**

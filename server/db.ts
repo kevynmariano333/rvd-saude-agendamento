@@ -2108,14 +2108,19 @@ export async function notasRepetidas(limite = 50) {
 }
 
 /**
- * Quantas mensagens por nota ainda não foram lidas.
+ * Quantas mensagens cada nota tem, e quantas ainda não foram lidas.
  *
  * O sino do topo avisa que existe mensagem nova, mas não diz em qual nota — e
  * um fornecedor com vinte notas na lista teria que abrir uma por uma para
  * descobrir onde está a resposta. Contar por nota é o que permite marcar a
  * conversa certa.
+ *
+ * O total vem junto porque só o não lido some assim que a conversa é aberta, e
+ * a nota volta a parecer que nunca teve conversa nenhuma. Quem olha a lista
+ * depois não tem como saber que ali houve tratativa. O total não zera: a marca
+ * fica, muda só de cor quando não há mais nada novo.
  */
-export async function contarMensagensNaoLidasPorNota(input: { userId: number; isOperator: boolean }) {
+export async function contarMensagensPorNota(input: { userId: number; isOperator: boolean }) {
   const db = await getDb();
   if (!db) return [];
   const colunaDeLeitura = input.isOperator ? appointmentMessages.operatorReadAt : appointmentMessages.supplierReadAt;
@@ -2123,10 +2128,14 @@ export async function contarMensagensNaoLidasPorNota(input: { userId: number; is
   // todas, como já acontece no sino.
   const escopo = input.isOperator ? [] : [eq(appointments.supplierId, input.userId)];
   return db
-    .select({ appointmentId: appointmentMessages.appointmentId, quantas: count() })
+    .select({
+      appointmentId: appointmentMessages.appointmentId,
+      total: count(),
+      naoLidas: sql<number>`sum(case when ${appointmentMessages.senderId} <> ${input.userId} and ${colunaDeLeitura} is null then 1 else 0 end)`.mapWith(Number),
+    })
     .from(appointmentMessages)
     .innerJoin(appointments, eq(appointmentMessages.appointmentId, appointments.id))
-    .where(and(ne(appointmentMessages.senderId, input.userId), isNull(colunaDeLeitura), ...escopo))
+    .where(and(...escopo))
     .groupBy(appointmentMessages.appointmentId);
 }
 

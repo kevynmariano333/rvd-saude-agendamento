@@ -18,7 +18,7 @@ export default function AppointmentChatDialog({ appointment, currentUserId, open
       setBody("");
       utils.messages.list.invalidate({ appointmentId: appointment?.id ?? 1 });
       utils.messages.notifications.invalidate();
-      utils.messages.naoLidasPorNota.invalidate();
+      utils.messages.porNota.invalidate();
     },
     onError: error => toast.error(error.message),
   });
@@ -28,10 +28,10 @@ export default function AppointmentChatDialog({ appointment, currentUserId, open
       // Abrir a conversa marca as mensagens como lidas no servidor; sem isto a
       // marca da nota continuaria acesa até a próxima atualização.
       utils.messages.notifications.invalidate();
-      utils.messages.naoLidasPorNota.invalidate();
+      utils.messages.porNota.invalidate();
       lastMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [messages.data, utils.messages.notifications, utils.messages.naoLidasPorNota]);
+  }, [messages.data, utils.messages.notifications, utils.messages.porNota]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
