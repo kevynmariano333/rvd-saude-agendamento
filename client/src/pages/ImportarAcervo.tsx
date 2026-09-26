@@ -16,6 +16,7 @@ type Relatorio = {
   linhasBacklog: number | null;
   importadas: number;
   jaExistentes: number;
+  atualizadas: number;
   fornecedores: { total: number; criados: number; reaproveitados: number };
   notasComItens: number;
   notasComBacklog: number;
@@ -299,6 +300,7 @@ export default function ImportarAcervo() {
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Numero rotulo={relatorio.gravou ? "Notas importadas" : "Notas a importar"} valor={relatorio.importadas} destaque />
             <Numero rotulo="Já existiam" valor={relatorio.jaExistentes} />
+            <Numero rotulo="Atualizadas" valor={relatorio.atualizadas} />
             <Numero rotulo="Recusadas" valor={relatorio.recusas.length} />
             <Numero rotulo="Fornecedores" valor={`${relatorio.fornecedores.total}`} />
             <Numero rotulo="Notas com itens" valor={relatorio.notasComItens} />

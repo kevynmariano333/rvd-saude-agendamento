@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MOTIVOS_DE_BACKLOG } from "../shared/backlogReasons";
 import { canTransitionAppointment } from "./permissions";
-import { decodificarCsv, importarAcervo, lerComentarios, lerDataSaoPaulo, lerDinheiroEmCentavos, montarEventos, MOTIVOS_DO_AGILIZA, STATUS_AGILIZA, type EpisodioDeBacklog, type LinhaValidada } from "./agilizaImport";
+import { decodificarCsv, importarAcervo, lerComentarios, lerDataSaoPaulo, lerDinheiroEmCentavos, montarEventos, MOTIVOS_DO_AGILIZA, STATUS_AGILIZA, type EpisodioDeBacklog, type LinhaValidada, mudancaDaReimportacao } from "./agilizaImport";
 import type { AppointmentStatus } from "../drizzle/schema";
 
 const linha = (extra: Partial<LinhaValidada> = {}): LinhaValidada => ({
@@ -157,5 +157,46 @@ describe("tradução do acervo", () => {
   it("não manda dois motivos da origem para o mesmo código, que apagaria a diferença", () => {
     const destinos = Object.values(MOTIVOS_DO_AGILIZA);
     expect(new Set(destinos).size).toBe(destinos.length);
+  });
+});
+
+describe("nota que já está no banco quando o arquivo volta", () => {
+  const agendadaPara = new Date("2026-09-22T11:05:00.000Z");
+
+  it("acerta a que veio da importação e mudou de status no acervo", () => {
+    // O caso real: a NF entrou como concluída, voltou para o backlog do lado
+    // de lá e aqui continuava concluída.
+    const mudanca = mudancaDaReimportacao(
+      { status: "completed", scheduledFor: agendadaPara, source: "importado" },
+      { status: "backlog", scheduledFor: agendadaPara },
+    );
+    expect(mudanca).toEqual({ status: true, data: false });
+  });
+
+  it("acerta também quando só a data mudou — o reagendamento", () => {
+    const mudanca = mudancaDaReimportacao(
+      { status: "scheduled", scheduledFor: agendadaPara, source: "importado" },
+      { status: "scheduled", scheduledFor: new Date("2026-09-30T11:05:00.000Z") },
+    );
+    expect(mudanca).toEqual({ status: false, data: true });
+  });
+
+  it("não mexe quando o arquivo diz o mesmo que já está gravado", () => {
+    expect(
+      mudancaDaReimportacao(
+        { status: "backlog", scheduledFor: agendadaPara, source: "importado" },
+        { status: "backlog", scheduledFor: agendadaPara },
+      ),
+    ).toBeNull();
+  });
+
+  it("nunca mexe na nota que nasceu no portal", () => {
+    // Um arquivo antigo arrastaria de volta o trabalho de quem opera aqui.
+    expect(
+      mudancaDaReimportacao(
+        { status: "completed", scheduledFor: agendadaPara, source: "portal" },
+        { status: "scheduled", scheduledFor: agendadaPara },
+      ),
+    ).toBeNull();
   });
 });
