@@ -16,8 +16,8 @@ import { MIRO_DIGITS, normalizeMiroNumber } from "@shared/miro";
 import { numerosDasPaginas } from "@/lib/paginacao";
 import UrgenciaBadge from "../components/UrgenciaBadge";
 import { MOTIVOS_DE_BACKLOG } from "@shared/backlogReasons";
-import { XCircle, AlertTriangle, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardCheck, FileText, Filter, Grid2X2, MessageSquare, Paperclip, RefreshCw, RotateCcw, Search, Undo2, X, Wrench} from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { XCircle, AlertTriangle, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, ChevronsUpDown, ClipboardCheck, FileText, Filter, Grid2X2, MessageSquare, Paperclip, RefreshCw, RotateCcw, Search, Undo2, X, Wrench} from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import AppointmentDateHistoryDialog from "../components/AppointmentDateHistoryDialog";
@@ -92,6 +92,8 @@ export default function OperatorDashboard() {
   const [finalizeNote, setFinalizeNote] = useState("");
   const [finalizeReason, setFinalizeReason] = useState("");
   const [suggestTarget, setSuggestTarget] = useState<Appointment | null>(null);
+  const [suggestUrgente, setSuggestUrgente] = useState(false);
+  const [suggestMotivoUrgencia, setSuggestMotivoUrgencia] = useState("");
   const [suggestDate, setSuggestDate] = useState("");
   const [suggestTime, setSuggestTime] = useState("");
   const [suggestNotes, setSuggestNotes] = useState("");
@@ -99,6 +101,18 @@ export default function OperatorDashboard() {
   // A tabela mostra um punhado de linhas por vez. Sem teto, cada abertura
   // trazia as milhares de notas do acervo para exibir as primeiras cinquenta.
   const [pagina, setPagina] = useState(1);
+  // Por qual coluna a lista está ordenada. Vazio é a ordem natural da agenda:
+  // o dia mais próximo primeiro, urgência na frente dentro do dia.
+  const [ordenarPor, setOrdenarPor] = useState<ColunaOrdenavel | "">("");
+  const [ordem, setOrdem] = useState<"asc" | "desc">("asc");
+  const ordenarPela = (coluna: ColunaOrdenavel) => {
+    // Clicar de novo inverte; clicar uma terceira vez devolve a ordem da
+    // agenda, para não ficar preso numa ordenação que já não serve.
+    if (ordenarPor !== coluna) { setOrdenarPor(coluna); setOrdem("asc"); }
+    else if (ordem === "asc") setOrdem("desc");
+    else setOrdenarPor("");
+    setPagina(1);
+  };
   // A aba de serviço filtra por origem, e não por status: são as notas que
   // entram sem XML, registradas pela operação.
   const [somenteServico, setSomenteServico] = useState(false);
@@ -145,6 +159,8 @@ export default function OperatorDashboard() {
     dateEnd: dateEnd || undefined,
     status: activeStatus === "all" ? undefined : activeStatus,
     excludeBacklog: activeStatus === "all" && !buscando,
+    ordenarPor: ordenarPor || undefined,
+    ordem: ordenarPor ? ordem : undefined,
     invoiceNumber: invoiceNumber || undefined,
     supplierName: supplierName || undefined,
     recipientCnpjs: cnpjsDoDestinatario(recipientCnpj),
@@ -155,7 +171,7 @@ export default function OperatorDashboard() {
     itemCount: itemCount.trim() ? Number(itemCount) : undefined,
     onlyUrgent: onlyUrgent || undefined,
     preNote: preNote === "all" ? undefined : preNote,
-  }), [activeStatus, buscando, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, pagina, preNote, purchaseOrder, recipientCnpj, sapCode, somenteServico, supplierCnpj, supplierName, tomorrowFilterDate]);
+  }), [activeStatus, buscando, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, ordem, ordenarPor, pagina, preNote, purchaseOrder, recipientCnpj, sapCode, somenteServico, supplierCnpj, supplierName, tomorrowFilterDate]);
   // Trocar de aba ou de filtro recomeça a contagem: a página 3 de uma busca não
   // é a página 3 da seguinte.
   useEffect(() => { setPagina(1); }, [activeStatus, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, preNote, purchaseOrder, recipientCnpj, sapCode, supplierCnpj, supplierName, tomorrowFilterDate]);
@@ -164,6 +180,10 @@ export default function OperatorDashboard() {
   // que existe mensagem; sem isto, o operador teria que abrir conversa por
   // conversa para descobrir em qual.
   const mensagens = trpc.messages.porNota.useQuery(undefined, { refetchInterval: 15_000 });
+  // A data que alguém propôs e ainda espera resposta. Sem isto, a nota com
+  // proposta em aberto e a que ninguém tocou diziam a mesma coisa na coluna.
+  const sugestoes = trpc.suggestions.pendentesPorNota.useQuery(undefined, { refetchInterval: 30_000 });
+  const sugestaoPorNota = useMemo(() => new Map((sugestoes.data ?? []).map(linha => [linha.appointmentId, linha.suggestedFor])), [sugestoes.data]);
   const mensagensPorNota = useMemo(() => new Map((mensagens.data ?? []).map(linha => [linha.appointmentId, linha])), [mensagens.data]);
   // Quantas notas o filtro alcança. A lista devolve uma página; o número de
   // páginas só o banco sabe.
@@ -191,7 +211,11 @@ export default function OperatorDashboard() {
   const updateStatus = trpc.appointments.updateStatus.useMutation({ onSuccess: () => { toast.success("Status atualizado."); setFinalizeTarget(null); utils.appointments.list.invalidate(); utils.calendar.list.invalidate(); }, onError: error => toast.error(error.message) });
   const rescue = trpc.appointments.rescue.useMutation({ onSuccess: () => { toast.success("Item resgatado para novo tratamento."); utils.appointments.list.invalidate(); }, onError: error => toast.error(error.message) });
   const schedule = trpc.appointments.schedule.useMutation({ onSuccess: () => { toast.success("Agendamento confirmado."); setSelected(null); setAcceptedSuggestionId(undefined); utils.appointments.list.invalidate(); utils.calendar.list.invalidate(); utils.suggestions.list.invalidate(); }, onError: error => toast.error(error.message) });
-  const createSuggestion = trpc.suggestions.create.useMutation({ onSuccess: () => { toast.success("Sugestão enviada ao Operador."); setSuggestTarget(null); setSuggestNotes(""); utils.suggestions.list.invalidate(); }, onError: error => toast.error(error.message) });
+  const marcarUrgencia = trpc.appointments.marcarUrgencia.useMutation({
+    onSuccess: () => { utils.appointments.list.invalidate(); },
+    onError: erro => toast.error(`A sugestão foi enviada, mas a urgência não foi marcada: ${erro.message}`),
+  });
+  const createSuggestion = trpc.suggestions.create.useMutation({ onSuccess: () => { toast.success(suggestUrgente ? "Sugestão enviada ao Operador, marcada como urgente." : "Sugestão enviada ao Operador."); setSuggestTarget(null); setSuggestNotes(""); setSuggestUrgente(false); setSuggestMotivoUrgencia(""); utils.suggestions.list.invalidate(); utils.suggestions.pendentesPorNota.invalidate(); }, onError: error => toast.error(error.message) });
   const confirmPreNote = trpc.appointments.confirmPreNote.useMutation({ onSuccess: () => { toast.success("Pré-nota confirmada com sucesso."); setPreNoteTarget(null); utils.appointments.list.invalidate(); }, onError: error => toast.error(error.message) });
   const desfazerPreNotaMut = trpc.appointments.desfazerPreNota.useMutation({ onSuccess: () => { toast.success("Confirmação de pré-nota desfeita."); setDesfazerPreNota(null); utils.appointments.list.invalidate(); }, onError: error => toast.error(error.message) });
 
@@ -269,6 +293,12 @@ export default function OperatorDashboard() {
   };
   const confirmSuggestion = () => {
     if (!suggestTarget || !suggestDate || !suggestTime) return toast.error("Informe a data e a hora que você sugere.");
+    // A urgência vai junto da proposta, e não depois: é a mesma decisão. Se o
+    // pedido de urgência falhar, a sugestão já está enviada — o aviso diz o que
+    // ficou de fora em vez de deixar as duas coisas em dúvida.
+    if (suggestUrgente) {
+      marcarUrgencia.mutate({ appointmentId: suggestTarget.id, urgente: true, motivo: suggestMotivoUrgencia.trim() || undefined });
+    }
     createSuggestion.mutate({ appointmentId: suggestTarget.id, suggestedFor: new Date(`${suggestDate}T${suggestTime}:00`).toISOString(), notes: suggestNotes.trim() || undefined });
   };
   const acceptSuggestion = (suggestion: { id: number; suggestedFor: Date }) => { const dateTime = new Date(suggestion.suggestedFor); setScheduleDate(datePart(dateTime)); setScheduleTime(dateTime.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", hour12: false })); setAcceptedSuggestionId(suggestion.id); };
@@ -315,9 +345,9 @@ export default function OperatorDashboard() {
         <button onClick={() => setSomenteServico(valor => !valor)} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-[11px] font-bold uppercase tracking-wide transition ${somenteServico ? "border-rvd-plum bg-brand text-white" : "border-line bg-surface text-rvd-plum hover:bg-rvd-plum-pale"}`}><Wrench className="size-3.5" />Serviço</button></div>
       {somenteServico && <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-rvd-plum-pale px-4 py-3 text-xs font-bold text-rvd-plum"><span className="inline-flex items-center gap-2"><Wrench className="size-4" />Você está vendo as notas de serviço — não as notas de produto.</span><button onClick={() => setSomenteServico(false)} className="underline">Voltar aos produtos</button></div>}
     </section>
-      <section className="mt-6 overflow-hidden panel"><div className="overflow-x-auto"><table className="w-full min-w-[1060px] text-left"><thead className="bg-sunken"><tr className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint"><th className="px-3 py-3">Status</th><th className="px-3 py-3">Fornecedor</th><th className="px-3 py-3">Destinatário</th><th className="px-3 py-3">Nota fiscal</th><th className="px-3 py-3">Pedido</th><th className="px-3 py-3">{activeStatus === "rejected" ? "Motivo da recusa" : activeStatus === "pending" ? "Confirmação" : activeStatus === "received" ? "Recebimento" : "Agendamento"}</th><th className="px-3 py-3 text-right">Ações</th></tr></thead><tbody>{agenda.isLoading ? <tr><td colSpan={7} className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando agendamentos...</td></tr> : visibleAgenda.length ? visibleAgenda.map(item => <AppointmentRow key={item.id} item={item} activeStatus={activeStatus} canConfirm={podeConfirmar} onFinalize={() => openFinalize(item)} onDetails={() => setDetails(item)} onHistory={() => setDateHistory(item)} onChat={() => setChatTarget(item)} onPreNote={() => item.preNoteConfirmedAt ? setDesfazerPreNota(item) : setPreNoteTarget(item)} onSchedule={() => openSchedule(item)} onRejeitar={() => setRejeitarPendente(item)} mensagens={mensagensPorNota.get(item.id)} onUpdate={(status, reason) => status === "received" ? setConfirmarRecebimento(item) : updateStatus.mutate({ appointmentId: item.id, status, rejectionReason: reason })} onRescue={() => rescue.mutate({ appointmentId: item.id })} ehAdmin={ehAdmin} onVoltarParaPendente={() => setVoltarParaPendente(item)} />) : <tr><td colSpan={7} className="px-4 py-16 text-center"><Search className="mx-auto size-7 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhum agendamento encontrado</p><p className="mt-1 text-sm text-ink-soft">Ajuste os filtros ou selecione outra aba de status.</p></td></tr>}</tbody></table></div>{visibleAgenda.length > 0 && <BarraDePaginas pagina={pagina} totalDePaginas={totalDePaginas} total={totalFiltrado} primeira={(pagina - 1) * POR_PAGINA + 1} ultima={Math.min(pagina * POR_PAGINA, totalFiltrado)} onPagina={setPagina} />}</section>
+      <section className="mt-6 overflow-hidden panel"><div className="overflow-x-auto"><table className="w-full min-w-[1060px] text-left"><thead className="bg-sunken"><tr className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint"><Cabecalho coluna="status" atual={ordenarPor} ordem={ordem} onOrdenar={ordenarPela}>Status</Cabecalho><Cabecalho coluna="fornecedor" atual={ordenarPor} ordem={ordem} onOrdenar={ordenarPela}>Fornecedor</Cabecalho><Cabecalho coluna="destinatario" atual={ordenarPor} ordem={ordem} onOrdenar={ordenarPela}>Destinatário</Cabecalho><Cabecalho coluna="nota" atual={ordenarPor} ordem={ordem} onOrdenar={ordenarPela}>Nota fiscal</Cabecalho><Cabecalho coluna="pedido" atual={ordenarPor} ordem={ordem} onOrdenar={ordenarPela}>Pedido</Cabecalho><Cabecalho coluna="agendamento" atual={ordenarPor} ordem={ordem} onOrdenar={ordenarPela}>{activeStatus === "rejected" ? "Motivo da recusa" : activeStatus === "pending" ? "Confirmação" : activeStatus === "received" ? "Recebimento" : "Agendamento"}</Cabecalho><th className="px-3 py-3 text-right">Ações</th></tr></thead><tbody>{agenda.isLoading ? <tr><td colSpan={7} className="py-20 text-center text-sm font-bold text-rvd-plum">Carregando agendamentos...</td></tr> : visibleAgenda.length ? visibleAgenda.map(item => <AppointmentRow key={item.id} item={item} activeStatus={activeStatus} canConfirm={podeConfirmar} onFinalize={() => openFinalize(item)} onDetails={() => setDetails(item)} onHistory={() => setDateHistory(item)} onChat={() => setChatTarget(item)} onPreNote={() => item.preNoteConfirmedAt ? setDesfazerPreNota(item) : setPreNoteTarget(item)} onSchedule={() => openSchedule(item)} onRejeitar={() => setRejeitarPendente(item)} mensagens={mensagensPorNota.get(item.id)} sugerida={sugestaoPorNota.get(item.id) ?? null} onUpdate={(status, reason) => status === "received" ? setConfirmarRecebimento(item) : updateStatus.mutate({ appointmentId: item.id, status, rejectionReason: reason })} onRescue={() => rescue.mutate({ appointmentId: item.id })} ehAdmin={ehAdmin} onVoltarParaPendente={() => setVoltarParaPendente(item)} />) : <tr><td colSpan={7} className="px-4 py-16 text-center"><Search className="mx-auto size-7 text-rvd-plum" /><p className="mt-3 font-bold text-rvd-plum">Nenhum agendamento encontrado</p><p className="mt-1 text-sm text-ink-soft">Ajuste os filtros ou selecione outra aba de status.</p></td></tr>}</tbody></table></div>{visibleAgenda.length > 0 && <BarraDePaginas pagina={pagina} totalDePaginas={totalDePaginas} total={totalFiltrado} primeira={(pagina - 1) * POR_PAGINA + 1} ultima={Math.min(pagina * POR_PAGINA, totalFiltrado)} onPagina={setPagina} />}</section>
     <FinalizeDialog item={finalizeTarget} open={Boolean(finalizeTarget)} onOpenChange={open => !open && setFinalizeTarget(null)} mode={finalizeMode} onMode={setFinalizeMode} miro={miro} onMiro={setMiro} note={finalizeNote} onNote={setFinalizeNote} reason={finalizeReason} onReason={setFinalizeReason} onConfirm={confirmFinalize} loading={updateStatus.isPending} />
-    <SuggestDialog item={suggestTarget} open={Boolean(suggestTarget)} onOpenChange={open => !open && setSuggestTarget(null)} date={suggestDate} time={suggestTime} notes={suggestNotes} onDate={setSuggestDate} onTime={setSuggestTime} onNotes={setSuggestNotes} onConfirm={confirmSuggestion} loading={createSuggestion.isPending} />
+    <SuggestDialog item={suggestTarget} open={Boolean(suggestTarget)} onOpenChange={open => !open && setSuggestTarget(null)} date={suggestDate} time={suggestTime} notes={suggestNotes} onDate={setSuggestDate} onTime={setSuggestTime} onNotes={setSuggestNotes} urgente={suggestUrgente} onUrgente={setSuggestUrgente} motivoUrgencia={suggestMotivoUrgencia} onMotivoUrgencia={setSuggestMotivoUrgencia} onConfirm={confirmSuggestion} loading={createSuggestion.isPending} />
     <ScheduleDialog item={selected} open={Boolean(selected)} onOpenChange={open => !open && setSelected(null)} date={scheduleDate} time={scheduleTime} onDate={setScheduleDate} onTime={setScheduleTime} onConfirm={confirmSchedule} loading={schedule.isPending} activeAppointments={activeSupplier.data?.filter(item => item.id !== selected?.id) ?? []} suggestions={pendingSuggestions.data ?? []} acceptedSuggestionId={acceptedSuggestionId} onAcceptSuggestion={acceptSuggestion} />
     <AppointmentDetailsDialog appointment={details} open={Boolean(details)} onOpenChange={open => !open && setDetails(null)} onHistory={() => { if (details) { setDateHistory(details); setDetails(null); } }} />
     <AppointmentDateHistoryDialog appointment={dateHistory} open={Boolean(dateHistory)} onOpenChange={open => !open && setDateHistory(null)} />
@@ -376,10 +406,10 @@ export default function OperatorDashboard() {
 
 function FilterField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) { return <div><Label className="text-xs font-bold uppercase tracking-wide text-rvd-plum">{label}</Label><div className="relative mt-2"><Search className="absolute left-3 top-3 size-4 text-rvd-plum" /><Input value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} className="border-line pl-9 text-rvd-plum placeholder:text-ink-soft" /></div></div>; }
 
-function AppointmentRow({ item, activeStatus, canConfirm, onDetails, onHistory, onChat, onPreNote, onSchedule, onUpdate, onRescue, onFinalize, onRejeitar, ehAdmin, onVoltarParaPendente, mensagens }: { item: Appointment; activeStatus: StatusTab; canConfirm: boolean; onFinalize: () => void; onDetails: () => void; onHistory: () => void; onChat: () => void; onPreNote: () => void; onSchedule: () => void; onUpdate: (status: Exclude<PortalStatus, "pending">, reason?: string) => void; onRescue: () => void; onRejeitar: () => void; mensagens?: ContagemDeMensagens; ehAdmin: boolean; onVoltarParaPendente: () => void }) { const displaySupplier = item.invoiceSupplierName || item.supplierName || "Fornecedor"; const showReceivedMoment = item.status === "received" && Boolean(item.receivedAt); const hasConfirmedSchedule = hasConfirmedAppointmentMoment(item.status as PortalStatus); const displayedMoment = getAppointmentMomentForDisplay({ status: item.status as PortalStatus, scheduledFor: item.scheduledFor, receivedAt: item.receivedAt }); const destinatario = rotuloDoDestinatario(item.recipientCnpj); const pedidos = pedidosDaNota(item.purchaseOrder); // Agendada com a hora já vencida e ninguém recebeu: o caminhão não chegou.
+function AppointmentRow({ item, activeStatus, canConfirm, onDetails, onHistory, onChat, onPreNote, onSchedule, onUpdate, onRescue, onFinalize, onRejeitar, ehAdmin, onVoltarParaPendente, mensagens, sugerida }: { item: Appointment; activeStatus: StatusTab; canConfirm: boolean; onFinalize: () => void; onDetails: () => void; onHistory: () => void; onChat: () => void; onPreNote: () => void; onSchedule: () => void; onUpdate: (status: Exclude<PortalStatus, "pending">, reason?: string) => void; onRescue: () => void; onRejeitar: () => void; mensagens?: ContagemDeMensagens; sugerida?: Date | string | null; ehAdmin: boolean; onVoltarParaPendente: () => void }) { const displaySupplier = item.invoiceSupplierName || item.supplierName || "Fornecedor"; const showReceivedMoment = item.status === "received" && Boolean(item.receivedAt); const hasConfirmedSchedule = hasConfirmedAppointmentMoment(item.status as PortalStatus); const displayedMoment = getAppointmentMomentForDisplay({ status: item.status as PortalStatus, scheduledFor: item.scheduledFor, receivedAt: item.receivedAt }); const destinatario = rotuloDoDestinatario(item.recipientCnpj); const pedidos = pedidosDaNota(item.purchaseOrder); // Agendada com a hora já vencida e ninguém recebeu: o caminhão não chegou.
   // A linha pisca junto com a aba, para o atraso ser visto por quem está
   // olhando a lista e não o contador.
-  const atrasada = item.status === "scheduled" && new Date(item.scheduledFor).getTime() < Date.now(); return <tr title={atrasada ? "Horário combinado já passou e a nota não foi recebida" : undefined} className={`border-t border-line align-middle text-sm ${atrasada ? "rvd-piscando-fundo" : ""}`}><td className="px-3 py-3"><span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusStyle[item.status as PortalStatus]}`}>{statusCopy[item.status as PortalStatus]}</span><UrgenciaBadge purchaseOrder={item.purchaseOrder} marcadaEm={item.urgenteMarcadoEm} motivo={item.urgenteMotivo} className="mt-1.5 flex w-fit" /></td><td className="px-3 py-3"><p title={displaySupplier} className="line-clamp-2 max-w-40 text-[13px] font-bold leading-4 text-rvd-plum">{displaySupplier}</p><p title={item.supplierEmail ?? undefined} className="mt-0.5 max-w-40 truncate text-[11px] text-ink-soft">{item.supplierEmail}</p>{/* A nota de serviço não tem carga nem XML, e quem confere a linha precisa saber disso antes de abrir: a etiqueta diz de que natureza é a nota ali mesmo, junto de quem a emitiu. */}{item.source === "servico" && <span className="mt-1.5 inline-flex rounded bg-rvd-plum-pale px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">Serviço</span>}</td><td className="px-3 py-3"><div title={destinatario.tooltip} className={destinatario.unidade ? "font-display text-[13px] font-extrabold leading-4 text-ink" : ""}><p className={destinatario.unidade ? "" : "font-bold text-rvd-plum"}>{destinatario.principal}</p><p className={destinatario.unidade ? "" : "mt-1 text-xs text-ink-soft"}>{destinatario.secundaria}</p></div></td><td className="px-3 py-3"><p className="font-display text-base font-extrabold leading-5 text-ink">{item.invoiceNumber || "—"}</p><p className="text-[10px] text-ink-soft">{sourceCopy[item.source]}</p></td><td className="px-3 py-3">{pedidos.length ? <div className="flex flex-col items-start gap-1">{pedidos.map(pedido => <span key={pedido} className={`rounded px-2 py-0.5 text-[11px] font-bold ${pedidoEhUrgente(pedido) ? "bg-state-stop-bg text-state-stop" : "bg-rvd-plum-pale text-rvd-plum"}`}>{pedido}</span>)}</div> : <span className="text-xs text-ink-soft">—</span>}</td><td className="px-3 py-3">{activeStatus === "rejected" ? <p className="max-w-36 text-[12px] font-semibold leading-4 text-red-700">{item.rejectionReason || "Motivo não informado"}</p> : hasConfirmedSchedule ? <><p className="text-[13px] font-bold text-rvd-plum">{new Date(displayedMoment).toLocaleDateString("pt-BR")}</p><p className="text-[11px] text-ink-soft">{new Date(displayedMoment).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>{showReceivedMoment && <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">Recebido em</p>}</> : <p className="max-w-32 text-[12px] font-semibold leading-4 text-rvd-plum">Aguardando confirmação</p>}</td><td className="px-3 py-3"><div className="flex items-center justify-end gap-2 text-rvd-plum"><ActionIcon label="Abrir detalhes da nota" icon={FileText} onClick={onDetails} /><AnexoDaNota url={item.xmlUrl} nome={item.xmlFileName} ehServico={item.source === "servico"} /><ActionIcon label="Histórico de datas" icon={CalendarClock} onClick={onHistory} />{item.status === "scheduled" && <ActionIcon label={canConfirm ? "Reagendar" : "Sugerir outra data"} icon={CalendarDays} onClick={onSchedule} />}<ActionIcon label={rotuloDaConversa(mensagens)} icon={MessageSquare} onClick={onChat} contagem={mensagens?.total ?? 0} novas={mensagens?.naoLidas ?? 0} /><ActionIcon label={canConfirm ? (item.preNoteConfirmedAt ? "Pré-nota confirmada — clique para desfazer" : "Confirmar pré-nota") : (item.preNoteConfirmedAt ? "Pré-nota confirmada" : "Pré-nota pendente")} icon={ClipboardCheck} onClick={onPreNote} confirmed={Boolean(item.preNoteConfirmedAt)} somenteLeitura={!canConfirm} />{ehAdmin && (item.status === "received" || item.status === "completed") && <ActionIcon label="Voltar esta nota para pendente" icon={Undo2} onClick={onVoltarParaPendente} />}<PrimaryAction status={item.status as PortalStatus} canConfirm={canConfirm} onSchedule={onSchedule} onUpdate={onUpdate} onRescue={onRescue} onFinalize={onFinalize} onRejeitar={onRejeitar} /></div></td></tr>; }
+  const atrasada = item.status === "scheduled" && new Date(item.scheduledFor).getTime() < Date.now(); return <tr title={atrasada ? "Horário combinado já passou e a nota não foi recebida" : undefined} className={`border-t border-line align-middle text-sm ${atrasada ? "rvd-piscando-fundo" : ""}`}><td className="px-3 py-3"><span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusStyle[item.status as PortalStatus]}`}>{statusCopy[item.status as PortalStatus]}</span><UrgenciaBadge purchaseOrder={item.purchaseOrder} marcadaEm={item.urgenteMarcadoEm} motivo={item.urgenteMotivo} className="mt-1.5 flex w-fit" /></td><td className="px-3 py-3"><p title={displaySupplier} className="line-clamp-2 max-w-40 text-[13px] font-bold leading-4 text-rvd-plum">{displaySupplier}</p><p title={item.supplierEmail ?? undefined} className="mt-0.5 max-w-40 truncate text-[11px] text-ink-soft">{item.supplierEmail}</p>{/* A nota de serviço não tem carga nem XML, e quem confere a linha precisa saber disso antes de abrir: a etiqueta diz de que natureza é a nota ali mesmo, junto de quem a emitiu. */}{item.source === "servico" && <span className="mt-1.5 inline-flex rounded bg-rvd-plum-pale px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">Serviço</span>}</td><td className="px-3 py-3"><div title={destinatario.tooltip} className={destinatario.unidade ? "font-display text-[13px] font-extrabold leading-4 text-ink" : ""}><p className={destinatario.unidade ? "" : "font-bold text-rvd-plum"}>{destinatario.principal}</p><p className={destinatario.unidade ? "" : "mt-1 text-xs text-ink-soft"}>{destinatario.secundaria}</p></div></td><td className="px-3 py-3"><p className="font-display text-base font-extrabold leading-5 text-ink">{item.invoiceNumber || "—"}</p><p className="text-[10px] text-ink-soft">{sourceCopy[item.source]}</p></td><td className="px-3 py-3">{pedidos.length ? <div className="flex flex-col items-start gap-1">{pedidos.map(pedido => <span key={pedido} className={`rounded px-2 py-0.5 text-[11px] font-bold ${pedidoEhUrgente(pedido) ? "bg-state-stop-bg text-state-stop" : "bg-rvd-plum-pale text-rvd-plum"}`}>{pedido}</span>)}</div> : <span className="text-xs text-ink-soft">—</span>}</td><td className="px-3 py-3">{activeStatus === "rejected" ? <p className="max-w-36 text-[12px] font-semibold leading-4 text-red-700">{item.rejectionReason || "Motivo não informado"}</p> : hasConfirmedSchedule ? <><p className="text-[13px] font-bold text-rvd-plum">{new Date(displayedMoment).toLocaleDateString("pt-BR")}</p><p className="text-[11px] text-ink-soft">{new Date(displayedMoment).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>{showReceivedMoment && <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">Recebido em</p>}</> : sugerida ? <><p className="inline-flex items-center gap-1 rounded bg-rvd-blue-pale px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rvd-plum"><CalendarClock className="size-3" />Sugestão</p><p className="mt-1 text-[13px] font-bold text-rvd-plum">{new Date(sugerida).toLocaleDateString("pt-BR")}</p><p className="text-[11px] text-ink-soft">{new Date(sugerida).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p></>: <p className="max-w-32 text-[12px] font-semibold leading-4 text-rvd-plum">Aguardando confirmação</p>}</td><td className="px-3 py-3"><div className="flex items-center justify-end gap-2 text-rvd-plum"><ActionIcon label="Abrir detalhes da nota" icon={FileText} onClick={onDetails} /><AnexoDaNota url={item.xmlUrl} nome={item.xmlFileName} ehServico={item.source === "servico"} /><ActionIcon label="Histórico de datas" icon={CalendarClock} onClick={onHistory} />{item.status === "scheduled" && <ActionIcon label={canConfirm ? "Reagendar" : "Sugerir outra data"} icon={CalendarDays} onClick={onSchedule} />}<ActionIcon label={rotuloDaConversa(mensagens)} icon={MessageSquare} onClick={onChat} contagem={mensagens?.total ?? 0} novas={mensagens?.naoLidas ?? 0} /><ActionIcon label={canConfirm ? (item.preNoteConfirmedAt ? "Pré-nota confirmada — clique para desfazer" : "Confirmar pré-nota") : (item.preNoteConfirmedAt ? "Pré-nota confirmada" : "Pré-nota pendente")} icon={ClipboardCheck} onClick={onPreNote} confirmed={Boolean(item.preNoteConfirmedAt)} somenteLeitura={!canConfirm} />{ehAdmin && (item.status === "received" || item.status === "completed") && <ActionIcon label="Voltar esta nota para pendente" icon={Undo2} onClick={onVoltarParaPendente} />}<PrimaryAction status={item.status as PortalStatus} canConfirm={canConfirm} onSchedule={onSchedule} onUpdate={onUpdate} onRescue={onRescue} onFinalize={onFinalize} onRejeitar={onRejeitar} /></div></td></tr>; }
 /**
  * O arquivo que veio com a nota, a um clique da linha.
  *
@@ -396,6 +426,33 @@ function AnexoDaNota({ url, nome, ehServico }: { url: string | null; nome: strin
     <a href={url} target="_blank" rel="noreferrer" title={rotulo} aria-label={rotulo} className="rounded-lg p-1.5 text-rvd-plum transition hover:bg-rvd-plum-pale">
       <Paperclip className="size-4" />
     </a>
+  );
+}
+
+/** As colunas que a lista sabe ordenar. O servidor recusa qualquer outra. */
+type ColunaOrdenavel = "fornecedor" | "destinatario" | "nota" | "pedido" | "agendamento" | "status";
+
+/**
+ * Um cabeçalho que ordena a lista ao ser clicado.
+ *
+ * A ordenação acontece no banco, e não no navegador: a tela mostra 25 de
+ * 4.300, e ordenar só a página daria "a maior nota" entre vinte e cinco. A
+ * seta aparece na coluna escolhida e diz para que lado a lista está.
+ */
+function Cabecalho({ coluna, atual, ordem, onOrdenar, children, className = "" }: { coluna: ColunaOrdenavel; atual: ColunaOrdenavel | ""; ordem: "asc" | "desc"; onOrdenar: (coluna: ColunaOrdenavel) => void; children: ReactNode; className?: string }) {
+  const escolhida = atual === coluna;
+  return (
+    <th className={`px-3 py-3 ${className}`}>
+      <button
+        type="button"
+        onClick={() => onOrdenar(coluna)}
+        title={escolhida ? (ordem === "asc" ? "Ordenado do menor para o maior — clique para inverter" : "Ordenado do maior para o menor — clique para voltar à ordem da agenda") : "Ordenar por esta coluna"}
+        className={`inline-flex items-center gap-1 uppercase tracking-[0.1em] transition hover:text-rvd-plum ${escolhida ? "text-rvd-plum" : ""}`}
+      >
+        {children}
+        {escolhida ? <ChevronUp className={`size-3 transition-transform ${ordem === "desc" ? "rotate-180" : ""}`} /> : <ChevronsUpDown className="size-3 opacity-40" />}
+      </button>
+    </th>
   );
 }
 
@@ -566,8 +623,82 @@ function PreNoteConfirmDialog({ item, open, onOpenChange, onConfirm, loading }: 
  * das sugestões do fornecedor, e é lá que o Operador o encontra na hora de
  * agendar — nada de um canal paralelo que ninguém olha.
  */
-function SuggestDialog({ item, open, onOpenChange, date, time, notes, onDate, onTime, onNotes, onConfirm, loading }: { item: Appointment | null; open: boolean; onOpenChange: (open: boolean) => void; date: string; time: string; notes: string; onDate: (value: string) => void; onTime: (value: string) => void; onNotes: (value: string) => void; onConfirm: () => void; loading: boolean }) {
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-lg rounded-[2rem] border-line bg-surface p-7"><DialogHeader><DialogTitle className="font-display text-2xl font-extrabold text-ink">Sugerir data de recebimento</DialogTitle><DialogDescription className="text-rvd-plum">{item?.invoiceNumber ? `Nota ${item.invoiceNumber}` : "Nota sem número"} · {item?.invoiceSupplierName || item?.supplierName || "Fornecedor"}</DialogDescription></DialogHeader><p className="mt-5 rounded-2xl bg-sunken p-4 text-sm leading-6 text-ink-soft">A data vai para o Operador como sugestão. O agendamento só passa a valer depois que ele aceitar.</p><div className="mt-6 space-y-5"><div className="grid grid-cols-2 gap-3"><div><Label className="font-bold text-rvd-plum">Data</Label><Input type="date" value={date} onChange={event => onDate(event.target.value)} className="mt-2 h-12 border-line bg-surface text-rvd-plum" /></div><div><Label className="font-bold text-rvd-plum">Hora</Label><Input type="time" value={time} onChange={event => onTime(event.target.value)} className="mt-2 h-12 border-line bg-surface text-rvd-plum" /></div></div><div><Label className="font-bold text-rvd-plum">Motivo <span className="font-normal text-ink-soft">(opcional)</span></Label><Textarea value={notes} onChange={event => onNotes(event.target.value)} placeholder="Ex.: doca livre na manhã de terça." className="mt-2 min-h-24 border-line bg-surface text-rvd-plum" /></div><div className="flex justify-end gap-3 pt-2"><Button variant="ghost" onClick={() => onOpenChange(false)} className="font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button><Button onClick={onConfirm} disabled={loading} className="h-12 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand">{loading ? "Enviando..." : "Enviar sugestão"}</Button></div></div></DialogContent></Dialog>;
+function SuggestDialog({ item, open, onOpenChange, date, time, notes, onDate, onTime, onNotes, urgente, onUrgente, motivoUrgencia, onMotivoUrgencia, onConfirm, loading }: { item: Appointment | null; open: boolean; onOpenChange: (open: boolean) => void; date: string; time: string; notes: string; onDate: (value: string) => void; onTime: (value: string) => void; onNotes: (value: string) => void; urgente: boolean; onUrgente: (value: boolean) => void; motivoUrgencia: string; onMotivoUrgencia: (value: string) => void; onConfirm: () => void; loading: boolean }) {
+  // As outras notas deste fornecedor que já têm data. Quem propõe uma data sem
+  // ver isto marca quinta-feira para um fornecedor que já vem na terça — duas
+  // viagens onde cabia uma.
+  const entregas = trpc.appointments.activeForSupplier.useQuery(
+    { supplierId: item?.supplierId ?? 1 },
+    { enabled: open && Boolean(item?.supplierId) },
+  );
+  const outras = (entregas.data ?? []).filter(entrega => entrega.id !== item?.id);
+
+  return <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent className="w-[calc(100%-1rem)] rounded-[2rem] border-line bg-surface p-7 sm:!max-w-3xl">
+      <DialogHeader>
+        <DialogTitle className="font-display text-2xl font-extrabold text-ink">Sugerir data de recebimento</DialogTitle>
+        <DialogDescription className="text-rvd-plum">{item?.invoiceNumber ? `Nota ${item.invoiceNumber}` : "Nota sem número"} · {item?.invoiceSupplierName || item?.supplierName || "Fornecedor"}</DialogDescription>
+      </DialogHeader>
+      <div className="mt-5 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <div>
+          <p className="rounded-2xl bg-sunken p-4 text-sm leading-6 text-ink-soft">A data vai para o Operador como sugestão. O agendamento só passa a valer depois que ele aceitar.</p>
+          <div className="mt-5 space-y-5">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="font-bold text-rvd-plum">Data</Label><Input type="date" value={date} onChange={event => onDate(event.target.value)} className="mt-2 h-12 border-line bg-surface text-rvd-plum" /></div>
+              <div><Label className="font-bold text-rvd-plum">Hora</Label><Input type="time" value={time} onChange={event => onTime(event.target.value)} className="mt-2 h-12 border-line bg-surface text-rvd-plum" /></div>
+            </div>
+            <div>
+              <Label className="font-bold text-rvd-plum">Motivo <span className="font-normal text-ink-soft">(opcional)</span></Label>
+              <Textarea value={notes} onChange={event => onNotes(event.target.value)} placeholder="Ex.: doca livre na manhã de terça." className="mt-2 min-h-24 border-line bg-surface text-rvd-plum" />
+            </div>
+            {/* A urgência é pedida aqui porque é aqui que o planejamento
+                descobre que a nota não pode esperar — pedir a data e marcar a
+                urgência em duas telas separadas fazia a segunda ser esquecida. */}
+            <div className="rounded-2xl border border-line p-4">
+              <button type="button" role="switch" aria-checked={urgente} onClick={() => onUrgente(!urgente)} className="flex w-full items-center gap-3 text-left">
+                <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${urgente ? "bg-state-stop" : "bg-line"}`}><span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${urgente ? "left-[1.375rem]" : "left-0.5"}`} /></span>
+                <span>
+                  <span className="block text-sm font-bold text-ink">Marcar como urgente</span>
+                  <span className="block text-xs leading-4 text-ink-soft">A nota passa a aparecer na frente da fila, com selo na linha.</span>
+                </span>
+              </button>
+              {urgente && (
+                <Input
+                  value={motivoUrgencia}
+                  onChange={event => onMotivoUrgencia(event.target.value)}
+                  maxLength={255}
+                  placeholder="Por que é urgente? Ex.: estoque zerado na maternidade."
+                  className="mt-3 h-11 border-line bg-surface text-rvd-plum"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+        <aside className="min-w-0">
+          <div className="flex items-start gap-2">
+            <CalendarDays className="mt-0.5 size-4 shrink-0 text-rvd-plum" />
+            <div>
+              <h3 className="text-sm font-extrabold text-ink">Notas deste fornecedor já com data</h3>
+              <p className="text-xs leading-5 text-ink-soft">Quando der, proponha a mesma janela e o caminhão vem uma vez só.</p>
+            </div>
+          </div>
+          {entregas.isLoading ? (
+            <p className="mt-3 rounded-2xl bg-sunken px-4 py-6 text-center text-xs font-bold text-rvd-plum">Consultando...</p>
+          ) : outras.length ? (
+            <ul className="mt-3 max-h-72 overflow-y-auto rounded-2xl border border-line">
+              {outras.map(entrega => <EntregaJaMarcada key={entrega.id} entrega={entrega} />)}
+            </ul>
+          ) : (
+            <p className="mt-3 rounded-2xl bg-sunken px-4 py-6 text-center text-xs leading-5 text-ink-soft">Nenhuma outra nota deste fornecedor com data marcada.</p>
+          )}
+        </aside>
+      </div>
+      <div className="mt-6 flex justify-end gap-3">
+        <Button variant="ghost" onClick={() => onOpenChange(false)} className="font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button>
+        <Button onClick={onConfirm} disabled={loading} className="h-12 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand">{loading ? "Enviando..." : "Enviar sugestão"}</Button>
+      </div>
+    </DialogContent>
+  </Dialog>;
 }
 
 /**

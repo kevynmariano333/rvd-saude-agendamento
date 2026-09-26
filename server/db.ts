@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, like, lt, lte, ne, or, sql } from "drizzle-orm";
+import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
 import { customAlphabet, nanoid } from "nanoid";
 import {
@@ -232,6 +233,9 @@ export type AppointmentFilters = {
   /** Quando a nota entrou no backlog, em dias de São Paulo. */
   backlogStart?: string;
   backlogEnd?: string;
+  /** Por qual coluna a tela pediu para ordenar, e em que sentido. */
+  ordenarPor?: string;
+  ordem?: "asc" | "desc";
   /** Só notas com pedido de urgência. */
   onlyUrgent?: boolean;
   /** Pré-nota: confirmada, pendente, ou tanto faz. */
@@ -370,6 +374,21 @@ export async function countAppointments(filters: AppointmentFilters = {}) {
  * resposta, e nenhuma tela de lista mostra item nenhum. Quem abre uma nota
  * busca a nota inteira por id, uma de cada vez.
  */
+/**
+ * As colunas por onde a lista aceita ser ordenada.
+ *
+ * Um mapa, e não o nome vindo da tela direto na consulta: assim um campo
+ * inventado no endereço não vira ordenação por qualquer coluna da tabela.
+ */
+const COLUNAS_ORDENAVEIS: Record<string, AnyMySqlColumn | undefined> = {
+  fornecedor: appointments.invoiceSupplierName,
+  destinatario: appointments.recipientCnpj,
+  nota: appointments.invoiceNumber,
+  pedido: appointments.purchaseOrder,
+  agendamento: appointments.scheduledFor,
+  status: appointments.status,
+};
+
 export async function listAppointments(filters: AppointmentFilters = {}) {
   const db = await getDb();
   if (!db) return [];
@@ -431,9 +450,15 @@ export async function listAppointments(filters: AppointmentFilters = {}) {
   // O que ainda vai acontecer é lido do mais próximo para o mais distante — é a
   // fila do dia. O que já aconteceu é lido do mais recente para trás, que é
   // como se procura no histórico.
-  const ordenada = filters.futuroPrimeiro
-    ? filtered.orderBy(sql`DATE(${appointments.scheduledFor}) ASC`, urgentePrimeiro, asc(appointments.scheduledFor))
-    : filtered.orderBy(sql`DATE(${appointments.scheduledFor}) DESC`, urgentePrimeiro, desc(appointments.scheduledFor));
+  // Quando alguém clica no cabeçalho, a ordem é a que a pessoa pediu — e aí a
+  // urgência não entra na frente: ela ajuda a montar o dia, mas atrapalha quem
+  // está procurando "a maior nota" ou "o último fornecedor da lista".
+  const coluna = COLUNAS_ORDENAVEIS[filters.ordenarPor ?? ""];
+  const ordenada = coluna
+    ? filtered.orderBy(filters.ordem === "desc" ? desc(coluna) : asc(coluna))
+    : filters.futuroPrimeiro
+      ? filtered.orderBy(sql`DATE(${appointments.scheduledFor}) ASC`, urgentePrimeiro, asc(appointments.scheduledFor))
+      : filtered.orderBy(sql`DATE(${appointments.scheduledFor}) DESC`, urgentePrimeiro, desc(appointments.scheduledFor));
   return filters.limit ? ordenada.limit(filters.limit).offset(filters.offset ?? 0) : ordenada;
 }
 
@@ -622,6 +647,30 @@ export async function getSuggestionById(id: number) {
   if (!db) return undefined;
   const result = await db.select().from(appointmentSuggestions).where(eq(appointmentSuggestions.id, id)).limit(1);
   return result[0];
+}
+
+/**
+ * A data sugerida de cada nota que ainda espera resposta.
+ *
+ * A lista dizia "Aguardando confirmação" tanto para a nota que ninguém tocou
+ * quanto para a que já tem data proposta esperando o Operador — e a diferença
+ * entre as duas é justamente o que faz alguém abrir a nota ou não. Uma
+ * consulta só para a tela inteira: por nota seriam vinte e cinco.
+ *
+ * Quando a mesma nota tem mais de uma sugestão em aberto, vale a última, que é
+ * a que está sendo negociada.
+ */
+export async function sugestoesPendentesPorNota() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      appointmentId: appointmentSuggestions.appointmentId,
+      suggestedFor: sql<Date>`MAX(${appointmentSuggestions.suggestedFor})`.mapWith(appointmentSuggestions.suggestedFor),
+    })
+    .from(appointmentSuggestions)
+    .where(eq(appointmentSuggestions.status, "pending"))
+    .groupBy(appointmentSuggestions.appointmentId);
 }
 
 export async function listAppointmentSuggestions(filters: { appointmentId?: number; supplierId?: number; supplierIds?: number[]; status?: SuggestionStatus } = {}) {
