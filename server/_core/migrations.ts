@@ -300,13 +300,16 @@ export function bancoAindaSubindo(erro: unknown): boolean {
 /**
  * Quanto esperar entre uma tentativa e a seguinte, em segundos.
  *
- * Somadas, são cerca de três minutos e meio. Parece muito para uma subida, mas
- * é a ordem de grandeza de um banco reiniciando para aplicar um patch de
- * segurança — a hospedagem faz isso sozinha, e um deploy que caia no meio não
- * pode ser marcado como falho por esperar pouco. Quem checa se o processo está
- * vivo é outro endereço, que responde sem tocar no banco.
+ * Somadas, meio minuto — e não mais do que isso de propósito. Durante a
+ * espera o servidor ainda não atende nada, nem o endereço que responde "estou
+ * vivo": esperar mais do que a hospedagem espera pela resposta transforma a
+ * paciência em deploy falho, que foi o que aconteceu aqui.
+ *
+ * Quando o banco demora mais do que isso, quem insiste é a hospedagem: a
+ * política de reinício sobe o processo de novo, e cada tentativa ganha estes
+ * trinta segundos outra vez.
  */
-export const ESPERAS_DA_SUBIDA = [2, 4, 8, 15, 30, 30, 30, 30, 30, 30];
+export const ESPERAS_DA_SUBIDA = [2, 4, 8, 15];
 
 export async function migrarNaSubida(dormir: (ms: number) => Promise<void> = ms => new Promise(pronto => setTimeout(pronto, ms))): Promise<void> {
   let resultado = await aplicarMigracoesPendentes();

@@ -19,11 +19,11 @@ describe("banco indisponível na subida", () => {
     expect(bancoAindaSubindo(null)).toBe(false);
   });
 
-  it("espera o bastante para um banco que está sendo reiniciado", () => {
-    // Um patch de segurança no banco leva minutos; esperar só um deixaria o
-    // deploy falhar por pouco.
+  it("espera menos do que a hospedagem espera pelo primeiro sinal de vida", () => {
+    // Durante a espera o servidor não atende nem o /api/vivo. Passar do tempo
+    // do healthcheck (120s) faz a própria paciência derrubar o deploy.
     const total = ESPERAS_DA_SUBIDA.reduce((soma, segundos) => soma + segundos, 0);
-    expect(total).toBeGreaterThanOrEqual(180);
-    expect(total).toBeLessThanOrEqual(600);
+    expect(total).toBeGreaterThanOrEqual(20);
+    expect(total).toBeLessThan(60);
   });
 });
