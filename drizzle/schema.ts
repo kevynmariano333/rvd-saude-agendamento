@@ -438,6 +438,32 @@ export const backupRuns = mysqlTable("backupRuns", {
 
 export type BackupRun = typeof backupRuns.$inferSelect;
 
+/**
+ * Os avisos automáticos que já saíram, para não saírem de novo todo dia.
+ *
+ * Um aviso que se repete a cada dez minutos vira ruído, e ruído é ignorado —
+ * inclusive na vez em que importava. Guardar quando o último saiu é o que
+ * permite avisar uma vez por dia enquanto o problema durar, em vez de
+ * cento e quarenta e quatro.
+ *
+ * Fica numa tabela, e não na memória do processo, porque o servidor reinicia:
+ * na memória, um ciclo de reinícios mandaria um e-mail a cada subida.
+ */
+export const systemAlerts = mysqlTable(
+  "systemAlerts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    /** Qual aviso: hoje só "backup-parado". */
+    kind: varchar("kind", { length: 50 }).notNull(),
+    sentAt: timestamp("sentAt").defaultNow().notNull(),
+    /** O que foi dito, resumido — para quem for conferir depois. */
+    detail: varchar("detail", { length: 500 }),
+  },
+  table => [index("system_alerts_kind_idx").on(table.kind, table.sentAt)]
+);
+
+export type SystemAlert = typeof systemAlerts.$inferSelect;
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Appointment = typeof appointments.$inferSelect;

@@ -11,7 +11,20 @@
  */
 
 import { executarBackup } from "./backup";
-import { ultimoBackupConcluido } from "./db";
+import { conteudoDoAvisoDeBackup, deveAvisarDoBackup } from "./avisoDeBackup";
+import {
+  emailsDosAdministradores,
+  inicioDoHistoricoDeBackup,
+  registrarAvisoEnviado,
+  ultimasTentativasDeBackup,
+  ultimoAvisoEnviado,
+  ultimoBackupConcluido,
+} from "./db";
+import { ENV } from "./_core/env";
+import { isMailerConfigured, sendMail } from "./_core/mailer";
+
+/** A chave do aviso na tabela — é por ela que se sabe quando o último saiu. */
+export const AVISO_DE_BACKUP = "backup-parado";
 
 /** Três da manhã, horário de Brasília: ninguém usando, e antes do expediente. */
 export const HORA_DO_BACKUP = 3;
@@ -73,14 +86,81 @@ export async function conferirEBackupear(agora: Date = new Date()): Promise<"fei
 }
 
 /**
+ * O aviso por e-mail, quando o backup já faltou duas noites.
+ *
+ * Roda depois da tentativa do dia, e não no lugar dela: quem acabou de
+ * conseguir o backup não precisa de aviso nenhum, e quem falhou agora mesmo
+ * entra nesta conta com o dado fresco.
+ *
+ * Nada aqui pode derrubar o portal. Um aviso que não sai é ruim; um portal que
+ * cai porque o aviso não saiu é pior.
+ */
+export async function conferirAvisoDeBackup(agora: Date = new Date()): Promise<"avisado" | "sem motivo" | "sem quem avisar" | "falhou"> {
+  try {
+    const [ultimo, primeira, ultimoAviso] = await Promise.all([
+      ultimoBackupConcluido(),
+      inicioDoHistoricoDeBackup(),
+      ultimoAvisoEnviado(AVISO_DE_BACKUP),
+    ]);
+    const situacao = {
+      agora,
+      ultimoSucessoEm: ultimo?.finishedAt ?? null,
+      primeiraTentativaEm: primeira,
+      ultimoAvisoEm: ultimoAviso,
+    };
+    if (!deveAvisarDoBackup(situacao)) return "sem motivo";
+
+    // O aviso é gravado mesmo sem conseguir enviar. Sem isso, um portal sem
+    // e-mail configurado tentaria de novo a cada dez minutos, para sempre.
+    const destinatarios = isMailerConfigured() ? await emailsDosAdministradores() : [];
+    if (!destinatarios.length) {
+      console.warn("[Backup] o backup está parado e não há a quem avisar (sem e-mail configurado ou sem administrador com e-mail).");
+      await registrarAvisoEnviado(AVISO_DE_BACKUP, "Sem destinatário: aviso não enviado.");
+      return "sem quem avisar";
+    }
+
+    const [tentativa] = await ultimasTentativasDeBackup(1);
+    const conteudo = conteudoDoAvisoDeBackup({
+      agora,
+      ultimoSucessoEm: situacao.ultimoSucessoEm,
+      ultimoErro: tentativa?.error ?? null,
+      appUrl: ENV.appUrl || null,
+    });
+    let entregues = 0;
+    for (const destinatario of destinatarios) {
+      try {
+        await sendMail({ to: destinatario, ...conteudo });
+        entregues += 1;
+      } catch (erro) {
+        console.error(`[Backup] não consegui avisar ${destinatario}:`, erro instanceof Error ? erro.message : erro);
+      }
+    }
+    // A tentativa fica registrada mesmo quando nenhum e-mail saiu: senão, um
+    // portal com o e-mail quebrado tentaria de novo a cada dez minutos. E o
+    // registro diz quantos saíram de verdade — "avisei" e "tentei avisar" não
+    // são a mesma frase para quem for ler isto depois.
+    await registrarAvisoEnviado(AVISO_DE_BACKUP, `Enviado para ${entregues} de ${destinatarios.length} administrador(es).`);
+    console.warn(`[Backup] backup parado — aviso enviado para ${entregues} de ${destinatarios.length} administrador(es).`);
+    return entregues ? "avisado" : "falhou";
+  } catch (erro) {
+    console.error("[Backup] falha ao conferir o aviso de backup parado:", erro instanceof Error ? erro.message : erro);
+    return "falhou";
+  }
+}
+
+/**
  * Liga a rotina. Devolve como desligá-la, que é o que o encerramento usa.
  *
  * O primeiro exame é logo na subida, e não daqui a dez minutos: se o servidor
  * passou a madrugada fora do ar, o backup daquele dia sai assim que ele volta.
  */
 export function ligarBackupAutomatico(): () => void {
-  void conferirEBackupear();
-  const relogio = setInterval(() => void conferirEBackupear(), INTERVALO_DA_CONFERENCIA_MS);
+  const passada = async () => {
+    await conferirEBackupear();
+    await conferirAvisoDeBackup();
+  };
+  void passada();
+  const relogio = setInterval(() => void passada(), INTERVALO_DA_CONFERENCIA_MS);
   // Sem isto, o processo demoraria até dez minutos para conseguir sair.
   relogio.unref();
   return () => clearInterval(relogio);

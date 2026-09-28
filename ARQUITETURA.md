@@ -228,8 +228,8 @@ Em ordem de risco:
 1. **Railway é ponto único**: aplicação e banco caem juntos. O backup diário vai
    para o R2, que é outro provedor, justamente por isso — a volta está em
    `scripts/restaurar-backup.mjs` e o procedimento no `DEPLOY.md`.
-2. **Ninguém é avisado quando o backup falha.** O painel do administrador mostra
-   o último resultado, mas mostrar depende de alguém olhar.
-3. **Não há monitoramento**: uma queda é descoberta por quem tenta usar.
-4. As telas internas não têm teste de ponta a ponta; a cobertura está nas regras
+2. **Não há monitoramento da queda**: o backup parado avisa por e-mail
+   (`server/avisoDeBackup.ts`), mas o portal fora do ar continua sendo
+   descoberto por quem tenta usar.
+3. As telas internas não têm teste de ponta a ponta; a cobertura está nas regras
    de negócio e nos endpoints.

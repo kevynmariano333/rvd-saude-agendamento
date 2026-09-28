@@ -26,6 +26,7 @@ import {
   companies,
   purchaseOrderItems,
   backupRuns,
+  systemAlerts,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { normalizeCnpj } from "./fiscalFilters";
@@ -2075,6 +2076,56 @@ export async function ultimoBackupConcluido() {
     .orderBy(desc(backupRuns.finishedAt))
     .limit(1);
   return linhas[0] ?? null;
+}
+
+/**
+ * Quando começou a haver histórico de backup.
+ *
+ * Serve de régua para o caso em que nenhum backup jamais deu certo: sem um
+ * sucesso para contar a partir dele, a primeira tentativa é a data mais antiga
+ * que se pode afirmar. Sem isso, "faz dois dias que não tem backup bom" não
+ * teria de onde contar num sistema que nunca teve um.
+ */
+export async function inicioDoHistoricoDeBackup(): Promise<Date | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const linhas = await db
+    .select({ startedAt: backupRuns.startedAt })
+    .from(backupRuns)
+    .orderBy(asc(backupRuns.startedAt))
+    .limit(1);
+  return linhas[0]?.startedAt ?? null;
+}
+
+/** Quando este aviso saiu pela última vez — nulo se nunca saiu. */
+export async function ultimoAvisoEnviado(tipo: string): Promise<Date | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const linhas = await db
+    .select({ sentAt: systemAlerts.sentAt })
+    .from(systemAlerts)
+    .where(eq(systemAlerts.kind, tipo))
+    .orderBy(desc(systemAlerts.sentAt))
+    .limit(1);
+  return linhas[0]?.sentAt ?? null;
+}
+
+/** Anota que o aviso saiu. É o que segura o próximo. */
+export async function registrarAvisoEnviado(tipo: string, detalhe: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(systemAlerts).values({ kind: tipo, sentAt: new Date(), detail: detalhe.slice(0, 500) });
+}
+
+/** Para quem mandar um aviso do sistema: os administradores que ainda entram. */
+export async function emailsDosAdministradores(): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const linhas = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(and(eq(users.role, "admin"), eq(users.accessStatus, "approved"), isNotNull(users.email)));
+  return linhas.map(linha => (linha.email ?? "").trim()).filter(email => email.includes("@"));
 }
 
 /** As últimas tentativas, com falhas e tudo, para a tela de manutenção. */

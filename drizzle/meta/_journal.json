@@ -253,6 +253,13 @@
       "when": 1790340453340,
       "tag": "0035_icy_brother_voodoo",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "5",
+      "when": 1790562190986,
+      "tag": "0036_gifted_tarantula",
+      "breakpoints": true
     }
   ]
 }

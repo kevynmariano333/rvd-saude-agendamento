@@ -123,6 +123,15 @@ guardada ao lado do original não protege contra o caso que mais importa, que é
 perder o provedor. O resultado do último backup aparece no painel do
 administrador, e o botão ao lado gera um na hora.
 
+**Se parar, você é avisado.** Duas noites seguidas sem backup bom e o sistema
+manda um e-mail para todos os administradores ativos, dizendo desde quando
+parou, qual erro o provedor devolveu e o que conferir. Não avisa na primeira
+falha — uma noite ruim acontece, e e-mail que chega à toa é e-mail que ninguém
+lê. Enquanto o problema durar, o aviso sai uma vez por dia, não a cada dez
+minutos. Isso depende do e-mail estar configurado (a chave do Brevo); sem ele,
+a falta de backup fica registrada no log e no quadro do portal, mas não sai
+daqui.
+
 **A volta tem script e já foi testada.** O caminho de volta é
 `scripts/restaurar-backup.mjs`, e ele foi rodado de ponta a ponta contra um
 banco vazio: backup gerado no formato real, migrações aplicadas, restauração
