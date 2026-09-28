@@ -1,8 +1,7 @@
-import { jsPDF } from "jspdf";
-import QRCode from "qrcode";
+import type { jsPDF } from "jspdf";
 import { MARCA } from "@shared/marca";
 import { OPERADOR_LOGISTICO } from "@shared/operadorLogistico";
-import { getRvdLogoDataUrl } from "./receiptCertificatePdf";
+import { carregarFerramentasDoPdf, getRvdLogoDataUrl } from "./receiptCertificatePdf";
 
 /**
  * O cartaz que fica na portaria.
@@ -34,6 +33,7 @@ export const PASSOS_DO_CARTAZ = [
 ] as const;
 
 export async function gerarCartazDaPortaria(enderecoDoPortal: string): Promise<jsPDF> {
+  const { jsPDF, QRCode } = await carregarFerramentasDoPdf();
   // Comprimido: o cartaz costuma ser mandado por WhatsApp para alguém
   // imprimir, e o logo sozinho leva o arquivo a alguns megabytes.
   const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });

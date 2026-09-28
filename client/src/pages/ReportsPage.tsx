@@ -67,16 +67,16 @@ export default function ReportsPage() {
   const carregando = view === "backlog" ? backlogReport.isLoading : appointments.isFetching && !appointments.data;
   const setFilter = <K extends keyof ReportFilters>(key: K, value: ReportFilters[K]) => setFilters(current => ({ ...current, [key]: value }));
   /** Monta e baixa a planilha a partir das linhas recebidas. */
-  const baixarExcel = (linhas: Record<string, string>[]) => {
-    baixarPlanilha({ linhas, colunas, aba: tituloDaVisao, arquivo: nomeDaPlanilha(`relatorio-${tituloDaVisao.toLowerCase()}`) });
+  const baixarExcel = async (linhas: Record<string, string>[]) => {
+    await baixarPlanilha({ linhas, colunas, aba: tituloDaVisao, arquivo: nomeDaPlanilha(`relatorio-${tituloDaVisao.toLowerCase()}`) });
   };
 
   const exportExcel = async () => {
-    if (view === "backlog") return baixarExcel(rows);
+    if (view === "backlog") return await baixarExcel(rows);
     setExportando(true);
     try {
       const completo = await utils.reports.notas.fetch({ ...consultaDeNotas, limite: NO_EXCEL });
-      baixarExcel(view === "detailed" ? toDetailedReportRows(completo.linhas) : toConsolidatedReportRows(completo.linhas));
+      await baixarExcel(view === "detailed" ? toDetailedReportRows(completo.linhas) : toConsolidatedReportRows(completo.linhas));
     } catch (erro) {
       toast.error(erro instanceof Error ? erro.message : "Não foi possível montar a planilha.");
     } finally {

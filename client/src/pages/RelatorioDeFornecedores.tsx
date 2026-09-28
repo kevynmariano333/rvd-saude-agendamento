@@ -6,7 +6,7 @@ import { formatarCnpj } from "@shared/recipients";
 import { Building2, Download, Mail, RefreshCw, Search, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import { baixarPlanilha } from "@/lib/planilha";
 import { useLocation } from "wouter";
 import PortalLayout from "./PortalLayout";
 
@@ -99,13 +99,15 @@ export default function RelatorioDeFornecedores() {
     return filtradas.map(linhaDaPlanilha);
   }, [busca, contas.data]);
 
-  const baixarExcel = () => {
+  const baixarExcel = async () => {
     if (!linhas.length) return toast.error("Não há fornecedores para exportar.");
-    const planilha = XLSX.utils.json_to_sheet(linhas, { header: [...COLUNAS] });
-    planilha["!cols"] = COLUNAS.map(coluna => ({ wch: Math.max(18, coluna.length + 8) }));
-    const arquivo = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(arquivo, planilha, "Fornecedores");
-    XLSX.writeFile(arquivo, `fornecedores-cadastrados-rvd-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    await baixarPlanilha({
+      linhas,
+      colunas: COLUNAS,
+      larguras: COLUNAS.map(coluna => Math.max(18, coluna.length + 8)),
+      aba: "Fornecedores",
+      arquivo: `fornecedores-cadastrados-rvd-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    });
   };
 
   if (!auth.data || !isPortalAdmin(auth.data.role as PortalRole)) return <div className="min-h-screen bg-canvas" />;

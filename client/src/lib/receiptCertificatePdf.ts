@@ -1,7 +1,19 @@
-import { jsPDF } from "jspdf";
-import QRCode from "qrcode";
 import { CAMPOS_DO_OPERADOR, OPERADOR_LOGISTICO } from "@shared/operadorLogistico";
 import { MARCA } from "@shared/marca";
+
+/**
+ * As duas bibliotecas do PDF chegam na hora do clique, e não na abertura.
+ *
+ * Juntas elas pesam mais de meio megabyte — e a maioria de quem abre o portal
+ * nunca gera comprovante nenhum. Carregadas no começo, todo mundo paga por
+ * elas; carregadas aqui, paga quem usa, uma vez só (o navegador guarda). O
+ * custo é uma espera de fração de segundo no primeiro clique, que ninguém
+ * percebe porque já está esperando um PDF.
+ */
+export async function carregarFerramentasDoPdf() {
+  const [jspdf, qrcode] = await Promise.all([import("jspdf"), import("qrcode")]);
+  return { jsPDF: jspdf.jsPDF, QRCode: qrcode.default };
+}
 
 export type ReceiptCertificateData = {
   invoiceNumber: string | null;
@@ -65,6 +77,7 @@ export function alturaDoBlocoDeEntrega(linhasDoAviso: number, campos: number) {
 }
 
 export async function generateReceiptCertificatePdf(data: ReceiptCertificateData) {
+  const { jsPDF, QRCode } = await carregarFerramentasDoPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const plum: [number, number, number] = [120, 32, 120];
   const blue: [number, number, number] = [142, 193, 217];

@@ -150,7 +150,16 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+/**
+ * O painel do Manus fica no desenvolvimento, e só nele.
+ *
+ * O plugin injeta um React inteiro mais o painel de depuração dentro do
+ * `index.html` — 368 KB que todo mundo baixava antes de o portal começar a
+ * carregar, em toda visita. A plataforma Manus não existe mais desde a
+ * migração para a Railway e nada no app conversa com esse painel: em produção
+ * era peso puro, e o celular da portaria pagava por ele todo dia.
+ */
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), { ...vitePluginManusRuntime(), apply: "serve" } as Plugin, vitePluginManusDebugCollector()];
 
 /**
  * Qual versão está no ar, gravada no pacote na hora da build.

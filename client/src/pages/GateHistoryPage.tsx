@@ -25,7 +25,7 @@ import { CalendarRange, ClipboardList, Download, Search, Timer, Truck } from "lu
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import * as XLSX from "xlsx";
+import { baixarPlanilha } from "@/lib/planilha";
 import PortalLayout from "./PortalLayout";
 
 /** Data de hoje em São Paulo, no formato que os campos de data usam. */
@@ -100,7 +100,7 @@ export default function GateHistoryPage() {
       )
     : 0;
 
-  function exportExcel() {
+  async function exportExcel() {
     if (!rows.length) return toast.error("Nenhum atendimento no filtro para exportar.");
     // O RG do motorista é dado pessoal: só a planilha do administrador o leva.
     const includeDriverDocument = auth.data?.role === "admin";
@@ -116,13 +116,15 @@ export default function GateHistoryPage() {
         { includeDriverDocument }
       )
     );
-    const worksheet = XLSX.utils.json_to_sheet(sheetRows, { header: columns.map(column => column.key) });
-    worksheet["!cols"] = columns.map(column => ({ wch: column.width }));
-    // Congelar o cabeçalho: a planilha do portão passa de cem linhas rápido.
-    worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Portaria");
-    XLSX.writeFile(workbook, `historico-portaria-${from}-a-${to}.xlsx`);
+    await baixarPlanilha({
+      linhas: sheetRows,
+      colunas: columns.map(column => column.key),
+      larguras: columns.map(column => column.width),
+      // Congelar o cabeçalho: a planilha do portão passa de cem linhas rápido.
+      congelarCabecalho: true,
+      aba: "Portaria",
+      arquivo: `historico-portaria-${from}-a-${to}.xlsx`,
+    });
     toast.success(`${sheetRows.length} atendimento(s) exportado(s).`);
   }
 

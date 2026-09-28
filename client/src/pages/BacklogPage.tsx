@@ -119,9 +119,9 @@ export default function BacklogPage() {
   const podeAgendar = isPortalOperator(auth.data.role as PortalRole);
   // A planilha sai do que está na tela: o que a fila mostra é o que o arquivo
   // leva, sem uma segunda consulta que pudesse trazer outro conjunto.
-  const exportarFila = () => {
+  const exportarFila = async () => {
     if (!notas.length) return toast.error("Não há nota em backlog para exportar.");
-    baixarPlanilha({
+    await baixarPlanilha({
       linhas: toBacklogQueueRows(notas),
       colunas: COLUNAS_DA_FILA_DO_BACKLOG,
       aba: "Backlog em aberto",
