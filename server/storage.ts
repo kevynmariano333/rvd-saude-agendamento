@@ -76,6 +76,34 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
   return { key, url: `/manus-storage/${key}` };
 }
 
+/**
+ * O conteúdo do arquivo, lido aqui dentro em vez de entregue por link.
+ *
+ * O caminho normal é o link assinado: o navegador busca direto no bucket e o
+ * servidor não carrega o arquivo. Só que link assinado aponta para outro
+ * domínio, e o navegador se recusa a *ler* o que vem de outro domínio sem uma
+ * permissão que o bucket não dá. Para baixar está ótimo; para desenhar o DANFE
+ * a partir do XML, não serve.
+ *
+ * Então este caminho existe para quem precisa do conteúdo, e não do arquivo. O
+ * limite é o mesmo do upload: o que não coube para entrar não vai caber para
+ * sair.
+ */
+export async function storageLerTexto(relKey: string, limiteBytes = 2 * 1024 * 1024): Promise<string> {
+  const key = normalizeKey(relKey);
+  const client = getS3Client();
+  try {
+    const resposta = await client.send(new GetObjectCommand({ Bucket: ENV.s3Bucket, Key: key }));
+    const bytes = await resposta.Body?.transformToByteArray();
+    if (!bytes) throw new Error("Arquivo vazio.");
+    if (bytes.length > limiteBytes) throw new Error("O arquivo é grande demais para ser lido.");
+    return Buffer.from(bytes).toString("utf8");
+  } catch (err) {
+    console.error("[Storage] leitura falhou:", err);
+    throw describeStorageError(err);
+  }
+}
+
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
   const key = normalizeKey(relKey);
   const client = getS3Client();

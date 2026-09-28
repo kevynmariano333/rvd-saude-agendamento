@@ -94,7 +94,7 @@ import { COOKIE_NAME } from "../shared/const";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { scryptSync, timingSafeEqual } from "node:crypto";
 import { nanoid } from "nanoid";
-import { storagePut } from "./storage";
+import { storageLerTexto, storagePut } from "./storage";
 import { MAX_XML_BYTES, parseInvoiceXml } from "./xmlInvoice";
 import { ENV } from "./_core/env";
 import { limparFalhas, registrarFalha, segundosDeEspera } from "./loginThrottle";
@@ -734,6 +734,30 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar este agendamento." });
         }
         return appointment;
+      }),
+    /**
+     * O XML da nota, em texto, para o navegador desenhar o DANFE.
+     *
+     * O anexo já é servido por link assinado, e para baixar isso basta. Mas o
+     * link aponta para o bucket, que é outro domínio, e o navegador não deixa
+     * uma página *ler* o conteúdo de outro domínio sem uma permissão que o
+     * bucket não dá. Desenhar o DANFE precisa ler.
+     *
+     * O mesmo cerco do resto da nota: o balcão vê todas, o fornecedor só as
+     * suas. Nota de serviço não passa por aqui — NFS-e não tem DANFE, e cada
+     * prefeitura tem o layout dela.
+     */
+    xmlDaNota: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+        if (!isSchedulingDesk(ctx.user.role) && !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar este agendamento." });
+        }
+        if (appointment.source === "servico") throw new TRPCError({ code: "BAD_REQUEST", message: "Nota de serviço não tem DANFE." });
+        if (!appointment.xmlStorageKey) throw new TRPCError({ code: "NOT_FOUND", message: "Esta nota não tem XML guardado." });
+        return { xml: await storageLerTexto(appointment.xmlStorageKey) };
       }),
     /**
      * O que os pedidos de uma nota esperavam, segundo o SAP.
