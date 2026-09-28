@@ -34,6 +34,7 @@ import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 import { getReceiptTimestampForStatus } from "./receiptStatus";
 import { getSaoPauloDayRange } from "../shared/dateFilters";
 import type { ChaveDeDuplicidade } from "../shared/duplicidadeDeNota";
+import { ehDoPlanejamento, sugestaoPrioritaria } from "../shared/prioridadeDaSugestao";
 
 /**
  * Como o portal segura a conexão com o banco o dia inteiro.
@@ -658,20 +659,37 @@ export async function getSuggestionById(id: number) {
  * entre as duas é justamente o que faz alguém abrir a nota ou não. Uma
  * consulta só para a tela inteira: por nota seriam vinte e cinco.
  *
- * Quando a mesma nota tem mais de uma sugestão em aberto, vale a última, que é
- * a que está sendo negociada.
+ * Quando a mesma nota tem mais de uma sugestão em aberto, vale a do
+ * planejamento — e, entre as do mesmo lado, a mais nova. A escolha é feita
+ * aqui, e não no banco, porque é a mesma regra que a janela de agendamento
+ * aplica: escrita duas vezes, ela divergiria no dia em que mudasse.
  */
 export async function sugestoesPendentesPorNota() {
   const db = await getDb();
   if (!db) return [];
-  return db
+  const linhas = await db
     .select({
       appointmentId: appointmentSuggestions.appointmentId,
-      suggestedFor: sql<Date>`MAX(${appointmentSuggestions.suggestedFor})`.mapWith(appointmentSuggestions.suggestedFor),
+      suggestedFor: appointmentSuggestions.suggestedFor,
+      createdAt: appointmentSuggestions.createdAt,
+      createdByRole: users.role,
     })
     .from(appointmentSuggestions)
-    .where(eq(appointmentSuggestions.status, "pending"))
-    .groupBy(appointmentSuggestions.appointmentId);
+    .innerJoin(users, eq(appointmentSuggestions.supplierId, users.id))
+    .where(eq(appointmentSuggestions.status, "pending"));
+
+  type SugestaoEmAberto = { appointmentId: number; suggestedFor: Date; createdAt: Date; createdByRole: string };
+  const porNota = new Map<number, SugestaoEmAberto[]>();
+  for (const linha of linhas as SugestaoEmAberto[]) {
+    const lista = porNota.get(linha.appointmentId);
+    if (lista) lista.push(linha);
+    else porNota.set(linha.appointmentId, [linha]);
+  }
+  return Array.from(porNota.entries()).flatMap(([appointmentId, lista]) => {
+    const escolhida = sugestaoPrioritaria<SugestaoEmAberto>(lista);
+    if (!escolhida) return [];
+    return [{ appointmentId, suggestedFor: escolhida.suggestedFor, doPlanejamento: ehDoPlanejamento(escolhida) }];
+  });
 }
 
 export async function listAppointmentSuggestions(filters: { appointmentId?: number; supplierId?: number; supplierIds?: number[]; status?: SuggestionStatus } = {}) {
