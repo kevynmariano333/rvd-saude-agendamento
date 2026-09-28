@@ -297,8 +297,16 @@ export function bancoAindaSubindo(erro: unknown): boolean {
   return typeof codigo === "string" && BANCO_INDISPONIVEL.has(codigo);
 }
 
-/** Quanto esperar entre uma tentativa e a seguinte, em segundos. */
-export const ESPERAS_DA_SUBIDA = [2, 4, 8, 15, 30];
+/**
+ * Quanto esperar entre uma tentativa e a seguinte, em segundos.
+ *
+ * Somadas, são cerca de três minutos e meio. Parece muito para uma subida, mas
+ * é a ordem de grandeza de um banco reiniciando para aplicar um patch de
+ * segurança — a hospedagem faz isso sozinha, e um deploy que caia no meio não
+ * pode ser marcado como falho por esperar pouco. Quem checa se o processo está
+ * vivo é outro endereço, que responde sem tocar no banco.
+ */
+export const ESPERAS_DA_SUBIDA = [2, 4, 8, 15, 30, 30, 30, 30, 30, 30];
 
 export async function migrarNaSubida(dormir: (ms: number) => Promise<void> = ms => new Promise(pronto => setTimeout(pronto, ms))): Promise<void> {
   let resultado = await aplicarMigracoesPendentes();

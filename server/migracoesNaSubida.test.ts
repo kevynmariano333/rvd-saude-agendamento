@@ -19,9 +19,11 @@ describe("banco indisponível na subida", () => {
     expect(bancoAindaSubindo(null)).toBe(false);
   });
 
-  it("espera no máximo cerca de um minuto, somando as tentativas", () => {
+  it("espera o bastante para um banco que está sendo reiniciado", () => {
+    // Um patch de segurança no banco leva minutos; esperar só um deixaria o
+    // deploy falhar por pouco.
     const total = ESPERAS_DA_SUBIDA.reduce((soma, segundos) => soma + segundos, 0);
-    expect(total).toBeGreaterThanOrEqual(30);
-    expect(total).toBeLessThanOrEqual(90);
+    expect(total).toBeGreaterThanOrEqual(180);
+    expect(total).toBeLessThanOrEqual(600);
   });
 });
