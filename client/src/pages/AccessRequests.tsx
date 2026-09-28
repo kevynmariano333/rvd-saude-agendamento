@@ -13,6 +13,7 @@ import BackupCard from "../components/BackupCard";
 import NotasRepetidasCard from "../components/NotasRepetidasCard";
 import CartazDaPortariaCard from "../components/CartazDaPortariaCard";
 import EstadoDoSistemaCard from "../components/EstadoDoSistemaCard";
+import SegurancaCard from "../components/SegurancaCard";
 
 type PendingRequest = {
   id: number;
@@ -370,6 +371,7 @@ export default function AccessRequests() {
         )}
 
         <EstadoDoSistemaCard />
+        <SegurancaCard />
       <CartazDaPortariaCard />
       <NotasRepetidasCard />
       <BackupCard />

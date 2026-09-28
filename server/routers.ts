@@ -104,6 +104,8 @@ import { buildResetUrl, createResetToken, enderecoDoPortal, hashResetToken, isRe
 import { caminhoDoEnvio, descricaoDoDestino, isMailerConfigured, remetente, sendMail } from "./_core/mailer";
 import { conteudoDoAcessoLiberado } from "./emailDeAcesso";
 import { conteudoDoTeste, motivoDaFalha } from "./emailDeTeste";
+import { montarEstadoDeSeguranca } from "./estadoDeSeguranca";
+import { isS3Configured } from "./_core/s3Client";
 import { conteudoDoAgendamento } from "./emailDeAgendamento";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
@@ -1227,6 +1229,23 @@ export const appRouter = router({
       commit: (process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 7) || null,
       subidoHaSegundos: Math.round(process.uptime()),
     })),
+    /**
+     * O que ainda está aberto na segurança, para o administrador conferir.
+     *
+     * Eram combinados de conversa — "no sábado troca o banco para a rede
+     * interna" — e conversa se perde. Aqui o servidor no ar responde o que ele
+     * vê, e o que estiver vermelho é o que falta fazer.
+     */
+    estadoDeSeguranca: adminProcedure.query(() =>
+      montarEstadoDeSeguranca({
+        databaseUrl: ENV.databaseUrl,
+        segredoDaSessao: ENV.cookieSecret,
+        appUrl: ENV.appUrl,
+        contasDeTesteLigadas: politicaDasContasDeTeste().ligadas,
+        emailConfigurado: isMailerConfigured(),
+        backupConfigurado: isS3Configured(),
+      }),
+    ),
     /** O que a tela mostra para provar que a cópia da madrugada está saindo. */
     situacaoDoBackup: adminProcedure.query(async () => ({
       ultimo: await ultimoBackupConcluido(),
