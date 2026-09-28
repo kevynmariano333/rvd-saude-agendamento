@@ -63,6 +63,7 @@ import {
   getPasswordResetToken,
   getUserById,
   marcarUrgencia,
+  definirPedidoDaNota,
   registrarNoHistorico,
   createAttendance,
   decideAttendanceEntry,
@@ -1106,6 +1107,38 @@ export const appRouter = router({
           status: appointment.status,
           urgente: input.urgente,
           motivo: input.motivo?.trim() || null,
+          handledBy: ctx.user.id,
+        });
+      }),
+    /**
+     * Informar (ou corrigir) o pedido de compra de uma nota.
+     *
+     * O pedido é obrigatório quando o fornecedor envia pelo portal, mas falta
+     * nos dois caminhos que não passam por ele: o recebimento sem agendamento,
+     * que lê o pedido do XML — e nem todo XML o traz —, e o acervo importado,
+     * que herda o que a planilha tinha. Sem o pedido, o recebimento não tem
+     * contra o que conferir, e até aqui não havia como consertar pela tela.
+     *
+     * Dez dígitos, como o resto do sistema exige: número curto aqui vira uma
+     * nota que ninguém consegue conferir no SAP depois.
+     */
+    definirPedido: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive(), purchaseOrders: z.array(z.string().trim()).min(1, "Informe ao menos um pedido.").max(10) }))
+      .mutation(async ({ ctx, input }) => {
+        assertSchedulingDesk(ctx.user.role);
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+        const pedidos = input.purchaseOrders.map(pedido => pedido.replace(/\D/g, "")).filter(Boolean);
+        if (!pedidos.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe ao menos um pedido de compra." });
+        const invalido = pedidos.find(pedido => pedido.length !== 10);
+        if (invalido) throw new TRPCError({ code: "BAD_REQUEST", message: `O pedido ${invalido} não tem 10 dígitos.` });
+        const purchaseOrder = pedidos.join(", ");
+        if (!pedidosCabem(purchaseOrder)) throw new TRPCError({ code: "BAD_REQUEST", message: `Os pedidos não cabem em ${PURCHASE_ORDER_MAX} caracteres.` });
+        return definirPedidoDaNota({
+          appointmentId: appointment.id,
+          status: appointment.status,
+          purchaseOrder,
+          anterior: appointment.purchaseOrder,
           handledBy: ctx.user.id,
         });
       }),

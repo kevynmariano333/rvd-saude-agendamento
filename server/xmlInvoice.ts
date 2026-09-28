@@ -79,6 +79,41 @@ function parseVolumeCount(xml: string) {
   return directValue === null ? null : Math.round(directValue);
 }
 
+/**
+ * O pedido de compra, procurado onde ele realmente aparece.
+ *
+ * O lugar certo é a tag `xPed` de cada item, e era só ali que se olhava — a
+ * primeira que aparecesse. Duas coisas escapavam disso. A nota que cobre mais
+ * de um pedido trazia só o primeiro; e a nota cujo fornecedor não preenche
+ * `xPed` — que é comum — ficava sem pedido nenhum, embora o número esteja
+ * escrito nas informações complementares, que é onde ele sai impresso no
+ * DANFE.
+ *
+ * Nas informações complementares a busca é conservadora: dez dígitos logo
+ * depois da palavra "pedido" (ou OC/PC). Sem a palavra por perto, aceita
+ * apenas quando há um único número de dez dígitos começando por 4 no texto
+ * inteiro — a faixa dos pedidos deste ERP. Pegar o número errado é pior do que
+ * não pegar: manda conferir a nota contra uma compra que não é a dela.
+ */
+export function lerPedidosDoXml(xml: string): string | null {
+  const dosItens = readScopes(xml, "det")
+    .map(escopo => readTag(escopo, ["xPed", "nPed"]))
+    .map(valor => (valor ?? "").replace(/\D/g, ""))
+    .filter(Boolean);
+  const unicos = Array.from(new Set(dosItens));
+  if (unicos.length) return unicos.join(", ").slice(0, 100);
+
+  const solto = readTag(xml, ["xPed", "nPed", "Pedido", "NumeroPedido"]);
+  if (solto?.replace(/\D/g, "")) return solto.trim().slice(0, 100);
+
+  const complemento = [readTag(xml, ["infCpl"]), readTag(xml, ["infAdFisco"])].filter(Boolean).join(" ");
+  if (!complemento) return null;
+  const comRotulo = complemento.match(/(?:pedido|ped\.?|oc|pc)\s*(?:de\s+compra\s*)?[:\-nº°\s]{0,6}(\d{10})/i);
+  if (comRotulo?.[1]) return comRotulo[1];
+  const candidatos = Array.from(new Set(complemento.match(/\b4\d{9}\b/g) ?? []));
+  return candidatos.length === 1 ? candidatos[0] : null;
+}
+
 export function parseInvoiceXml(content: Buffer): XmlInvoiceDetails {
   if (!content.length || content.length > MAX_XML_BYTES) throw new Error("O XML deve ter até 2 MB.");
   const xml = content.toString("utf8").replace(/^\uFEFF/, "");
@@ -92,7 +127,7 @@ export function parseInvoiceXml(content: Buffer): XmlInvoiceDetails {
   // uma transportadora pode enviar pelo portal a nota de outra empresa.
   const supplierCnpj = readScopedTag(xml, "emit", ["CNPJ", "CPF"]);
   const recipientCnpj = readScopedTag(xml, "dest", ["CNPJ"]);
-  const purchaseOrder = readTag(xml, ["xPed", "nPed", "Pedido", "NumeroPedido"]);
+  const purchaseOrder = lerPedidosDoXml(xml);
   const items = readScopes(xml, "det").map(scope => ({
     description: readTag(scope, ["xProd", "xServ", "Discriminacao", "DescricaoServico"]) || "Item não identificado",
     quantity: parseQuantity(readTag(scope, ["qCom", "qTrib", "qServ", "Quantidade"])),

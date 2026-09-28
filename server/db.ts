@@ -2411,6 +2411,44 @@ export async function registrarNoHistorico(input: { appointmentId: number; statu
  * Fica no histórico da nota com quem marcou: prioridade que aparece sem dono é
  * prioridade que ninguém revisa.
  */
+/**
+ * Corrige o pedido de compra de uma nota que entrou sem ele.
+ *
+ * O pedido é obrigatório quando o fornecedor envia pelo portal, mas há dois
+ * caminhos em que ele pode faltar: o recebimento sem agendamento, que lê o
+ * pedido do XML — e nem todo XML o traz —, e o acervo importado, que herda o
+ * que a planilha tinha. A nota ficava com "Não informado" para sempre: sem
+ * pedido não há contra o que conferir, e ninguém tinha como consertar sem
+ * mexer no banco.
+ *
+ * A troca fica no histórico com o valor anterior. Pedido é o que liga a nota à
+ * compra; trocar isso em silêncio seria apagar o rastro de uma conferência.
+ */
+export async function definirPedidoDaNota(input: {
+  appointmentId: number;
+  status: AppointmentStatus;
+  purchaseOrder: string;
+  anterior: string | null;
+  handledBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const agora = new Date();
+  await db.transaction(async tx => {
+    await tx.update(appointments).set({ purchaseOrder: input.purchaseOrder, updatedAt: agora }).where(eq(appointments.id, input.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({
+      appointmentId: input.appointmentId,
+      previousStatus: input.status,
+      nextStatus: input.status,
+      handledBy: input.handledBy,
+      eventNote: input.anterior
+        ? `Pedido de compra alterado de ${input.anterior} para ${input.purchaseOrder}.`
+        : `Pedido de compra informado: ${input.purchaseOrder}.`,
+    });
+  });
+  return getAppointmentById(input.appointmentId);
+}
+
 export async function marcarUrgencia(input: { appointmentId: number; status: AppointmentStatus; urgente: boolean; motivo: string | null; handledBy: number }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
