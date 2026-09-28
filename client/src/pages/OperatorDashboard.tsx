@@ -425,7 +425,7 @@ function FilterField({ label, value, onChange, placeholder }: { label: string; v
 function AppointmentRow({ item, activeStatus, canConfirm, onDetails, onHistory, onChat, onPreNote, onSchedule, onUpdate, onRescue, onFinalize, onRejeitar, ehAdmin, onVoltarParaPendente, mensagens, sugerida }: { item: Appointment; activeStatus: StatusTab; canConfirm: boolean; onFinalize: () => void; onDetails: () => void; onHistory: () => void; onChat: () => void; onPreNote: () => void; onSchedule: () => void; onUpdate: (status: Exclude<PortalStatus, "pending">, reason?: string) => void; onRescue: () => void; onRejeitar: () => void; mensagens?: ContagemDeMensagens; sugerida?: { quando: Date | string; doPlanejamento: boolean } | null; ehAdmin: boolean; onVoltarParaPendente: () => void }) { const displaySupplier = item.invoiceSupplierName || item.supplierName || "Fornecedor"; const showReceivedMoment = item.status === "received" && Boolean(item.receivedAt); const hasConfirmedSchedule = hasConfirmedAppointmentMoment(item.status as PortalStatus); const displayedMoment = getAppointmentMomentForDisplay({ status: item.status as PortalStatus, scheduledFor: item.scheduledFor, receivedAt: item.receivedAt }); const destinatario = rotuloDoDestinatario(item.recipientCnpj); const pedidos = pedidosDaNota(item.purchaseOrder); // Agendada com a hora já vencida e ninguém recebeu: o caminhão não chegou.
   // A linha pisca junto com a aba, para o atraso ser visto por quem está
   // olhando a lista e não o contador.
-  const atrasada = item.status === "scheduled" && new Date(item.scheduledFor).getTime() < Date.now(); return <tr title={atrasada ? "Horário combinado já passou e a nota não foi recebida" : undefined} className={`border-t border-line align-middle text-sm ${atrasada ? "rvd-piscando-fundo" : ""}`}><td className="px-3 py-3"><span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusStyle[item.status as PortalStatus]}`}>{statusCopy[item.status as PortalStatus]}</span><UrgenciaBadge purchaseOrder={item.purchaseOrder} marcadaEm={item.urgenteMarcadoEm} motivo={item.urgenteMotivo} className="mt-1.5 flex w-fit" /></td><td className="px-3 py-3"><p title={displaySupplier} className="line-clamp-2 max-w-40 text-[13px] font-bold leading-4 text-rvd-plum">{displaySupplier}</p><p title={item.supplierEmail ?? undefined} className="mt-0.5 max-w-40 truncate text-[11px] text-ink-soft">{item.supplierEmail}</p>{/* A nota de serviço não tem carga nem XML, e quem confere a linha precisa saber disso antes de abrir: a etiqueta diz de que natureza é a nota ali mesmo, junto de quem a emitiu. */}{item.source === "servico" && <span className="mt-1.5 inline-flex rounded bg-rvd-plum-pale px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">Serviço</span>}</td><td className="px-3 py-3"><div title={destinatario.tooltip} className={destinatario.unidade ? "font-display text-[13px] font-extrabold leading-4 text-ink" : ""}><p className={destinatario.unidade ? "" : "font-bold text-rvd-plum"}>{destinatario.principal}</p><p className={destinatario.unidade ? "" : "mt-1 text-xs text-ink-soft"}>{destinatario.secundaria}</p></div></td><td className="px-3 py-3"><p className="font-display text-base font-extrabold leading-5 text-ink">{item.invoiceNumber || "—"}</p><p className="text-[10px] text-ink-soft">{sourceCopy[item.source]}</p></td><td className="px-3 py-3">{pedidos.length ? <div className="flex flex-col items-start gap-1">{pedidos.map(pedido => <span key={pedido} className={`rounded px-2 py-0.5 text-[11px] font-bold ${pedidoEhUrgente(pedido) ? "bg-state-stop-bg text-state-stop" : "bg-rvd-plum-pale text-rvd-plum"}`}>{pedido}</span>)}</div> : <span className="text-xs text-ink-soft">—</span>}</td><td className="px-3 py-3">{activeStatus === "rejected" ? <p className="max-w-36 text-[12px] font-semibold leading-4 text-red-700">{item.rejectionReason || "Motivo não informado"}</p> : hasConfirmedSchedule ? <><p className="text-[13px] font-bold text-rvd-plum">{new Date(displayedMoment).toLocaleDateString("pt-BR")}</p><p className="text-[11px] text-ink-soft">{new Date(displayedMoment).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>{showReceivedMoment && <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">Recebido em</p>}</> : sugerida ? <><p className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${sugerida.doPlanejamento ? "bg-rvd-plum text-white" : "bg-rvd-blue-pale text-rvd-plum"}`} title={sugerida.doPlanejamento ? "Data proposta pelo planejamento — tem prioridade sobre a do fornecedor" : "Data proposta pelo fornecedor"}><CalendarClock className="size-3" />{sugerida.doPlanejamento ? "Planejamento" : "Sugestão"}</p><p className="mt-1 text-[13px] font-bold text-rvd-plum">{new Date(sugerida.quando).toLocaleDateString("pt-BR")}</p><p className="text-[11px] text-ink-soft">{new Date(sugerida.quando).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p></>: <p className="max-w-32 text-[12px] font-semibold leading-4 text-rvd-plum">Aguardando confirmação</p>}</td><td className="px-3 py-3"><div className="flex items-center justify-end gap-2 text-rvd-plum"><ActionIcon label="Abrir detalhes da nota" icon={FileText} onClick={onDetails} /><AnexoDaNota url={item.xmlUrl} nome={item.xmlFileName} ehServico={item.source === "servico"} /><DanfeDaNota appointmentId={item.id} url={item.xmlUrl} numero={item.invoiceNumber} ehServico={item.source === "servico"} /><ActionIcon label="Histórico de datas" icon={CalendarClock} onClick={onHistory} />{item.status === "scheduled" && <ActionIcon label={canConfirm ? "Reagendar" : "Sugerir outra data"} icon={CalendarDays} onClick={onSchedule} />}<ActionIcon label={rotuloDaConversa(mensagens)} icon={MessageSquare} onClick={onChat} contagem={mensagens?.total ?? 0} novas={mensagens?.naoLidas ?? 0} /><ActionIcon label={canConfirm ? (item.preNoteConfirmedAt ? "Pré-nota confirmada — clique para desfazer" : "Confirmar pré-nota") : (item.preNoteConfirmedAt ? "Pré-nota confirmada" : "Pré-nota pendente")} icon={ClipboardCheck} onClick={onPreNote} confirmed={Boolean(item.preNoteConfirmedAt)} somenteLeitura={!canConfirm} />{ehAdmin && (item.status === "received" || item.status === "completed") && <ActionIcon label="Voltar esta nota para pendente" icon={Undo2} onClick={onVoltarParaPendente} />}<PrimaryAction status={item.status as PortalStatus} canConfirm={canConfirm} onSchedule={onSchedule} onUpdate={onUpdate} onRescue={onRescue} onFinalize={onFinalize} onRejeitar={onRejeitar} /></div></td></tr>; }
+  const atrasada = item.status === "scheduled" && new Date(item.scheduledFor).getTime() < Date.now(); return <tr title={atrasada ? "Horário combinado já passou e a nota não foi recebida" : undefined} className={`border-t border-line align-middle text-sm ${atrasada ? "rvd-piscando-fundo" : ""}`}><td className="px-3 py-3"><span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusStyle[item.status as PortalStatus]}`}>{statusCopy[item.status as PortalStatus]}</span><UrgenciaBadge purchaseOrder={item.purchaseOrder} marcadaEm={item.urgenteMarcadoEm} motivo={item.urgenteMotivo} className="mt-1.5 flex w-fit" /></td><td className="px-3 py-3"><p title={displaySupplier} className="line-clamp-2 max-w-40 text-[13px] font-bold leading-4 text-rvd-plum">{displaySupplier}</p><p title={item.supplierEmail ?? undefined} className="mt-0.5 max-w-40 truncate text-[11px] text-ink-soft">{item.supplierEmail}</p>{/* A nota de serviço não tem carga nem XML, e quem confere a linha precisa saber disso antes de abrir: a etiqueta diz de que natureza é a nota ali mesmo, junto de quem a emitiu. */}{item.source === "servico" && <span className="mt-1.5 inline-flex rounded bg-rvd-plum-pale px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">Serviço</span>}</td><td className="px-3 py-3"><div title={destinatario.tooltip} className={destinatario.unidade ? "font-display text-[13px] font-extrabold leading-4 text-ink" : ""}><p className={destinatario.unidade ? "" : "font-bold text-rvd-plum"}>{destinatario.principal}</p><p className={destinatario.unidade ? "" : "mt-1 text-xs text-ink-soft"}>{destinatario.secundaria}</p></div></td><td className="px-3 py-3"><p className="font-display text-base font-extrabold leading-5 text-ink">{item.invoiceNumber || "—"}</p><p className="text-[10px] text-ink-soft">{sourceCopy[item.source]}</p></td><td className="px-3 py-3">{pedidos.length ? <div className="flex flex-col items-start gap-1">{pedidos.map(pedido => <span key={pedido} className={`rounded px-2 py-0.5 text-[11px] font-bold ${pedidoEhUrgente(pedido) ? "bg-state-stop-bg text-state-stop" : "bg-rvd-plum-pale text-rvd-plum"}`}>{pedido}</span>)}</div> : <span className="text-xs text-ink-soft">—</span>}</td><td className="px-3 py-3">{activeStatus === "rejected" ? <p className="max-w-36 text-[12px] font-semibold leading-4 text-red-700">{item.rejectionReason || "Motivo não informado"}</p> : hasConfirmedSchedule ? <><p className="text-[13px] font-bold text-rvd-plum">{new Date(displayedMoment).toLocaleDateString("pt-BR")}</p><p className="text-[11px] text-ink-soft">{new Date(displayedMoment).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>{showReceivedMoment && <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">Recebido em</p>}</> : sugerida ? <><p className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${sugerida.doPlanejamento ? "bg-rvd-plum text-white" : "bg-rvd-blue-pale text-rvd-plum"}`} title={sugerida.doPlanejamento ? "Data proposta pelo planejamento — tem prioridade sobre a do fornecedor" : "Data proposta pelo fornecedor"}><CalendarClock className="size-3" />{sugerida.doPlanejamento ? "Planejamento" : "Sugestão"}</p><p className="mt-1 text-[13px] font-bold text-rvd-plum">{new Date(sugerida.quando).toLocaleDateString("pt-BR")}</p><p className="text-[11px] text-ink-soft">{new Date(sugerida.quando).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p></>: <p className="max-w-32 text-[12px] font-semibold leading-4 text-rvd-plum">Aguardando confirmação</p>}</td><td className="px-3 py-3"><div className="flex items-center justify-end gap-2 text-rvd-plum"><ActionIcon label="Abrir detalhes da nota" icon={FileText} onClick={onDetails} /><AnexoDaNota url={item.xmlUrl} nome={item.xmlFileName} ehServico={item.source === "servico"} /><EspelhoDaNota appointmentId={item.id} url={item.xmlUrl} numero={item.invoiceNumber} ehServico={item.source === "servico"} scheduledFor={hasConfirmedSchedule ? item.scheduledFor : null} /><ActionIcon label="Histórico de datas" icon={CalendarClock} onClick={onHistory} />{item.status === "scheduled" && <ActionIcon label={canConfirm ? "Reagendar" : "Sugerir outra data"} icon={CalendarDays} onClick={onSchedule} />}<ActionIcon label={rotuloDaConversa(mensagens)} icon={MessageSquare} onClick={onChat} contagem={mensagens?.total ?? 0} novas={mensagens?.naoLidas ?? 0} /><ActionIcon label={canConfirm ? (item.preNoteConfirmedAt ? "Pré-nota confirmada — clique para desfazer" : "Confirmar pré-nota") : (item.preNoteConfirmedAt ? "Pré-nota confirmada" : "Pré-nota pendente")} icon={ClipboardCheck} onClick={onPreNote} confirmed={Boolean(item.preNoteConfirmedAt)} somenteLeitura={!canConfirm} />{ehAdmin && (item.status === "received" || item.status === "completed") && <ActionIcon label="Voltar esta nota para pendente" icon={Undo2} onClick={onVoltarParaPendente} />}<PrimaryAction status={item.status as PortalStatus} canConfirm={canConfirm} onSchedule={onSchedule} onUpdate={onUpdate} onRescue={onRescue} onFinalize={onFinalize} onRejeitar={onRejeitar} /></div></td></tr>; }
 /**
  * O arquivo que veio com a nota, a um clique da linha.
  *
@@ -446,21 +446,25 @@ function AnexoDaNota({ url, nome, ehServico }: { url: string | null; nome: strin
 }
 
 /**
- * O DANFE da nota, desenhado na hora a partir do XML que ela trouxe.
+ * A nota desenhada numa folha, a partir do XML que ela trouxe.
  *
  * O clipe ao lado entrega o XML, que é o arquivo certo para o sistema e o
  * errado para uma pessoa: ninguém confere carga lendo etiqueta em XML. Até
- * aqui, quem precisava do DANFE dependia de o fornecedor ter mandado por
+ * aqui, quem precisava do documento dependia de o fornecedor ter mandado por
  * e-mail — e de alguém achar esse e-mail.
  *
+ * Sai o espelho, e não o DANFE no layout da SEFAZ. O DANFE reserva o quadro de
+ * cima para o emitente, que é o fornecedor: com a marca da RVD ali, a folha
+ * dava a entender que a nota tinha saído daqui. O espelho é assumidamente um
+ * documento nosso de conferência, e aí a marca está no lugar certo.
+ *
  * Nada sai daqui para fora: o XML já está guardado, e o desenho acontece no
- * próprio navegador. Nota de serviço não entra, porque NFS-e não tem DANFE —
- * cada prefeitura tem o layout dela.
+ * próprio navegador. Nota de serviço não entra — ela não tem XML para ler.
  *
  * As bibliotecas do PDF e do código de barras chegam só neste clique. São
  * quase 800 KB que não fazem falta para quem nunca precisou de um DANFE.
  */
-function DanfeDaNota({ appointmentId, url, numero, ehServico }: { appointmentId: number; url: string | null; numero: string | null; ehServico: boolean }) {
+function EspelhoDaNota({ appointmentId, url, numero, ehServico, scheduledFor }: { appointmentId: number; url: string | null; numero: string | null; ehServico: boolean; scheduledFor: Date | string | null }) {
   const [gerando, setGerando] = useState(false);
   const utils = trpc.useUtils();
   if (!url || ehServico) return null;
@@ -471,24 +475,41 @@ function DanfeDaNota({ appointmentId, url, numero, ehServico }: { appointmentId:
       // O XML vem pelo servidor, e não do bucket: o link do anexo aponta para
       // outro domínio, e o navegador deixa baixar de lá, mas não deixa ler.
       const { xml } = await utils.appointments.xmlDaNota.fetch({ appointmentId });
-      const [{ lerNotaCompleta }, { danfeFileName, gerarDanfe }] = await Promise.all([
+      const [{ lerNotaCompleta }, { espelhoDaNotaFileName, gerarEspelhoDaNota }] = await Promise.all([
         import("@shared/notaCompleta"),
-        import("@/lib/danfe"),
+        import("@/lib/espelhoDaNota"),
       ]);
       const nota = lerNotaCompleta(xml);
       // Sem chave e sem número não há o que desenhar: seria uma folha com o
-      // formato do DANFE e nenhum dado dentro, que é pior que nenhuma folha.
-      if (!nota.chave && !nota.numero) throw new Error("O XML desta nota não tem os dados do DANFE.");
-      const doc = await gerarDanfe(nota);
-      doc.save(danfeFileName(nota.numero ?? numero));
+      // formato certo e nenhum dado dentro, que é pior que nenhuma folha.
+      if (!nota.chave && !nota.numero) throw new Error("O XML desta nota não tem os dados da nota.");
+      const doc = await gerarEspelhoDaNota({
+        invoiceNumber: nota.numero,
+        accessKey: nota.chave,
+        issuedAt: nota.emitidaEm,
+        supplierName: nota.emitente.nome,
+        supplierCnpj: nota.emitente.documento,
+        recipientCnpj: nota.destinatario.documento,
+        purchaseOrder: nota.itens.find(item => item.pedido)?.pedido ?? null,
+        totalCents: nota.totais.notaCents,
+        volumeCount: nota.transporte.quantidade,
+        items: nota.itens.map(item => ({
+          description: item.descricao,
+          quantity: item.quantidade,
+          unitPriceCents: item.valorUnitarioCents,
+          totalCents: item.valorTotalCents,
+        })),
+        scheduledFor,
+      });
+      doc.save(espelhoDaNotaFileName(nota.numero ?? numero));
     } catch (erro) {
-      toast.error(erro instanceof Error ? erro.message : "Não consegui gerar o DANFE desta nota.");
+      toast.error(erro instanceof Error ? erro.message : "Não consegui gerar a folha desta nota.");
     } finally {
       setGerando(false);
     }
   };
 
-  return <ActionIcon label={gerando ? "Gerando o DANFE..." : "Gerar o DANFE desta nota"} icon={ScrollText} onClick={() => void baixar()} />;
+  return <ActionIcon label={gerando ? "Gerando a folha..." : "Ver a nota numa folha (PDF)"} icon={ScrollText} onClick={() => void baixar()} />;
 }
 
 /** As colunas que a lista sabe ordenar. O servidor recusa qualquer outra. */

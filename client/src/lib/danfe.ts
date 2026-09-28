@@ -1,6 +1,6 @@
 import type { jsPDF } from "jspdf";
 import type { NotaCompleta } from "@shared/notaCompleta";
-import { carregarFerramentasDoPdf, getRvdLogoDataUrl } from "./receiptCertificatePdf";
+import { carregarFerramentasDoPdf } from "./receiptCertificatePdf";
 
 /**
  * O DANFE, no desenho que a SEFAZ especifica.
@@ -212,7 +212,7 @@ function cabecalhoDosItens(doc: jsPDF, y: number): number {
   return y + 5;
 }
 
-export async function gerarDanfe(nota: NotaCompleta, opcoes: { logo?: boolean } = {}): Promise<jsPDF> {
+export async function gerarDanfe(nota: NotaCompleta): Promise<jsPDF> {
   const { jsPDF } = await carregarFerramentasDoPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
   doc.setTextColor(...TINTA);
@@ -261,16 +261,13 @@ export async function gerarDanfe(nota: NotaCompleta, opcoes: { logo?: boolean } 
     const topo = y;
     doc.setLineWidth(0.2);
     doc.rect(MARGEM, topo, 74, 32);
-    if (opcoes.logo !== false) {
-      try {
-        doc.addImage(await getRvdLogoDataUrl(), "PNG", MARGEM + 2, topo + 2, 16, 13);
-      } catch {
-        // Sem logo o quadro segue; o nome do emitente é o que identifica.
-      }
-    }
+    // Este quadro é do emitente, que é o fornecedor — e não a RVD. A marca da
+    // RVD já esteve aqui e dava a entender que a nota tinha saído daqui, numa
+    // folha que se parece com documento fiscal. Quem emitiu assina com o
+    // próprio nome, que é o que o DANFE de verdade mostra.
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.4);
-    doc.text(doc.splitTextToSize(texto(nota.emitente.nome), 50) as string[], MARGEM + 21, topo + 5);
+    doc.text(doc.splitTextToSize(texto(nota.emitente.nome), 68) as string[], MARGEM + 3, topo + 6);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(5.8);
     const emit = nota.emitente.endereco;
@@ -281,8 +278,8 @@ export async function gerarDanfe(nota: NotaCompleta, opcoes: { logo?: boolean } 
         [texto(emit.municipio), texto(emit.uf)].filter(Boolean).join(" / "),
         emit.telefone ? `Fone: ${texto(emit.telefone)}` : "",
       ].filter(Boolean),
-      MARGEM + 21,
-      topo + 12,
+      MARGEM + 3,
+      topo + 14,
     );
 
     doc.rect(MARGEM + 74, topo, 46, 32);
