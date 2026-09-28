@@ -114,6 +114,48 @@ Antes, uma falha dessas encerrava o processo inteiro.
 parada antes que o MySQL a derrube. Era a causa dos erros que apareciam depois
 de horas sem movimento e sumiam quando alguém reiniciava o serviço.
 
+## 7. Backup e restauração
+
+**A cópia acontece sozinha.** Todo dia, às três da manhã de Brasília, o próprio
+servidor lê o banco inteiro e grava um arquivo `backups/rvd-saude-AAAA-MM-DD-HHMM.json.gz`
+no bucket R2. O destino é o bucket, e não o Railway, de propósito: cópia
+guardada ao lado do original não protege contra o caso que mais importa, que é
+perder o provedor. O resultado do último backup aparece no painel do
+administrador, e o botão ao lado gera um na hora.
+
+**A volta tem script e já foi testada.** O caminho de volta é
+`scripts/restaurar-backup.mjs`, e ele foi rodado de ponta a ponta contra um
+banco vazio: backup gerado no formato real, migrações aplicadas, restauração
+confirmada — 62 linhas em 13 tabelas, conferidas de volta no banco uma a uma,
+com acentuação intacta. Backup que nunca foi restaurado é esperança, não cópia.
+
+Para restaurar, abra **Console** no serviço do app no Railway (não no banco) —
+é de lá que o banco é alcançável pela rede interna e as credenciais do bucket já
+existem — e rode:
+
+```bash
+# 1. Que backups existem?
+node scripts/restaurar-backup.mjs --listar
+
+# 2. O que este arquivo tem dentro? (não grava nada)
+node scripts/restaurar-backup.mjs backups/rvd-saude-2026-09-28-0300.json.gz
+
+# 3. Restaurar de verdade
+node scripts/restaurar-backup.mjs backups/rvd-saude-2026-09-28-0300.json.gz --confirmar
+```
+
+O passo 2 não é opcional na prática: ele imprime a data do backup e quantas
+linhas tem cada tabela, que é como se descobre que o arquivo escolhido é o
+errado **antes** de apagar o certo. A restauração **apaga** o conteúdo atual das
+tabelas listadas e põe o do arquivo no lugar — por isso gravar exige o
+`--confirmar` escrito à mão. No fim o script conta as linhas de volta no banco e
+falha se as contagens não baterem: "o insert não deu erro" não é o mesmo que "os
+dados estão lá".
+
+O arquivo também pode ser um caminho local, o que serve para restaurar num banco
+de teste antes de mexer no de verdade — que é o ensaio que vale a pena fazer uma
+vez por ano, com o sistema no ar e ninguém apressado.
+
 ## O que muda em relação à versão do Manus
 
 - **Login e cadastro**: já funcionavam com e-mail e senha próprios do app

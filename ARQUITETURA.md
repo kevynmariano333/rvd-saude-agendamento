@@ -225,12 +225,11 @@ dashboard.
 
 Em ordem de risco:
 
-1. **Não há backup automático do banco.** É o dado que não existe em nenhum
-   outro lugar.
-2. **Railway é ponto único**: aplicação e banco caem juntos.
-3. **Recuperação de senha está desligada na interface** — o fluxo está pronto e
-   testado, mas o Resend só entrega para o dono da conta enquanto o domínio
-   `rvdsaude.com.br` não for verificado (registros SPF e DKIM no DNS).
-4. **Não há monitoramento**: uma queda é descoberta por quem tenta usar.
-5. As telas internas não têm teste de ponta a ponta; a cobertura está nas regras
+1. **Railway é ponto único**: aplicação e banco caem juntos. O backup diário vai
+   para o R2, que é outro provedor, justamente por isso — a volta está em
+   `scripts/restaurar-backup.mjs` e o procedimento no `DEPLOY.md`.
+2. **Ninguém é avisado quando o backup falha.** O painel do administrador mostra
+   o último resultado, mas mostrar depende de alguém olhar.
+3. **Não há monitoramento**: uma queda é descoberta por quem tenta usar.
+4. As telas internas não têm teste de ponta a ponta; a cobertura está nas regras
    de negócio e nos endpoints.
