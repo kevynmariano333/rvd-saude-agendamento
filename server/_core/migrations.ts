@@ -270,8 +270,47 @@ export async function aplicarMigracoesPendentes(): Promise<ResultadoDaMigracao> 
  * lê colunas inexistentes. Em desenvolvimento, só avisa — quem está com o banco
  * local desatualizado não precisa do processo morrendo na cara.
  */
-export async function migrarNaSubida(): Promise<void> {
-  const resultado = await aplicarMigracoesPendentes();
+/**
+ * Erros que dizem "o banco ainda não está aí", e não "a migração está errada".
+ *
+ * São coisas diferentes e pedem respostas opostas: um arquivo .sql com defeito
+ * precisa derrubar a subida, porque subir publicaria telas que quebram. Já o
+ * banco reiniciando — a hospedagem aplicando um patch, a rede demorando —
+ * passa sozinho em alguns segundos, e desistir na primeira tentativa marca o
+ * deploy como falho por nada.
+ */
+const BANCO_INDISPONIVEL = new Set([
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "ENOTFOUND",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "ECONNRESET",
+  "EPIPE",
+  "PROTOCOL_CONNECTION_LOST",
+  "ER_CON_COUNT_ERROR",
+  "ER_SERVER_SHUTDOWN",
+]);
+
+export function bancoAindaSubindo(erro: unknown): boolean {
+  const codigo = (erro as { code?: string } | null)?.code;
+  return typeof codigo === "string" && BANCO_INDISPONIVEL.has(codigo);
+}
+
+/** Quanto esperar entre uma tentativa e a seguinte, em segundos. */
+export const ESPERAS_DA_SUBIDA = [2, 4, 8, 15, 30];
+
+export async function migrarNaSubida(dormir: (ms: number) => Promise<void> = ms => new Promise(pronto => setTimeout(pronto, ms))): Promise<void> {
+  let resultado = await aplicarMigracoesPendentes();
+
+  // O banco pode estar reiniciando bem na hora do deploy. Espera e tenta de
+  // novo: são até um minuto de paciência contra um deploy marcado como falho.
+  for (const espera of ESPERAS_DA_SUBIDA) {
+    if (resultado.estado !== "falhou" || !bancoAindaSubindo(resultado.erro)) break;
+    console.warn(`[Migrações] o banco não respondeu (${(resultado.erro as { code?: string }).code}); tentando de novo em ${espera}s.`);
+    await dormir(espera * 1000);
+    resultado = await aplicarMigracoesPendentes();
+  }
 
   if (resultado.estado === "sem-banco") {
     console.warn("[Migrações] DATABASE_URL não definida — o banco não foi tocado.");
