@@ -228,8 +228,10 @@ Em ordem de risco:
 1. **Railway é ponto único**: aplicação e banco caem juntos. O backup diário vai
    para o R2, que é outro provedor, justamente por isso — a volta está em
    `scripts/restaurar-backup.mjs` e o procedimento no `DEPLOY.md`.
-2. **Não há monitoramento da queda**: o backup parado avisa por e-mail
-   (`server/avisoDeBackup.ts`), mas o portal fora do ar continua sendo
-   descoberto por quem tenta usar.
+2. **O aviso de queda depende do GitHub**: quem pergunta se o portal está de pé
+   é um workflow agendado (`.github/workflows/monitor-do-portal.yml`), que roda
+   de quinze em quinze minutos e avisa por e-mail. É de fora da Railway, que é
+   o que importa, mas não é imediato — um monitor externo com notificação no
+   celular ainda é mais rápido.
 3. As telas internas não têm teste de ponta a ponta; a cobertura está nas regras
    de negócio e nos endpoints.

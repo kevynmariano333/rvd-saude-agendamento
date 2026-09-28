@@ -1,0 +1,67 @@
+# Vigia o portal de fora, que é o único lugar de onde dá para ver que ele caiu.
+#
+# Todo o resto que avisa alguma coisa mora dentro do próprio portal: o backup,
+# o log, o quadro do sistema. Nada disso fala quando o problema é o portal não
+# estar no ar — servidor caído não manda e-mail sobre estar caído. Então a
+# pergunta é feita daqui, de uma máquina do GitHub, que não tem nada a ver com
+# a Railway e continua de pé quando a Railway não está.
+#
+# A pergunta é `/api/saude`, e não a página inicial: essa rota só responde 200
+# quando o banco também responde. Portal de pé com banco fora serve erro em
+# toda tela, e uma página inicial que carrega esconderia exatamente isso.
+#
+# Quando falha, o GitHub manda e-mail para quem é dono do repositório. É o
+# aviso — não precisa configurar mais nada.
+
+name: Monitor do portal
+
+on:
+  schedule:
+    # De quinze em quinze minutos. O GitHub atrasa agendamento quando está
+    # cheio, então na prática é "mais ou menos de quinze em quinze" — para
+    # saber que o portal caiu, serve; para cronometrar queda, não.
+    - cron: "*/15 * * * *"
+  # Para conferir na hora, sem esperar o relógio.
+  workflow_dispatch:
+
+jobs:
+  esta-no-ar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Perguntar ao portal se ele está de pé
+        env:
+          # Variável do repositório (Settings → Secrets and variables → Actions
+          # → Variables), por exemplo https://agendamento.rvdsaude.com.br
+          PORTAL: ${{ vars.URL_DO_PORTAL }}
+        run: |
+          set -u
+          if [ -z "${PORTAL}" ]; then
+            echo "Falta a variável URL_DO_PORTAL no repositório — sem endereço, não há o que vigiar."
+            exit 1
+          fi
+
+          # Três tentativas antes de acusar queda. Um deploy reinicia o
+          # servidor por alguns segundos, e avisar a cada publicação treinaria
+          # quem recebe a ignorar o aviso.
+          for tentativa in 1 2 3; do
+            # A resposta anterior é apagada antes de cada tentativa: quando o
+            # portal não conecta, o curl não escreve nada no arquivo, e o log
+            # mostraria a resposta boa da tentativa passada como se fosse desta.
+            : > /tmp/resposta.txt
+            codigo=$(curl -s -o /tmp/resposta.txt -w "%{http_code}" --max-time 25 "${PORTAL}/api/saude") || true
+            codigo=${codigo:-000}
+            if [ "${codigo}" = "200" ]; then
+              echo "Tentativa ${tentativa}: portal no ar (HTTP 200)."
+              cat /tmp/resposta.txt; echo
+              exit 0
+            fi
+            echo "Tentativa ${tentativa}: HTTP ${codigo}. Resposta: $(cat /tmp/resposta.txt)"
+            if [ "${tentativa}" -lt 3 ]; then sleep 30; fi
+          done
+
+          echo ""
+          echo "O portal não respondeu em três tentativas seguidas."
+          echo "HTTP 000 = nem conectou (fora do ar, DNS ou certificado)."
+          echo "HTTP 503 = o servidor está de pé, mas o banco não responde."
+          echo "Onde olhar: painel da Railway, aba Deployments do serviço do app."
+          exit 1

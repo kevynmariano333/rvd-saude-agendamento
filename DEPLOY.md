@@ -94,9 +94,32 @@ ou mexer.
   pessoas para uma versão nova: se a versão nova não conseguir falar com o
   banco, o deploy não entra no ar e a versão que estava funcionando continua.
 
-Se quiser um aviso no celular quando o portal cair, aponte um monitor gratuito
-(UptimeRobot, Better Stack) para `https://SEU-ENDERECO/api/saude` a cada 5
-minutos. É o jeito mais barato de descobrir uma queda antes dos fornecedores.
+**Vigia de fora** — quem avisa que o portal caiu não pode morar dentro dele:
+servidor fora do ar não manda e-mail sobre estar fora do ar. Por isso a pergunta
+é feita de fora, e há duas formas (dá para usar as duas):
+
+*No GitHub, já pronto no repositório.* O workflow
+`.github/workflows/monitor-do-portal.yml` pergunta `/api/saude` de quinze em
+quinze minutos, de uma máquina do GitHub. Três tentativas sem resposta e ele
+falha — e o GitHub manda e-mail para o dono do repositório. Falta um passo, uma
+vez só: **Settings → Secrets and variables → Actions → Variables → New
+repository variable**, nome `URL_DO_PORTAL`, valor o endereço do portal (por
+exemplo `https://agendamento.rvdsaude.com.br`, sem barra no fim). Sem essa
+variável o monitor falha de propósito, dizendo que falta o endereço. Dá para
+testar na hora em **Actions → Monitor do portal → Run workflow**. Dois detalhes:
+o GitHub só roda agendamento a partir da branch principal, e ele desliga
+agendamentos em repositório parado há 60 dias — se ninguém publicar nada por
+dois meses, ele avisa por e-mail e basta reativar.
+
+*Num monitor externo, se quiser aviso no celular.* Um serviço gratuito
+(UptimeRobot, Better Stack) apontado para `https://SEU-ENDERECO/api/saude` a
+cada 5 minutos avisa mais rápido que o GitHub e manda notificação no telefone,
+não só e-mail. Leva uns três minutos para configurar: criar conta, **Add New
+Monitor** → tipo HTTP(s) → colar o endereço → intervalo de 5 minutos.
+
+Nos dois casos a pergunta é `/api/saude`, e não a página inicial: essa rota só
+responde 200 quando o banco também responde. Portal de pé com banco fora serve
+erro em toda tela, e uma página inicial que carrega esconderia exatamente isso.
 
 **Reinício automático** — `restartPolicyType: ON_FAILURE`. Se o processo morrer,
 o Railway sobe outro na hora.
