@@ -79,7 +79,7 @@ function CodigoSapDaLinha({ sapCode }: { sapCode: string | null }) {
  * testes seguem de pé, e os pedidos continuam sendo gravados, que é o que
  * permite conferir com calma. Voltar é trocar este `false` por `true`.
  */
-const MOSTRAR_CODIGO_SAP: boolean = false;
+const MOSTRAR_CODIGO_SAP: boolean = true;
 
 /**
  * Marcar a nota como prioridade, e tirar a marca.
