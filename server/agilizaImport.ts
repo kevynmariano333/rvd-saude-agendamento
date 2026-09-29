@@ -23,7 +23,7 @@
  * continua vazio nas notas importadas, porque esse número o acervo não tem.
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { getDb } from "./db";
 import { z } from "zod";
 import {
@@ -798,15 +798,20 @@ async function garantirFornecedor(db: Banco, fornecedor: PlanoFornecedor) {
 type Transacao = Parameters<Parameters<Banco["transaction"]>[0]>[0];
 
 /**
- * A nota deste fornecedor que já está no banco, se houver.
+ * A nota desta empresa que já está no banco, se houver.
  *
- * Antes a pergunta era só "já existe?", e a resposta "sim" mandava pular a
- * linha. Só que o acervo continua andando do outro lado: uma nota importada
- * como concluída volta para o backlog lá, é reagendada, e aqui ficava parada
- * no estado do dia da primeira importação. Trazendo o que ela tem hoje, dá
- * para comparar com o relatório e acertar o que mudou.
+ * A procura é por CNPJ e número da nota, e não pelo login que a enviou. Uma
+ * empresa costuma ter mais de um login no portal — o vendedor, o faturamento,
+ * a transportadora —, e é por isso que existe a tela de Empresas. Procurando
+ * pelo login, a nota enviada por um deles ficava invisível para a importação,
+ * que então criava uma segunda nota com o mesmo número: duas linhas da mesma
+ * entrega na lista, e o relatório contando duas vezes.
+ *
+ * CNPJ e número é a mesma chave que o portal usa para recusar nota repetida no
+ * envio. O CNPJ é procurado dos dois lados: no cadastro de quem enviou e no
+ * emitente lido do XML, que nem sempre é a mesma empresa.
  */
-async function notaNoBanco(executor: Banco | Transacao, supplierId: number, invoiceNumber: string) {
+async function notaNoBanco(executor: Banco | Transacao, cnpj: string, invoiceNumber: string) {
   const encontrada = await executor
     .select({
       id: appointments.id,
@@ -815,7 +820,13 @@ async function notaNoBanco(executor: Banco | Transacao, supplierId: number, invo
       source: appointments.source,
     })
     .from(appointments)
-    .where(and(eq(appointments.supplierId, supplierId), eq(appointments.invoiceNumber, invoiceNumber)))
+    .innerJoin(users, eq(users.id, appointments.supplierId))
+    .where(
+      and(
+        eq(appointments.invoiceNumber, invoiceNumber),
+        or(eq(users.companyCnpj, cnpj), eq(appointments.invoiceSupplierCnpj, cnpj)),
+      ),
+    )
     .limit(1);
   return encontrada[0] ?? null;
 }
@@ -1127,9 +1138,7 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
     for (const lotePlanos of emLotes(planos, lote)) {
       if (!confirmar) {
         for (const plano of lotePlanos) {
-          const supplierId = idPorCnpj.get(plano.cnpj);
-          // Sem o fornecedor no banco não existe nota dele para já estar lá.
-          const existente = supplierId ? await notaNoBanco(db, supplierId, plano.dados.numeroNota) : null;
+          const existente = await notaNoBanco(db, plano.cnpj, plano.dados.numeroNota);
           if (existente) contagem.jaExistentes += 1;
           else contagem.importadas += 1;
         }
@@ -1148,7 +1157,7 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
           const ultimoEvento = plano.eventos[plano.eventos.length - 1];
           const episodio = plano.episodio;
           const agendadaPara = plano.dados.dataAgendamento ?? plano.dados.dataCriacao;
-          const existente = await notaNoBanco(tx, supplierId, plano.dados.numeroNota);
+          const existente = await notaNoBanco(tx, plano.cnpj, plano.dados.numeroNota);
           if (existente) {
             // Já está aqui: conta e segue. O arquivo não reescreve o que a
             // operação fez depois que ele foi gerado.
