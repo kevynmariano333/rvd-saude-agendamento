@@ -1179,6 +1179,11 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
             invoiceNumber: plano.dados.numeroNota,
             purchaseOrder: plano.dados.numeroPedido,
             invoiceSupplierName: plano.dados.nomeFornecedor,
+            // O CNPJ do emitente vem no relatório e não era gravado. Sem ele, a
+            // nota importada ficava fora do relatório fiscal por CNPJ e, pior,
+            // invisível para a conferência de notas repetidas, que procura por
+            // emitente e número.
+            invoiceSupplierCnpj: plano.cnpj,
             recipientCnpj: plano.destino,
             receivedAt: plano.recebidoEm,
             // Valor e itens vêm do relatório detalhado; sem ele a nota entra

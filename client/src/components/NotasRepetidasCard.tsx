@@ -28,7 +28,8 @@ export default function NotasRepetidasCard() {
           <h2 className="mt-1 font-display text-xl font-extrabold text-ink">Notas repetidas</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-soft">
             O sistema recusa uma nota que já esteja cadastrada, pela chave de acesso ou pelo CNPJ do
-            emitente com o número. Esta lista mostra as que entraram <strong>antes</strong> dessa
+            emitente com o número — e a conferência olha também a empresa de quem enviou, que é
+            onde a importação do acervo repetia nota. Esta lista mostra as que entraram <strong>antes</strong> dessa
             trava existir — pela data de cada registro dá para saber se é herança ou coisa nova.
           </p>
 

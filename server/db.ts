@@ -2243,6 +2243,34 @@ export async function notasRepetidas(limite = 50) {
     .having(sql`count(*) > 1`)
     .limit(limite);
 
+  /**
+   * A terceira regra: a empresa de quem enviou, e não o emitente lido do XML.
+   *
+   * As notas trazidas do acervo antigo não têm chave nem CNPJ do emitente — o
+   * relatório não traz nenhum dos dois —, então as duas primeiras regras não
+   * enxergam a duplicata delas. E era justamente ali que a repetição nascia: a
+   * importação procurava a nota pelo login, e uma empresa com dois logins
+   * ganhava duas cópias da mesma nota. Esta regra usa a chave que a importação
+   * passou a usar: CNPJ da empresa e número da nota.
+   */
+  const porEmpresa = await db
+    .select({ cnpj: users.companyCnpj, numero: numeroNormalizado, quantas: count() })
+    .from(appointments)
+    .innerJoin(users, eq(users.id, appointments.supplierId))
+    .where(
+      and(
+        or(isNull(appointments.invoiceAccessKey), eq(appointments.invoiceAccessKey, "")),
+        or(isNull(appointments.invoiceSupplierCnpj), eq(appointments.invoiceSupplierCnpj, "")),
+        isNotNull(users.companyCnpj),
+        ne(users.companyCnpj, ""),
+        isNotNull(appointments.invoiceNumber),
+        ne(appointments.invoiceNumber, ""),
+      ),
+    )
+    .groupBy(users.companyCnpj, numeroNormalizado)
+    .having(sql`count(*) > 1`)
+    .limit(limite);
+
   const colunas = {
     id: appointments.id,
     invoiceNumber: appointments.invoiceNumber,
@@ -2254,7 +2282,7 @@ export async function notasRepetidas(limite = 50) {
   };
 
   type NotaRepetida = { id: number; invoiceNumber: string | null; invoiceSupplierName: string | null; invoiceSupplierCnpj: string | null; status: string; source: string; createdAt: Date };
-  const grupos: { identidade: string; porQue: "chave de acesso" | "fornecedor e número"; notas: NotaRepetida[] }[] = [];
+  const grupos: { identidade: string; porQue: "chave de acesso" | "fornecedor e número" | "empresa e número"; notas: NotaRepetida[] }[] = [];
 
   for (const linha of porChave) {
     const notas = await db.select(colunas).from(appointments).where(sql`${chaveNormalizada} = ${linha.chave}`).orderBy(asc(appointments.createdAt));
@@ -2267,6 +2295,22 @@ export async function notasRepetidas(limite = 50) {
       .where(and(eq(appointments.invoiceSupplierCnpj, linha.cnpj ?? ""), sql`${numeroNormalizado} = ${linha.numero}`, or(isNull(appointments.invoiceAccessKey), eq(appointments.invoiceAccessKey, ""))))
       .orderBy(asc(appointments.createdAt));
     grupos.push({ identidade: `NF ${linha.numero} · CNPJ ${linha.cnpj}`, porQue: "fornecedor e número", notas });
+  }
+  for (const linha of porEmpresa) {
+    const notas = await db
+      .select(colunas)
+      .from(appointments)
+      .innerJoin(users, eq(users.id, appointments.supplierId))
+      .where(
+        and(
+          eq(users.companyCnpj, linha.cnpj ?? ""),
+          sql`${numeroNormalizado} = ${linha.numero}`,
+          or(isNull(appointments.invoiceAccessKey), eq(appointments.invoiceAccessKey, "")),
+          or(isNull(appointments.invoiceSupplierCnpj), eq(appointments.invoiceSupplierCnpj, "")),
+        ),
+      )
+      .orderBy(asc(appointments.createdAt));
+    grupos.push({ identidade: `NF ${linha.numero} · empresa ${linha.cnpj}`, porQue: "empresa e número", notas });
   }
   // A mais recente primeiro: é a que interessa conferir.
   return grupos.sort((a, b) => (b.notas.at(-1)?.createdAt.getTime() ?? 0) - (a.notas.at(-1)?.createdAt.getTime() ?? 0));
