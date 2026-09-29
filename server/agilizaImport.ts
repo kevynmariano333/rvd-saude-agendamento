@@ -820,23 +820,20 @@ async function notaNoBanco(executor: Banco | Transacao, supplierId: number, invo
   return encontrada[0] ?? null;
 }
 
-/**
- * O que o relatório muda numa nota que já está aqui.
+/*
+ * A importação não mexe em nota que já está aqui — e isso é decisão, não
+ * esquecimento.
  *
- * Só nota nascida da importação é acertada: a que entrou pelo portal é
- * trabalhada aqui dentro, e deixar um arquivo antigo arrastá-la de volta
- * apagaria o trabalho de quem opera. Devolve null quando não há o que mudar.
+ * Por um tempo ela acertava status e data das notas nascidas do próprio
+ * arquivo, para corrigir divergências entre os dois sistemas. Na prática o
+ * arquivo puxava a nota para trás: nota recebida aqui voltava a rejeitada
+ * porque o relatório foi tirado antes do recebimento. O portal é onde a
+ * operação acontece; quem chega depois não manda no que já foi feito.
+ *
+ * Então a importação só cria o que falta. Nota que já existe é contada e
+ * deixada em paz. Divergência entre os dois sistemas se resolve na nota, por
+ * quem conhece o caso.
  */
-export function mudancaDaReimportacao(
-  atual: { status: string; scheduledFor: Date | string; source: string },
-  doRelatorio: { status: string; scheduledFor: Date },
-): { status: boolean; data: boolean } | null {
-  if (atual.source !== "importado") return null;
-  const mudouStatus = atual.status !== doRelatorio.status;
-  const mudouData = new Date(atual.scheduledFor).getTime() !== doRelatorio.scheduledFor.getTime();
-  if (!mudouStatus && !mudouData) return null;
-  return { status: mudouStatus, data: mudouData };
-}
 
 
 // ---------------------------------------------------------------------------
@@ -855,9 +852,8 @@ export type RelatorioDaImportacao = {
   linhasDetalhado: number | null;
   linhasBacklog: number | null;
   importadas: number;
+  /** Notas que o arquivo trouxe e já estavam aqui: contadas, não tocadas. */
   jaExistentes: number;
-  /** Notas que já estavam aqui e tiveram status ou data acertados pelo arquivo. */
-  atualizadas: number;
   fornecedores: { total: number; criados: number; reaproveitados: number };
   notasComItens: number;
   notasComBacklog: number;
@@ -1101,7 +1097,7 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
   const db = await abrirBanco();
   if (confirmar && !db) throw new Error("DATABASE_URL não está definida: sem banco não há o que confirmar.");
 
-  const contagem = { importadas: 0, jaExistentes: 0, atualizadas: 0, criados: 0, reaproveitados: 0, comentarios: 0 };
+  const contagem = { importadas: 0, jaExistentes: 0, criados: 0, reaproveitados: 0, comentarios: 0 };
 
   if (db) {
     const idPorCnpj = new Map<string, number>();
@@ -1134,9 +1130,8 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
           const supplierId = idPorCnpj.get(plano.cnpj);
           // Sem o fornecedor no banco não existe nota dele para já estar lá.
           const existente = supplierId ? await notaNoBanco(db, supplierId, plano.dados.numeroNota) : null;
-          if (!existente) contagem.importadas += 1;
-          else if (mudancaDaReimportacao(existente, { status: plano.status, scheduledFor: plano.dados.dataAgendamento ?? plano.dados.dataCriacao })) contagem.atualizadas += 1;
-          else contagem.jaExistentes += 1;
+          if (existente) contagem.jaExistentes += 1;
+          else contagem.importadas += 1;
         }
         continue;
       }
@@ -1145,7 +1140,7 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
       // sem histórico é um registro que o portal não sabe explicar. O lote é
       // pequeno para que uma falha no meio do arquivo deixe o trabalho já feito
       // gravado — o que faltar entra na próxima execução, sem duplicar.
-      const parcial = { importadas: 0, jaExistentes: 0, atualizadas: 0, comentarios: 0 };
+      const parcial = { importadas: 0, jaExistentes: 0, comentarios: 0 };
       await db.transaction(async tx => {
         for (const plano of lotePlanos) {
           const supplierId = idPorCnpj.get(plano.cnpj);
@@ -1155,35 +1150,9 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
           const agendadaPara = plano.dados.dataAgendamento ?? plano.dados.dataCriacao;
           const existente = await notaNoBanco(tx, supplierId, plano.dados.numeroNota);
           if (existente) {
-            const mudanca = mudancaDaReimportacao(existente, { status: plano.status, scheduledFor: agendadaPara });
-            if (!mudanca) {
-              parcial.jaExistentes += 1;
-              continue;
-            }
-            await tx
-              .update(appointments)
-              .set({
-                status: plano.status,
-                scheduledFor: agendadaPara,
-                receivedAt: plano.recebidoEm,
-                backlogReasonCode: episodio?.codigo ?? null,
-                backlogReason: episodio ? montarDescricaoDoMotivo(episodio) : null,
-                updatedAt: ultimoEvento.quando,
-              })
-              .where(eq(appointments.id, existente.id));
-            // O acerto vira linha de histórico: quem abrir a nota depois vê que
-            // a mudança veio do arquivo, e não de alguém da operação.
-            await tx.insert(appointmentStatusHistory).values({
-              appointmentId: existente.id,
-              previousStatus: existente.status,
-              nextStatus: plano.status,
-              handledBy: null,
-              eventNote: `Importação do ${ORIGEM}: ${mudanca.status ? `status atualizado de ${NOME_DO_STATUS[existente.status] ?? existente.status} para ${NOME_DO_STATUS[plano.status] ?? plano.status}` : "data atualizada"}${mudanca.data && mudanca.status ? " e data reagendada" : ""}.`,
-              previousScheduledFor: mudanca.data ? new Date(existente.scheduledFor) : null,
-              nextScheduledFor: mudanca.data ? agendadaPara : null,
-              createdAt: ultimoEvento.quando,
-            });
-            parcial.atualizadas += 1;
+            // Já está aqui: conta e segue. O arquivo não reescreve o que a
+            // operação fez depois que ele foi gerado.
+            parcial.jaExistentes += 1;
             continue;
           }
           const inserida = await tx.insert(appointments).values({
@@ -1250,7 +1219,6 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
       });
       contagem.importadas += parcial.importadas;
       contagem.jaExistentes += parcial.jaExistentes;
-      contagem.atualizadas += parcial.atualizadas;
       contagem.comentarios += parcial.comentarios;
     }
   } else {
@@ -1268,7 +1236,6 @@ export async function importarAcervo(arquivos: ArquivosDoAcervo, opcoes: OpcoesD
     linhasBacklog: acervoDeBacklog?.linhas ?? null,
     importadas: contagem.importadas,
     jaExistentes: contagem.jaExistentes,
-    atualizadas: contagem.atualizadas,
     fornecedores: { total: fornecedores.size, criados: contagem.criados, reaproveitados: contagem.reaproveitados },
     notasComItens: planos.filter(plano => plano.itens !== null).length,
     notasComBacklog: planos.filter(plano => plano.episodio !== null).length,
