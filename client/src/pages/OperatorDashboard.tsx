@@ -151,10 +151,21 @@ export default function OperatorDashboard() {
       somenteServico ||
       preNote !== "all",
   );
+  /** Procurando um documento específico, e não lendo a fila. */
+  const procurandoDocumento = Boolean(invoiceNumber.trim() || purchaseOrder.trim() || sapCode.trim());
   const listInput = useMemo(() => ({
     limit: POR_PAGINA,
     offset: (pagina - 1) * POR_PAGINA,
     source: somenteServico ? ("servico" as const) : undefined,
+    // Sem o filtro de Serviço ligado, a lista é a das notas de produto: serviço
+    // não tem carga, não ocupa doca e só atrapalhava a leitura da fila de
+    // recebimento.
+    //
+    // A exceção é procurar por um número — nota, pedido ou código SAP. Quem
+    // tem um número na mão quer aquela nota, seja ela do tipo que for, e
+    // esconder vira mentira: a pessoa conclui que a nota não existe. Filtrar
+    // por data ou destinatário não conta: ali ainda se está lendo a fila.
+    excluirServico: !somenteServico && !procurandoDocumento,
     date: dailyFilterDate || tomorrowFilterDate || undefined,
     dateStart: date || undefined,
     dateEnd: dateEnd || undefined,
@@ -172,7 +183,7 @@ export default function OperatorDashboard() {
     itemCount: itemCount.trim() ? Number(itemCount) : undefined,
     onlyUrgent: onlyUrgent || undefined,
     preNote: preNote === "all" ? undefined : preNote,
-  }), [activeStatus, buscando, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, ordem, ordenarPor, pagina, preNote, purchaseOrder, recipientCnpj, sapCode, somenteServico, supplierCnpj, supplierName, tomorrowFilterDate]);
+  }), [activeStatus, buscando, procurandoDocumento, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, ordem, ordenarPor, pagina, preNote, purchaseOrder, recipientCnpj, sapCode, somenteServico, supplierCnpj, supplierName, tomorrowFilterDate]);
   // Trocar de aba ou de filtro recomeça a contagem: a página 3 de uma busca não
   // é a página 3 da seguinte.
   useEffect(() => { setPagina(1); }, [activeStatus, dailyFilterDate, date, dateEnd, invoiceNumber, itemCount, itemCountOperator, onlyUrgent, preNote, purchaseOrder, recipientCnpj, sapCode, supplierCnpj, supplierName, tomorrowFilterDate]);

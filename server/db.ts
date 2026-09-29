@@ -244,6 +244,17 @@ export type AppointmentFilters = {
   preNote?: "done" | "pending";
   /** Tira o backlog da lista: ele tem aba e fila próprias. */
   excludeBacklog?: boolean;
+  /**
+   * Tira as notas de serviço da lista de produtos.
+   *
+   * Serviço e produto são duas operações diferentes: uma tem carga, doca e
+   * conferência de volume; a outra é um documento que passa pelo mesmo
+   * recebimento porque também vira lançamento no SAP. Misturadas na mesma fila,
+   * a nota de serviço aparecia no meio do que a doca tem para receber e
+   * atrapalhava a leitura — o filtro de Serviço já dizia "você está vendo as
+   * notas de serviço, não as de produto", e o contrário não era verdade.
+   */
+  excluirServico?: boolean;
 };
 
 /**
@@ -322,6 +333,7 @@ function condicoesDaLista(filters: AppointmentFilters) {
   // páginas de tamanhos diferentes, com buracos onde estavam as notas tiradas.
   else if (filters.excludeBacklog) conditions.push(ne(appointments.status, "backlog"));
   if (filters.source) conditions.push(eq(appointments.source, filters.source));
+  else if (filters.excluirServico) conditions.push(ne(appointments.source, "servico"));
   if (filters.invoiceNumber) conditions.push(like(appointments.invoiceNumber, `%${filters.invoiceNumber.trim()}%`));
   if (filters.supplierName) {
     const supplierName = `%${filters.supplierName.trim()}%`;
