@@ -110,7 +110,7 @@ import { isS3Configured } from "./_core/s3Client";
 import { conteudoDoAgendamento } from "./emailDeAgendamento";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
-import { notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
+import { excluirNotaRepetida, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
 import { chaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 import { countAppointments, countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
 import { executarBackup } from "./backup";
@@ -1274,6 +1274,23 @@ export const appRouter = router({
      * qualquer repetição vista na tela parece falha da trava.
      */
     notasRepetidas: adminProcedure.query(async () => notasRepetidas()),
+    /**
+     * Apagar uma das cópias de uma nota repetida.
+     *
+     * A única exclusão de nota do sistema, e só do administrador. O servidor
+     * confere de novo que a nota está mesmo repetida e que sobra outra cópia:
+     * a tela pode estar desatualizada, e apagar a última cópia deixaria a
+     * entrega sem registro nenhum.
+     */
+    excluirNotaRepetida: adminProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await excluirNotaRepetida({ appointmentId: input.appointmentId, adminId: ctx.user.id });
+        } catch (erro) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "Não consegui apagar esta nota." });
+        }
+      }),
     /**
      * Qual versão está rodando, para o rodapé de qualquer perfil.
      *

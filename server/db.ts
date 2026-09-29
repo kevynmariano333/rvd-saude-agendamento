@@ -2317,6 +2317,77 @@ export async function notasRepetidas(limite = 50) {
 }
 
 /**
+ * Apaga uma das cópias de uma nota repetida.
+ *
+ * É a única exclusão de nota que o sistema tem, e ela é estreita de
+ * propósito: só apaga o que a conferência de repetidas apontou, e só
+ * enquanto sobrar outra cópia. Sem essa trava, o mesmo botão que limpa
+ * duplicata vira o botão que apaga a nota errada — e nota apagada leva junto
+ * mensagem, histórico, anotação interna e sugestão, que o banco remove em
+ * cascata.
+ *
+ * A exclusão fica registrada em `systemAlerts`: a linha da nota some, então o
+ * rastro precisa morar fora dela. Sem isso, "sumiu uma nota" viraria uma
+ * pergunta sem resposta.
+ */
+export async function excluirNotaRepetida(input: { appointmentId: number; adminId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+
+  const alvo = (
+    await db
+      .select({
+        id: appointments.id,
+        invoiceNumber: appointments.invoiceNumber,
+        invoiceAccessKey: appointments.invoiceAccessKey,
+        invoiceSupplierCnpj: appointments.invoiceSupplierCnpj,
+        supplierId: appointments.supplierId,
+        status: appointments.status,
+        source: appointments.source,
+        miroNumber: appointments.miroNumber,
+      })
+      .from(appointments)
+      .where(eq(appointments.id, input.appointmentId))
+      .limit(1)
+  )[0];
+  if (!alvo) throw new Error("Nota não encontrada.");
+
+  // Precisa existir outra cópia — pela chave, pelo emitente ou pela empresa de
+  // quem enviou, que são as três regras da conferência.
+  const grupos = await notasRepetidas(200);
+  const grupo = grupos.find(item => item.notas.some(nota => nota.id === alvo.id));
+  if (!grupo) throw new Error("Esta nota não aparece como repetida. Aqui só se apaga cópia de nota repetida.");
+  if (grupo.notas.length < 2) throw new Error("Esta é a única cópia da nota. Apagar deixaria a entrega sem registro.");
+
+  const [mensagens] = await db
+    .select({ total: count() })
+    .from(appointmentMessages)
+    .where(eq(appointmentMessages.appointmentId, alvo.id));
+  const [historico] = await db
+    .select({ total: count() })
+    .from(appointmentStatusHistory)
+    .where(eq(appointmentStatusHistory.appointmentId, alvo.id));
+
+  const resumo = [
+    `NF ${alvo.invoiceNumber ?? "sem número"}`,
+    `id ${alvo.id}`,
+    `status ${alvo.status}`,
+    `origem ${alvo.source}`,
+    alvo.miroNumber ? `MIRO ${alvo.miroNumber}` : null,
+    `${mensagens?.total ?? 0} mensagem(ns)`,
+    `${historico?.total ?? 0} linha(s) de histórico`,
+    `apagada pelo usuário ${input.adminId}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  await db.delete(appointments).where(eq(appointments.id, alvo.id));
+  await db.insert(systemAlerts).values({ kind: "nota-repetida-excluida", sentAt: new Date(), detail: resumo.slice(0, 500) });
+  console.warn(`[Notas repetidas] ${resumo}`);
+  return { apagada: alvo.id, resumo };
+}
+
+/**
  * Quantas mensagens cada nota tem, e quantas ainda não foram lidas.
  *
  * O sino do topo avisa que existe mensagem nova, mas não diz em qual nota — e
