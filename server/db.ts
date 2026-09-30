@@ -1656,6 +1656,48 @@ export async function createAppointmentInternalNote(input: { appointmentId: numb
  * nota entra em backlog mais de uma vez, vale a última passagem — é a que
  * responde "e essa nota, como está?".
  */
+/**
+ * As últimas notas que caíram no backlog, para o aviso do planejamento.
+ *
+ * O menu já mostrava quantas notas estão lá, e um número que sobe de 11 para 12
+ * não conta a novidade: quem trata precisa saber qual nota chegou e por quê,
+ * sem abrir a tela. O peso é o motivo de a consulta ser esta e não a fila
+ * inteira — a fila tem quinhentas linhas e meio megabyte, e o sino precisa de
+ * dez.
+ */
+export async function ultimasNotasNoBacklog(limite = 10) {
+  const db = await getDb();
+  if (!db) return [];
+  const linhas = await db
+    .select({
+      id: appointments.id,
+      invoiceNumber: appointments.invoiceNumber,
+      invoiceSupplierName: appointments.invoiceSupplierName,
+      supplierName: users.name,
+      recipientCnpj: appointments.recipientCnpj,
+      backlogReasonCode: appointments.backlogReasonCode,
+      backlogReason: appointments.backlogReason,
+      entrouEm: appointmentStatusHistory.createdAt,
+    })
+    .from(appointments)
+    .innerJoin(users, eq(appointments.supplierId, users.id))
+    .innerJoin(appointmentStatusHistory, eq(appointmentStatusHistory.appointmentId, appointments.id))
+    .where(and(eq(appointments.status, "backlog"), eq(appointmentStatusHistory.nextStatus, "backlog")))
+    .orderBy(desc(appointmentStatusHistory.createdAt))
+    .limit(limite * 4);
+
+  // Uma nota que foi e voltou tem mais de uma entrada gravada; vale a última.
+  const vistas = new Set<number>();
+  const recentes = [];
+  for (const linha of linhas) {
+    if (vistas.has(linha.id)) continue;
+    vistas.add(linha.id);
+    recentes.push(linha);
+    if (recentes.length === limite) break;
+  }
+  return recentes;
+}
+
 export async function listBacklogReportRows() {
   const db = await getDb();
   if (!db) return [];
@@ -1688,6 +1730,11 @@ export async function listBacklogReportRows() {
         supplierName: users.name,
         supplierCnpj: appointments.invoiceSupplierCnpj,
         loginCnpj: users.companyCnpj,
+        // A unidade que recebe e a procedência da nota: o relatório de backlog
+        // era o único que não dizia nem para onde a carga ia nem de onde a nota
+        // veio, e as duas perguntas aparecem em toda tratativa.
+        recipientCnpj: appointments.recipientCnpj,
+        source: appointments.source,
         miroNumber: appointments.miroNumber,
         backlogReasonCode: appointments.backlogReasonCode,
         backlogReason: appointments.backlogReason,
@@ -1813,6 +1860,9 @@ export async function listReportRows(filtros: {
     invoiceTotalCents: appointments.invoiceTotalCents,
     serviceType: appointments.serviceType,
     status: appointments.status,
+    // De onde a nota veio. O relatório dizia o que aconteceu com ela e não
+    // dizia se ela nasceu aqui ou chegou pelo acervo do Agiliza.
+    source: appointments.source,
     scheduledFor: appointments.scheduledFor,
     receivedAt: appointments.receivedAt,
     // A nota recusada aparece no relatório como qualquer outra; sem o motivo,

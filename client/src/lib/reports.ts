@@ -1,4 +1,4 @@
-import { type PortalStatus, statusCopy } from "./portal";
+import { type PortalSource, type PortalStatus, statusCopy } from "./portal";
 import { apenasDigitos, formatarCnpj, unidadePorCnpj } from "@shared/recipients";
 import { passouPeloBacklog, rotuloDoMotivo } from "@shared/backlogReasons";
 import { notaEhUrgente } from "@shared/purchaseOrders";
@@ -25,6 +25,7 @@ export type ReportAppointment = {
   invoiceTotalCents: number | null;
   serviceType: string;
   status: PortalStatus;
+  source?: PortalSource | string | null;
   scheduledFor: Date | string;
   receivedAt: Date | string | null;
   /** O que ficou gravado da passagem pelo backlog, mesmo em nota já concluída. */
@@ -63,6 +64,7 @@ export type ConsolidatedReportRow = {
   "Total de Linhas": string;
   "CNPJ Destino": string;
   "Descrição Destino": string;
+  Origem: string;
 };
 
 /** O detalhado acrescenta o que não cabe numa visão de conferência rápida. */
@@ -75,6 +77,29 @@ export type DetailedReportRow = ConsolidatedReportRow & {
   "Motivo da recusa": string;
   "Motivo do backlog": string;
 };
+
+/**
+ * De onde a nota veio, escrito por extenso.
+ *
+ * A etiqueta curta da lista ("Importado") serve na tela, onde a coluna é
+ * estreita e o contexto está à volta. Na planilha, que sai do portal e vai
+ * parar em reunião, ela não diz de onde: a procedência inteira evita a pergunta
+ * "importado de onde?" em toda conferência.
+ */
+export function origemDaNota(source: PortalSource | string | null | undefined): string {
+  switch (source) {
+    case "importado":
+      return "Importado do Agiliza";
+    case "portal":
+      return "Enviada pelo fornecedor no portal";
+    case "manual_xml":
+      return "XML lançado à mão";
+    case "servico":
+      return "Nota de serviço";
+    default:
+      return "—";
+  }
+}
 
 function isWithinDateRange(value: Date | string | null, start?: string, end?: string) {
   if (!start && !end) return true;
@@ -152,6 +177,7 @@ function baseRow(item: ReportAppointment): ConsolidatedReportRow {
     "Total de Linhas": item.totalDeLinhas === null || item.totalDeLinhas === undefined ? "—" : String(item.totalDeLinhas),
     "CNPJ Destino": apenasDigitos(item.recipientCnpj) ? formatarCnpj(item.recipientCnpj) : "—",
     "Descrição Destino": descricaoDestino(item.recipientCnpj),
+    Origem: origemDaNota(item.source),
   };
 }
 
@@ -197,7 +223,7 @@ export function reportColumns(view: "consolidated" | "detailed"): string[] {
   const modelo: ReportAppointment = {
     id: 0, invoiceNumber: null, supplierName: null, invoiceSupplierName: null, supplierCnpj: null,
     invoiceSupplierCnpj: null, recipientCnpj: null, purchaseOrder: null, miroNumber: null, invoiceVolumeCount: null,
-    invoiceTotalCents: null, serviceType: "", status: "pending", scheduledFor: new Date(0), receivedAt: null,
+    invoiceTotalCents: null, serviceType: "", status: "pending", source: null, scheduledFor: new Date(0), receivedAt: null,
     createdAt: null, updatedAt: null, totalDeLinhas: null, backlogReasonCode: null, backlogReason: null, treatedAt: null,
   };
   const linha = view === "detailed" ? toDetailedReportRows([modelo])[0] : toConsolidatedReportRows([modelo])[0];
@@ -216,6 +242,8 @@ export type BacklogReportAppointment = {
   /** Já vem do XML da nota; o do login fica em loginCnpj. */
   supplierCnpj: string | null;
   loginCnpj: string | null;
+  recipientCnpj?: string | null;
+  source?: PortalSource | string | null;
   miroNumber: string | null;
   backlogReasonCode: string | null;
   backlogReason: string | null;
@@ -230,6 +258,9 @@ export type BacklogReportRow = {
   "Número da Nota": string;
   "CNPJ Fornecedor": string;
   "Nome Fornecedor": string;
+  "CNPJ Destino": string;
+  "Descrição Destino": string;
+  Origem: string;
   "Cód. SAP": string;
   Motivo: string;
   Comentários: string;
@@ -285,6 +316,11 @@ export function toBacklogReportRows(linhas: BacklogReportAppointment[]): Backlog
     "Número da Nota": item.invoiceNumber || "—",
     "CNPJ Fornecedor": cnpjDoRemetenteDoBacklog(item) ? formatarCnpj(cnpjDoRemetenteDoBacklog(item)) : "—",
     "Nome Fornecedor": item.invoiceSupplierName || item.supplierName || "—",
+    // Para onde a carga ia e de onde a nota veio: o backlog é tratado por
+    // unidade, e a tratativa muda conforme a nota nasceu aqui ou veio do acervo.
+    "CNPJ Destino": apenasDigitos(item.recipientCnpj ?? null) ? formatarCnpj(item.recipientCnpj ?? null) : "—",
+    "Descrição Destino": descricaoDestino(item.recipientCnpj ?? null),
+    Origem: origemDaNota(item.source),
     "Cód. SAP": item.miroNumber || "—",
     Motivo: [rotulo, descricaoSemRotulo(rotulo, item.backlogReason)].filter(Boolean).join(" — "),
     // Os comentários vão numa célula só, cada um com quem escreveu e quando,
@@ -298,6 +334,7 @@ export const COLUNAS_DO_BACKLOG = Object.keys(
   toBacklogReportRows([{
     id: 0, createdAt: new Date(0), enteredBacklogAt: null, leftBacklogAt: null, status: "backlog",
     invoiceNumber: null, invoiceSupplierName: null, supplierName: null, supplierCnpj: null, loginCnpj: null,
+    recipientCnpj: null, source: null,
     miroNumber: null, backlogReasonCode: null, backlogReason: null, comments: [],
   }])[0],
 );

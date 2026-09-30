@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { canSeeGateHistory, canTreatBacklogPortal, isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
 import { serviceTypeCopy } from "@/lib/attendance";
+import { rotuloDoMotivo } from "@shared/backlogReasons";
+import { unidadePorCnpj } from "@shared/recipients";
 import { trpc } from "@/lib/trpc";
 import {
   AlertTriangle,
@@ -107,8 +109,12 @@ export default function PortalLayout({
   // cada minuto. Contar é trabalho do banco.
   const backlogFila = trpc.appointments.total.useQuery({ status: "backlog" }, { enabled: podeTratarBacklog, refetchInterval: 60_000 });
   const backlogCount = podeTratarBacklog ? (backlogFila.data ?? 0) : 0;
+  // O contador do menu diz quantas notas estão lá; ele não diz qual chegou
+  // agora nem por quê, e é isso que faz alguém abrir a tela.
+  const backlogRecente = trpc.appointments.novosNoBacklog.useQuery(undefined, { enabled: podeTratarBacklog, refetchInterval: 60_000 });
+  const novosNoBacklog = podeTratarBacklog ? (backlogRecente.data ?? []) : [];
   const releaseCount = pendingReleases.length;
-  const alertCount = unreadCount + releaseCount;
+  const alertCount = unreadCount + releaseCount + backlogCount;
 
   // Cada perfil vê só o seu posto de trabalho: quem cuida de agendamentos não
   // tem o pátio no menu, e quem trabalha no portão não tem a agenda. O
@@ -193,6 +199,23 @@ export default function PortalLayout({
       action: { label: "Ver", onClick: () => setLocation("/operacao") },
     });
   }, [canApproveEntries, releaseRequests.data, releaseCount, setLocation]);
+
+  // Mesma regra do portão: só avisa o que caiu no backlog depois de a tela
+  // abrir. Entrar no portal com a fila cheia não é novidade nenhuma.
+  const vistosNoBacklog = useRef<number | null>(null);
+  useEffect(() => {
+    if (!podeTratarBacklog || backlogFila.data === undefined) return;
+    const anterior = vistosNoBacklog.current;
+    vistosNoBacklog.current = backlogCount;
+    if (anterior === null || backlogCount <= anterior) return;
+    const chegou = backlogCount - anterior;
+    toast.warning(chegou === 1 ? "Nota nova no backlog" : `${chegou} notas novas no backlog`, {
+      description: novosNoBacklog[0]
+        ? `NF ${novosNoBacklog[0].invoiceNumber || "sem número"} — ${rotuloDoMotivo(novosNoBacklog[0].backlogReasonCode)}.`
+        : "O recebimento não fechou e a nota espera tratativa.",
+      action: { label: "Ver", onClick: () => setLocation("/operador/backlog") },
+    });
+  }, [podeTratarBacklog, backlogFila.data, backlogCount, novosNoBacklog, setLocation]);
 
   const [menuAberto, setMenuAberto] = useState<string | null>(null);
   const homePath = nav[0]?.path ?? "/";
@@ -380,7 +403,11 @@ export default function PortalLayout({
               <div>
                 <p className="font-display text-sm font-extrabold text-ink">Avisos</p>
                 <p className="text-xs text-ink-soft">
-                  {releaseCount > 0 ? "Liberações no portão e conversas das notas" : "Conversas vinculadas às notas"}
+                  {releaseCount > 0
+                    ? "Liberações no portão e conversas das notas"
+                    : backlogCount > 0
+                      ? "Notas no backlog e conversas das notas"
+                      : "Conversas vinculadas às notas"}
                 </p>
               </div>
               <Bell className="size-4 text-ink-faint" />
@@ -423,6 +450,49 @@ export default function PortalLayout({
                 </div>
               </div>
             )}
+            {novosNoBacklog.length > 0 && (
+              <div className="border-b border-line bg-state-stop-bg/40 p-2">
+                <p className="px-2 pb-1 pt-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-state-stop">
+                  Foram para o backlog · {backlogCount}
+                </p>
+                <div className="max-h-56 overflow-y-auto">
+                  {novosNoBacklog.map(nota => {
+                    const unidade = unidadePorCnpj(nota.recipientCnpj);
+                    return (
+                      <button
+                        key={nota.id}
+                        onClick={() => {
+                          setNotificationsOpen(false);
+                          go("/operador/backlog");
+                        }}
+                        className="w-full rounded-xl p-3 text-left hover:bg-surface"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="mt-0.5 rounded-lg bg-state-stop-bg p-2 text-state-stop">
+                            <AlertTriangle className="size-4" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-xs font-bold text-ink">
+                              NF {nota.invoiceNumber || "sem número"}
+                              {unidade ? ` · ${unidade.sigla}` : ""}
+                            </span>
+                            <span className="mt-0.5 block truncate text-sm text-ink-soft">
+                              {rotuloDoMotivo(nota.backlogReasonCode)}
+                            </span>
+                            <span className="mt-1 block truncate text-[10px] text-ink-faint">
+                              {nota.invoiceSupplierName || nota.supplierName || "Fornecedor"} ·{" "}
+                              {nota.entrouEm
+                                ? new Date(nota.entrouEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+                                : "data não registrada"}
+                            </span>
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {notifications.data?.length ? (
               <div className="max-h-80 overflow-y-auto p-2">
                 {notifications.data.map(message => (
@@ -454,7 +524,7 @@ export default function PortalLayout({
                 ))}
               </div>
             ) : (
-              releaseCount === 0 && (
+              releaseCount === 0 && novosNoBacklog.length === 0 && (
                 <div className="px-5 py-10 text-center">
                   <Bell className="mx-auto size-6 text-ink-faint" />
                   <p className="mt-3 text-sm font-bold text-ink">Nenhum aviso novo</p>

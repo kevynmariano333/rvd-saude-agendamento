@@ -27,8 +27,18 @@ describe("consolidado de relatórios", () => {
     expect(reportColumns("consolidated")).toEqual([
       "Data de Criação", "Último Status", "Data do Último Status", "Data de Agendamento",
       "Número da Nota", "Número do Pedido", "CNPJ Fornecedor", "Nome Fornecedor",
-      "Total de Linhas", "CNPJ Destino", "Descrição Destino",
+      "Total de Linhas", "CNPJ Destino", "Descrição Destino", "Origem",
     ]);
+  });
+
+  it("diz de onde a nota veio, por extenso", () => {
+    // "Importado" sozinho não responde de onde: na planilha isso vira pergunta.
+    const [importada] = toConsolidatedReportRows([nota({ source: "importado" })]);
+    expect(importada.Origem).toBe("Importado do Agiliza");
+    const [doPortal] = toConsolidatedReportRows([nota({ source: "portal" })]);
+    expect(doPortal.Origem).toBe("Enviada pelo fornecedor no portal");
+    const [semOrigem] = toConsolidatedReportRows([nota({})]);
+    expect(semOrigem.Origem).toBe("—");
   });
 
   it("descreve o destino como a planilha de origem escreve", () => {
@@ -104,7 +114,7 @@ const noBacklog = (extra: Partial<BacklogReportAppointment>): BacklogReportAppoi
 });
 
 describe("relatório de backlog", () => {
-  it("monta as dez colunas do arquivo", () => {
+  it("monta as colunas do arquivo", () => {
     const [linha] = toBacklogReportRows([noBacklog({
       leftBacklogAt: "2026-09-10T16:00:00.000Z", status: "completed", miroNumber: "5105101642",
       comments: [{ authorName: "Robert", body: "Realizado  entrada de\nmovimento 0244599", createdAt: "2026-09-08T20:53:00.000Z" }],
@@ -117,6 +127,20 @@ describe("relatório de backlog", () => {
     // Quebra de linha e espaço duplo estouram a célula da planilha.
     expect(linha.Comentários).toContain("Robert: Realizado entrada de movimento 0244599");
     expect(linha.Comentários).not.toContain("\n");
+  });
+
+  it("diz para qual unidade a carga ia e de onde a nota veio", () => {
+    // Era o único relatório que não respondia nem uma coisa nem outra.
+    const [linha] = toBacklogReportRows([noBacklog({ recipientCnpj: "06033403000113", source: "importado" })]);
+    expect(linha["Descrição Destino"]).toBe("HSH - HOSPITAL");
+    expect(linha["CNPJ Destino"]).toBe("06.033.403/0001-13");
+    expect(linha.Origem).toBe("Importado do Agiliza");
+  });
+
+  it("nota de backlog sem destino não ganha unidade inventada", () => {
+    const [linha] = toBacklogReportRows([noBacklog({})]);
+    expect(linha["Descrição Destino"]).toBe("—");
+    expect(linha["CNPJ Destino"]).toBe("—");
   });
 
   it("diz que a nota ainda está lá em vez de deixar a saída vazia", () => {

@@ -32,6 +32,7 @@ import {
   listAppointmentMessages,
   listAppointments,
   listCalendarAppointments,
+  ultimasNotasNoBacklog,
   listAppointmentInternalNotes,
   listAppointmentSuggestions,
   listBacklogReportRows,
@@ -708,6 +709,17 @@ export const appRouter = router({
      * dependem desse formato; embrulhar tudo num objeto para servir a paginação
      * de uma delas quebraria as outras quatro.
      */
+    /**
+     * As últimas notas que caíram no backlog, para o sino do planejamento.
+     *
+     * O contador no menu diz quantas são; ele não diz qual chegou agora nem por
+     * quê, e é isso que faz alguém abrir a tela. Só para quem trata o backlog:
+     * para o resto do portal não é aviso, é a fila dos outros.
+     */
+    novosNoBacklog: protectedProcedure.query(async ({ ctx }) => {
+      if (!canTreatBacklog(ctx.user.role)) return [];
+      return ultimasNotasNoBacklog(10);
+    }),
     total: protectedProcedure
       .input(filtrosDaLista)
       .query(async ({ ctx, input }) => {
