@@ -1818,6 +1818,12 @@ export async function listReportRows(filtros: {
     // A nota recusada aparece no relatório como qualquer outra; sem o motivo,
     // a linha diria "recusada" e não diria por quê.
     rejectionReason: appointments.rejectionReason,
+    // A nota que travou e depois fechou continua concluída — mas o relatório
+    // precisa dizer que ela passou por ali, senão ela é indistinguível da que
+    // entrou direto.
+    backlogReasonCode: appointments.backlogReasonCode,
+    backlogReason: appointments.backlogReason,
+    treatedAt: appointments.treatedAt,
   };
 
   const base = db.select(colunas).from(appointments).innerJoin(users, eq(appointments.supplierId, users.id));

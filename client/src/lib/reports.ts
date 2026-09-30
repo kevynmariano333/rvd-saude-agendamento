@@ -1,6 +1,6 @@
 import { type PortalStatus, statusCopy } from "./portal";
 import { apenasDigitos, formatarCnpj, unidadePorCnpj } from "@shared/recipients";
-import { rotuloDoMotivo } from "@shared/backlogReasons";
+import { passouPeloBacklog, rotuloDoMotivo } from "@shared/backlogReasons";
 import { notaEhUrgente } from "@shared/purchaseOrders";
 
 export type ReportAppointment = {
@@ -27,6 +27,10 @@ export type ReportAppointment = {
   status: PortalStatus;
   scheduledFor: Date | string;
   receivedAt: Date | string | null;
+  /** O que ficou gravado da passagem pelo backlog, mesmo em nota já concluída. */
+  backlogReasonCode?: string | null;
+  backlogReason?: string | null;
+  treatedAt?: Date | string | null;
 };
 
 export type ReportFilters = {
@@ -69,6 +73,7 @@ export type DetailedReportRow = ConsolidatedReportRow & {
   "Data de Recebimento": string;
   "Item recebido": string;
   "Motivo da recusa": string;
+  "Motivo do backlog": string;
 };
 
 function isWithinDateRange(value: Date | string | null, start?: string, end?: string) {
@@ -119,10 +124,25 @@ function descricaoDestino(recipientCnpj: string | null) {
   return apenasDigitos(recipientCnpj) ? "Destino não cadastrado" : "—";
 }
 
+/**
+ * O status como o relatório o escreve.
+ *
+ * "Concluído" e "Recebido" ganham a marca quando a nota passou pelo backlog. O
+ * nome e a ordem das colunas ficam como estavam: quem confere tem a planilha
+ * antiga aberta do lado, e mexer no cabeçalho custa mais do que ganha.
+ */
+export function statusDoRelatorio(item: ReportAppointment): string {
+  const base = statusCopy[item.status];
+  if (item.status !== "completed" && item.status !== "received") return base;
+  return passouPeloBacklog(item) ? `${base} (com backlog)` : base;
+}
+
 function baseRow(item: ReportAppointment): ConsolidatedReportRow {
   return {
     "Data de Criação": formatReportDate(item.createdAt ?? null),
-    "Último Status": statusCopy[item.status],
+    // A nota concluída que travou no meio do caminho continua concluída — a
+    // marca é o que separa quem entrou direto de quem entrou depois de briga.
+    "Último Status": statusDoRelatorio(item),
     "Data do Último Status": formatReportDate(item.updatedAt ?? null),
     "Data de Agendamento": formatReportDate(item.scheduledFor),
     "Número da Nota": item.invoiceNumber || "—",
@@ -158,6 +178,11 @@ export function toDetailedReportRows(appointments: ReportAppointment[]): Detaile
           ? "Em backlog"
           : "Aguardando recebimento",
     "Motivo da recusa": item.rejectionReason || "—",
+    // O motivo fica no detalhado: é onde mora o que é só nosso, e é ele que
+    // responde por que a nota travou.
+    "Motivo do backlog": passouPeloBacklog(item)
+      ? [rotuloDoMotivo(item.backlogReasonCode), item.backlogReason].filter(Boolean).join(" — ")
+      : "—",
   }));
 }
 
@@ -173,7 +198,7 @@ export function reportColumns(view: "consolidated" | "detailed"): string[] {
     id: 0, invoiceNumber: null, supplierName: null, invoiceSupplierName: null, supplierCnpj: null,
     invoiceSupplierCnpj: null, recipientCnpj: null, purchaseOrder: null, miroNumber: null, invoiceVolumeCount: null,
     invoiceTotalCents: null, serviceType: "", status: "pending", scheduledFor: new Date(0), receivedAt: null,
-    createdAt: null, updatedAt: null, totalDeLinhas: null,
+    createdAt: null, updatedAt: null, totalDeLinhas: null, backlogReasonCode: null, backlogReason: null, treatedAt: null,
   };
   const linha = view === "detailed" ? toDetailedReportRows([modelo])[0] : toConsolidatedReportRows([modelo])[0];
   return Object.keys(linha);

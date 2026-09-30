@@ -54,3 +54,21 @@ export function curtoDoMotivo(codigo: string | null | undefined): string {
   if (!codigo) return "Sem motivo";
   return motivoPorCodigo(codigo)?.curto ?? codigo;
 }
+
+/**
+ * A nota travou em algum momento — mesmo que já esteja concluída.
+ *
+ * A nota que passou pelo backlog e depois fechou vinha para o relatório igual
+ * à que fechou direto: as duas diziam "Concluído" e mais nada. São a mesma
+ * linha para quem só quer saber se a nota entrou, e coisas diferentes para
+ * quem precisa saber por que aquela entrada custou três semanas. A marca é
+ * lida do que ficou gravado na nota: o código do motivo, a data da tratativa
+ * ou o próprio status.
+ */
+export function passouPeloBacklog(nota: {
+  status: string;
+  backlogReasonCode?: string | null;
+  treatedAt?: Date | string | null;
+}): boolean {
+  return nota.status === "backlog" || Boolean(nota.backlogReasonCode) || Boolean(nota.treatedAt);
+}

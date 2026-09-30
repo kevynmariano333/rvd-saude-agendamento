@@ -40,6 +40,32 @@ describe("consolidado de relatórios", () => {
     expect(primeira["Último Status"]).toBe("Recebido");
   });
 
+  it("a nota concluída que travou no meio do caminho continua concluída, com a marca", () => {
+    // Era isso que o relatório escondia: ela saía igual à que entrou direto.
+    const travada = nota({ id: 9, status: "completed", backlogReasonCode: "PENDENCIA_PEDIDO_COMPRA", backlogReason: "Pedido 4504880332 não encontrado ou inválido." });
+    const [linha] = toConsolidatedReportRows([travada]);
+    expect(linha["Último Status"]).toBe("Concluído (com backlog)");
+    const [detalhada] = toDetailedReportRows([travada]);
+    expect(detalhada["Motivo do backlog"]).toBe("Pendência em pedido de compra — Pedido 4504880332 não encontrado ou inválido.");
+  });
+
+  it("a nota que fechou direto não ganha marca nenhuma", () => {
+    const [linha] = toConsolidatedReportRows([nota({ status: "completed", miroNumber: "5105101642" })]);
+    expect(linha["Último Status"]).toBe("Concluído");
+    const [detalhada] = toDetailedReportRows([nota({ status: "completed", miroNumber: "5105101642" })]);
+    expect(detalhada["Motivo do backlog"]).toBe("—");
+  });
+
+  it("a marca também vale para a recebida que passou pelo backlog", () => {
+    const [linha] = toConsolidatedReportRows([nota({ status: "received", treatedAt: "2026-08-11T10:00:00.000Z" })]);
+    expect(linha["Último Status"]).toBe("Recebido (com backlog)");
+  });
+
+  it("a nota que está em backlog agora continua dizendo só Backlog", () => {
+    const [linha] = toConsolidatedReportRows([appointments[2]]);
+    expect(linha["Último Status"]).toBe("Backlog");
+  });
+
   it("uma nota sem destino não ganha nome inventado", () => {
     const [terceira] = toConsolidatedReportRows([appointments[2]]);
     expect(terceira["CNPJ Destino"]).toBe("—");
