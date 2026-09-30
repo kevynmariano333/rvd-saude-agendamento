@@ -724,12 +724,13 @@ export const appRouter = router({
     /**
      * As últimas falas da conversa das notas em backlog.
      *
-     * A conversa da tratativa é interna — o fornecedor não lê esta tabela —, e
-     * o aviso dela é do planejamento: é ele que responde por destravar a nota.
-     * Deixá-la no sino de todo mundo encheria a caixa de quem não vai tratar.
+     * A conversa da tratativa é interna: o fornecedor não lê esta tabela, e é
+     * por isso que nela se escreve preço, documento do HIS e número de SAP.
+     * Dentro de casa ela não é segredo de ninguém — quem mandou a nota para o
+     * backlog foi o balcão, e ele precisa saber no que deu.
      */
     conversaDoBacklog: protectedProcedure.query(async ({ ctx }) => {
-      if (!canTreatBacklog(ctx.user.role)) return [];
+      if (!isSchedulingDesk(ctx.user.role)) return [];
       return conversasRecentesDoBacklog({ exceptoAutorId: ctx.user.id, limite: 10 });
     }),
     total: protectedProcedure

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { canSeeGateHistory, canTreatBacklogPortal, isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
+import { canSeeGateHistory, canTreatBacklogPortal, isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalSchedulingDesk, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
 import { serviceTypeCopy } from "@/lib/attendance";
 import { rotuloDoMotivo } from "@shared/backlogReasons";
 import { unidadePorCnpj } from "@shared/recipients";
@@ -114,10 +114,12 @@ export default function PortalLayout({
   // agora nem por quê, e é isso que faz alguém abrir a tela.
   const backlogRecente = trpc.appointments.novosNoBacklog.useQuery(undefined, { enabled: podeTratarBacklog, refetchInterval: 60_000 });
   const novosNoBacklog = podeTratarBacklog ? (backlogRecente.data ?? []) : [];
-  // A conversa da tratativa é interna e é do planejamento: quem não vai tratar
-  // a nota não precisa do aviso dela na caixa.
-  const conversaDoBacklog = trpc.appointments.conversaDoBacklog.useQuery(undefined, { enabled: podeTratarBacklog, refetchInterval: 30_000 });
-  const falasDoBacklog = podeTratarBacklog ? (conversaDoBacklog.data ?? []) : [];
+  // A conversa da tratativa é interna — o fornecedor não a lê —, mas dentro de
+  // casa ela não é segredo: quem mandou a nota para o backlog foi o balcão, e
+  // ele precisa saber no que deu.
+  const ehBalcao = isPortalSchedulingDesk(role);
+  const conversaDoBacklog = trpc.appointments.conversaDoBacklog.useQuery(undefined, { enabled: ehBalcao, refetchInterval: 30_000 });
+  const falasDoBacklog = ehBalcao ? (conversaDoBacklog.data ?? []) : [];
   const releaseCount = pendingReleases.length;
   const alertCount = unreadCount + releaseCount + backlogCount + falasDoBacklog.length;
 
@@ -226,16 +228,16 @@ export default function PortalLayout({
   // ficava esperando alguém abrir a tela do backlog para ser descoberta.
   const falasVistas = useRef<number | null>(null);
   useEffect(() => {
-    if (!podeTratarBacklog || !conversaDoBacklog.data) return;
+    if (!ehBalcao || !conversaDoBacklog.data) return;
     const anterior = falasVistas.current;
     const ultima = conversaDoBacklog.data[0];
     falasVistas.current = ultima?.id ?? 0;
     if (anterior === null || !ultima || ultima.id <= anterior) return;
     toast.info("Nova mensagem na tratativa do backlog", {
       description: `NF ${ultima.invoiceNumber || "sem número"} · ${ultima.authorName || "Colaborador"}: ${ultima.body.slice(0, 90)}`,
-      action: { label: "Ver", onClick: () => setLocation("/operador/backlog") },
+      action: { label: "Ver", onClick: () => setLocation(`/operador?tratativa=${ultima.appointmentId}`) },
     });
-  }, [podeTratarBacklog, conversaDoBacklog.data, setLocation]);
+  }, [ehBalcao, conversaDoBacklog.data, setLocation]);
 
   const [menuAberto, setMenuAberto] = useState<string | null>(null);
   const homePath = nav[0]?.path ?? "/";
@@ -524,7 +526,7 @@ export default function PortalLayout({
                       key={fala.id}
                       onClick={() => {
                         setNotificationsOpen(false);
-                        go("/operador/backlog");
+                        go(`/operador?tratativa=${fala.appointmentId}`);
                       }}
                       className="w-full rounded-xl p-3 text-left hover:bg-surface"
                     >

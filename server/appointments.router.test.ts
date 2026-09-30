@@ -842,9 +842,10 @@ describe("alcance da Portaria", () => {
 });
 
 /*
- * A conversa da tratativa é interna e é do planejamento. Deixá-la no sino de
- * todo mundo encheria a caixa de quem não vai tratar a nota — e foi por isso
- * que ela nasceu separada da conversa com o fornecedor.
+ * A conversa da tratativa é interna: ela existe separada da conversa com o
+ * fornecedor justamente porque ele não pode lê-la. Dentro de casa ela corre
+ * solta — quem mandou a nota para o backlog foi o balcão, e ele precisa saber
+ * no que deu.
  */
 describe("o aviso da conversa do backlog", () => {
   beforeEach(() => {
@@ -864,10 +865,9 @@ describe("o aviso da conversa do backlog", () => {
     await expect(caller.appointments.conversaDoBacklog()).resolves.toHaveLength(1);
   });
 
-  it("não chega para o operador, que não trata a fila", async () => {
+  it("chega para o operador: foi ele que mandou a nota para lá", async () => {
     const caller = appRouter.createCaller(context("operator"));
-    await expect(caller.appointments.conversaDoBacklog()).resolves.toEqual([]);
-    expect(mocks.conversasRecentesDoBacklog).not.toHaveBeenCalled();
+    await expect(caller.appointments.conversaDoBacklog()).resolves.toHaveLength(1);
   });
 
   it("não chega para o fornecedor: ele nem enxerga esta conversa", async () => {
