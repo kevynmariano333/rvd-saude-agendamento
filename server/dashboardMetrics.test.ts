@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDashboardMetrics } from "./dashboardMetrics";
+import { buildDashboardMetrics, siglaDaUnidade } from "./dashboardMetrics";
 
 describe("buildDashboardMetrics", () => {
   it("agrupa recebimentos, fornecedores e espera usando o período selecionado", () => {
@@ -76,3 +76,63 @@ describe("buildDashboardMetrics", () => {
     expect(metrics.monthlyReceived.every(item => item.total === 0)).toBe(true);
   });
 });
+
+const HSH = "06033403000113";
+const MSH = "43293604002120";
+
+const recebida = (dia: number, recipientCnpj: string | null, volumes: number | null) => ({
+  status: "received" as const,
+  createdAt: new Date(`2026-08-0${dia}T09:00:00`),
+  scheduledFor: new Date(`2026-08-1${dia}T09:00:00`),
+  receivedAt: new Date(`2026-08-1${dia}T11:00:00`),
+  supplierName: "Fornecedor",
+  invoiceSupplierName: null,
+  invoiceTotalCents: 1000,
+  recipientCnpj,
+  invoiceVolumeCount: volumes,
+});
+
+describe("a divisão por unidade e os volumes", () => {
+  it("separa a barra do dia entre HSH e MSH", () => {
+    const metrics = buildDashboardMetrics(
+      [recebida(2, HSH, 10), recebida(2, MSH, 4), recebida(2, HSH, 6)],
+      { month: 8, year: 2026, now: new Date("2026-08-20T10:00:00") },
+    );
+    expect(metrics.dailyReceived[11]).toMatchObject({ label: "12/08", total: 3, HSH: 2, MSH: 1, volumes: 20 });
+  });
+
+  it("a nota sem destinatário reconhecido não some da contagem", () => {
+    // Somem do gráfico e o total do dia deixa de bater com o número de notas
+    // recebidas — que é o pior jeito de um painel mentir.
+    const metrics = buildDashboardMetrics(
+      [recebida(2, HSH, 1), recebida(2, null, 2)],
+      { month: 8, year: 2026, now: new Date("2026-08-20T10:00:00") },
+    );
+    const barra = metrics.dailyReceived[11]!;
+    expect(barra.total).toBe(2);
+    expect(barra.HSH).toBe(1);
+    expect(barra.Outros).toBe(1);
+    expect(Number(barra.HSH) + Number(barra.MSH) + Number(barra.Outros)).toBe(barra.total);
+  });
+
+  it("soma os volumes do período, e nota sem volume informado conta como zero", () => {
+    const metrics = buildDashboardMetrics(
+      [recebida(2, HSH, 12), recebida(2, MSH, null)],
+      { month: 8, year: 2026, now: new Date("2026-08-20T10:00:00") },
+    );
+    expect(metrics.receivedVolumes).toBe(12);
+    expect(metrics.receivedPorUnidade).toEqual([
+      { sigla: "HSH", notas: 1, volumes: 12 },
+      { sigla: "MSH", notas: 1, volumes: 0 },
+      { sigla: "Outros", notas: 0, volumes: 0 },
+    ]);
+  });
+
+  it("reconhece a unidade pelo CNPJ do destinatário", () => {
+    expect(siglaDaUnidade(HSH)).toBe("HSH");
+    expect(siglaDaUnidade(MSH)).toBe("MSH");
+    expect(siglaDaUnidade(null)).toBe("Outros");
+    expect(siglaDaUnidade("99999999999999")).toBe("Outros");
+  });
+});
+

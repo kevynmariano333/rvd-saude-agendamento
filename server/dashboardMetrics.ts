@@ -1,4 +1,5 @@
 import type { AppointmentStatus } from "../drizzle/schema";
+import { UNIDADES, unidadePorCnpj } from "../shared/recipients";
 
 export type DashboardAppointment = {
   status: AppointmentStatus;
@@ -8,7 +9,35 @@ export type DashboardAppointment = {
   supplierName: string | null;
   invoiceSupplierName: string | null;
   invoiceTotalCents: number | null;
+  /** Para qual unidade a carga foi — é por ele que a barra se divide. */
+  recipientCnpj: string | null;
+  /** Quantos volumes a nota trouxe. Nem toda nota informa. */
+  invoiceVolumeCount: number | null;
 };
+
+/**
+ * A sigla da unidade que recebeu, ou "Outros".
+ *
+ * Nota do acervo antigo pode ter vindo sem destinatário reconhecido, e ela não
+ * pode sumir da contagem: some do gráfico e o total do dia deixa de bater com o
+ * número de notas recebidas, que é o pior jeito de um painel mentir.
+ */
+const OUTROS = "Outros";
+
+export function siglaDaUnidade(recipientCnpj: string | null): string {
+  return unidadePorCnpj(recipientCnpj)?.sigla ?? OUTROS;
+}
+
+/** As colunas da barra empilhada, na ordem fixa em que a operação as lê. */
+export const SIGLAS_DAS_UNIDADES = [...UNIDADES.map(unidade => unidade.sigla), OUTROS];
+
+type BarraDoGrafico = { label: string; total: number; volumes: number } & Record<string, number | string>;
+
+function barraVazia(label: string): BarraDoGrafico {
+  const barra = { label, total: 0, volumes: 0 } as BarraDoGrafico;
+  for (const sigla of SIGLAS_DAS_UNIDADES) barra[sigla] = 0;
+  return barra;
+}
 
 export type DashboardPeriod = {
   month: number;
@@ -37,12 +66,14 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
   const start = day ? new Date(period.year, period.month - 1, day) : new Date(period.year, period.month - 1, 1);
   const end = day ? new Date(period.year, period.month - 1, day + 1) : new Date(period.year, period.month, 1);
   const now = period.now ?? new Date();
-  const dailyReceived = Array.from({ length: daysInMonth }, (_, index) => ({
+  const dailyReceived: (BarraDoGrafico & { day: number })[] = Array.from({ length: daysInMonth }, (_, index) => ({
     day: index + 1,
-    label: `${String(index + 1).padStart(2, "0")}/${String(period.month).padStart(2, "0")}`,
-    total: 0,
+    ...barraVazia(`${String(index + 1).padStart(2, "0")}/${String(period.month).padStart(2, "0")}`),
   }));
-  const monthlyReceived = MONTH_LABELS.map((label, index) => ({ month: index + 1, label, total: 0 }));
+  const monthlyReceived: (BarraDoGrafico & { month: number })[] = MONTH_LABELS.map((label, index) => ({
+    month: index + 1,
+    ...barraVazia(label),
+  }));
   const receivedBySupplier = new Map<string, number>();
   const pending = items.filter(item => item.status === "pending");
   const scheduled = items.filter(item => item.status === "scheduled" && isWithinPeriod(item.scheduledFor, start, end));
@@ -56,12 +87,20 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
   items.forEach(item => {
     const receivedAt = item.receivedAt;
     if (!receivedAt) return;
+    const sigla = siglaDaUnidade(item.recipientCnpj);
+    const volumes = item.invoiceVolumeCount ?? 0;
     if (isWithinPeriod(receivedAt, monthStart, monthEnd)) {
-      dailyReceived[receivedAt.getDate() - 1]!.total += 1;
+      const barra = dailyReceived[receivedAt.getDate() - 1]!;
+      barra.total += 1;
+      barra.volumes += volumes;
+      barra[sigla] = (barra[sigla] as number) + 1;
     }
     // A leitura por mês é do ano inteiro: é ela que mostra o ano tomando forma.
     if (isWithinPeriod(receivedAt, yearStart, yearEnd)) {
-      monthlyReceived[receivedAt.getMonth()]!.total += 1;
+      const barra = monthlyReceived[receivedAt.getMonth()]!;
+      barra.total += 1;
+      barra.volumes += volumes;
+      barra[sigla] = (barra[sigla] as number) + 1;
     }
   });
 
@@ -81,6 +120,16 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
     pendingTotalCents: pending.reduce((sum, item) => sum + (item.invoiceTotalCents ?? 0), 0),
     scheduledTotalCents: scheduled.reduce((sum, item) => sum + (item.invoiceTotalCents ?? 0), 0),
     receivedTotalCents: received.reduce((sum, item) => sum + (item.invoiceTotalCents ?? 0), 0),
+    // Volumes e a divisão por unidade no período escolhido: é o que o gráfico
+    // mostra dia a dia, somado, para quem quer o número e não a forma.
+    receivedVolumes: received.reduce((sum, item) => sum + (item.invoiceVolumeCount ?? 0), 0),
+    receivedPorUnidade: SIGLAS_DAS_UNIDADES.map(sigla => ({
+      sigla,
+      notas: received.filter(item => siglaDaUnidade(item.recipientCnpj) === sigla).length,
+      volumes: received
+        .filter(item => siglaDaUnidade(item.recipientCnpj) === sigla)
+        .reduce((sum, item) => sum + (item.invoiceVolumeCount ?? 0), 0),
+    })),
     dailyReceived,
     monthlyReceived,
     topSuppliers: Array.from(receivedBySupplier, ([name, notesReceived]) => ({ name, notesReceived }))
