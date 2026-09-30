@@ -9,10 +9,12 @@ describe("exibição e sincronização do portal", () => {
     expect(getAppointmentMomentForDisplay({ status: "received", scheduledFor, receivedAt })).toBe(receivedAt);
   });
 
-  it("mantém a sincronização automática ativa para telas abertas", () => {
+  it("mantém a sincronização automática nas telas abertas, e só nelas", () => {
+    // Aberta e à vista continua atualizando sozinha. Minimizada, não: a aba
+    // esquecida repetia a consulta a cada cinco segundos, madrugada adentro.
     expect(realtimeQueryDefaults).toMatchObject({
       refetchInterval: REALTIME_REFRESH_INTERVAL_MS,
-      refetchIntervalInBackground: true,
+      refetchIntervalInBackground: false,
       refetchOnWindowFocus: true,
     });
   });

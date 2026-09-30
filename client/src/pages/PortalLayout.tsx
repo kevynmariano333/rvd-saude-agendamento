@@ -86,10 +86,11 @@ export default function PortalLayout({
   const notifications = trpc.messages.notifications.useQuery(undefined, { refetchInterval: 15_000 });
   const utils = trpc.useUtils();
   const logoutMutation = trpc.auth.logout.useMutation();
-  // Qual versão o servidor está servindo agora. Pergunta de novo de minuto em
-  // minuto: assim, depois de um deploy, o rodapé passa a mostrar o código novo
-  // sem ninguém precisar limpar o navegador.
-  const versaoNoAr = trpc.manutencao.versaoNoAr.useQuery(undefined, { refetchInterval: 60_000, staleTime: 30_000 });
+  // Qual versão o servidor está servindo agora. De dez em dez minutos: deploy
+  // não acontece a cada minuto, e perguntar de minuto em minuto era uma
+  // consulta por pessoa por minuto o dia inteiro para responder um número que
+  // muda uma vez por semana.
+  const versaoNoAr = trpc.manutencao.versaoNoAr.useQuery(undefined, { refetchInterval: 600_000, staleTime: 300_000 });
   const unreadCount = notifications.data?.length ?? 0;
 
   // Um caminhão parado no portão espera a Operação aceitar o recebimento, e

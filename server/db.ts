@@ -57,7 +57,10 @@ import { ehDoPlanejamento, sugestaoPrioritaria } from "../shared/prioridadeDaSug
  */
 const CONEXOES_DO_POOL = {
   connectionLimit: 10,
-  maxIdle: 4,
+  // Duas conexões paradas, e não quatro: cada uma custa memória dos dois lados,
+  // e memória é a maior linha da conta do servidor. O pico continua podendo
+  // abrir dez.
+  maxIdle: 2,
   idleTimeout: 60_000,
   enableKeepAlive: true,
   keepAliveInitialDelay: 10_000,
