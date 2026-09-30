@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MOTIVOS_DE_BACKLOG } from "../shared/backlogReasons";
 import { canTransitionAppointment } from "./permissions";
-import { decodificarCsv, importarAcervo, lerComentarios, lerDataSaoPaulo, lerDinheiroEmCentavos, montarEventos, MOTIVOS_DO_AGILIZA, STATUS_AGILIZA, type EpisodioDeBacklog, type LinhaValidada } from "./agilizaImport";
+import { codigoDeOrigem, decodificarCsv, importarAcervo, lerComentarios, lerDataSaoPaulo, lerDinheiroEmCentavos, montarEventos, MOTIVOS_DO_AGILIZA, STATUS_AGILIZA, type EpisodioDeBacklog, type LinhaValidada } from "./agilizaImport";
 import type { AppointmentStatus } from "../drizzle/schema";
 
 const linha = (extra: Partial<LinhaValidada> = {}): LinhaValidada => ({
@@ -157,6 +157,24 @@ describe("tradução do acervo", () => {
   it("não manda dois motivos da origem para o mesmo código, que apagaria a diferença", () => {
     const destinos = Object.values(MOTIVOS_DO_AGILIZA);
     expect(new Set(destinos).size).toBe(destinos.length);
+  });
+
+  it("guarda o código de lá quando ele não tem par aqui, em vez de guardar nada", () => {
+    // Gravar nulo fazia o relatório escrever "Motivo não informado" numa nota
+    // em que o Agiliza informou o motivo.
+    expect(codigoDeOrigem("pendencia de recebimento")).toBe("PENDENCIA_DE_RECEBIMENTO");
+    expect(codigoDeOrigem("divergência fiscal")).toBe("DIVERGENCIA_FISCAL");
+    expect(codigoDeOrigem("erro-no-lote")).toBe("ERRO_NO_LOTE");
+  });
+
+  it("motivo em branco continua sendo motivo nenhum", () => {
+    expect(codigoDeOrigem("")).toBeNull();
+    expect(codigoDeOrigem("   ")).toBeNull();
+    expect(codigoDeOrigem("---")).toBeNull();
+  });
+
+  it("não inventa código maior do que a coluna aceita", () => {
+    expect((codigoDeOrigem("a".repeat(120)) ?? "").length).toBe(60);
   });
 });
 

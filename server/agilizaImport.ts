@@ -26,6 +26,7 @@
 import { and, eq, or } from "drizzle-orm";
 import { getDb } from "./db";
 import { z } from "zod";
+import { ehMotivoConhecido } from "../shared/backlogReasons";
 import {
   appointmentInternalNotes,
   appointments,
@@ -109,6 +110,24 @@ const CABECALHO_BACKLOG = [
  * descrição de toda nota importada: se a leitura estiver trocada, o dado não se
  * perdeu, e corrigir é reescrever esta tabela.
  */
+/**
+ * O código do Agiliza escrito como código daqui.
+ *
+ * Maiúsculas e sublinhado, que é a forma dos códigos da lista fechada, e no
+ * tamanho que a coluna aceita. Não vira motivo conhecido — `rotuloDoMotivo`
+ * mostra o próprio código quando ele não está na lista —, mas diz o que o
+ * sistema de origem disse, em vez de dizer que ninguém disse nada.
+ */
+export function codigoDeOrigem(codigoOriginal: string): string | null {
+  const limpo = codigoOriginal
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return limpo ? limpo.slice(0, 60) : null;
+}
+
 export const MOTIVOS_DO_AGILIZA: Record<string, string> = {
   avaliacao_lote_incompleta: "AVALIACAO_LOTE_INCOMPLETA",
   caixaria: "UNIDADE_MEDIDA_CAIXARIA",
@@ -446,8 +465,14 @@ function lerBacklog(conteudo: string): { porNota: Map<string, EpisodioDeBacklog>
       return;
     }
     const codigoOriginal = colunas[8].replace(/^Problema relatado:\s*/i, "").trim().toLowerCase();
-    const codigo = MOTIVOS_DO_AGILIZA[codigoOriginal] ?? null;
-    if (codigoOriginal && !codigo) motivosDesconhecidos.set(codigoOriginal, (motivosDesconhecidos.get(codigoOriginal) ?? 0) + 1);
+    // Sem correspondência na lista daqui, vale o código de lá. Guardar nulo
+    // fazia o relatório escrever "Motivo não informado" numa nota em que o
+    // Agiliza informou o motivo — a tela mentia sobre o que estava gravado. O
+    // rótulo de um código fora da lista é o próprio código, que é a verdade.
+    const codigo = MOTIVOS_DO_AGILIZA[codigoOriginal] ?? codigoDeOrigem(codigoOriginal);
+    if (codigoOriginal && !MOTIVOS_DO_AGILIZA[codigoOriginal]) {
+      motivosDesconhecidos.set(codigoOriginal, (motivosDesconhecidos.get(codigoOriginal) ?? 0) + 1);
+    }
     porNota.set(chaveDaNota(cnpj, nota), {
       codigoOriginal,
       codigo,
@@ -719,7 +744,9 @@ function montarObservacao(plano: PlanoNota) {
 /** A descrição do motivo guarda o código como ele veio, que é o dado bruto. */
 function montarDescricaoDoMotivo(episodio: EpisodioDeBacklog) {
   const origem = episodio.codigoOriginal || "não informado";
-  return episodio.codigo
+  // O que decide a frase é a lista do portal, e não o que foi gravado: o código
+  // de origem passou a ser guardado justamente quando ele não tem par aqui.
+  return ehMotivoConhecido(episodio.codigo)
     ? `Motivo importado do ${ORIGEM} (código de origem: ${origem}).`
     : `Motivo importado do ${ORIGEM} sem correspondência na lista do portal (código de origem: ${origem}).`;
 }
