@@ -51,7 +51,14 @@ function celulasDoMes(mes: Date) {
   });
 }
 
-type NotaDoCalendario = AppointmentDetail;
+/**
+ * A nota como o calendário a recebe.
+ *
+ * `dataDoCalendario` é o dia em que a operação espera a nota: o agendamento
+ * cravado ou, na pendente, a data proposta que a lista já mostra. Quem decide é
+ * o servidor — aqui ela só é obedecida, para o quadro e a lista não discordarem.
+ */
+type NotaDoCalendario = AppointmentDetail & { dataDoCalendario: Date | string };
 
 export default function CalendarPage() {
   const [, setLocation] = useLocation();
@@ -80,12 +87,12 @@ export default function CalendarPage() {
   const porDia = useMemo(() => {
     const mapa = new Map<string, NotaDoCalendario[]>();
     for (const nota of notas) {
-      const chave = chaveDoDia(nota.scheduledFor);
+      const chave = chaveDoDia(nota.dataDoCalendario);
       const lista = mapa.get(chave);
       if (lista) lista.push(nota);
       else mapa.set(chave, [nota]);
     }
-    for (const lista of Array.from(mapa.values())) lista.sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime());
+    for (const lista of Array.from(mapa.values())) lista.sort((a, b) => new Date(a.dataDoCalendario).getTime() - new Date(b.dataDoCalendario).getTime());
     return mapa;
   }, [notas]);
 
@@ -197,7 +204,7 @@ function DiaAberto({ dia, notas, onFechar, onAbrirNota }: { dia: string; notas: 
   useEffect(() => { quadro.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [dia]);
   const porHora = new Map<string, NotaDoCalendario[]>();
   for (const nota of notas) {
-    const hora = `${String(new Date(nota.scheduledFor).getHours()).padStart(2, "0")}:00`;
+    const hora = `${String(new Date(nota.dataDoCalendario).getHours()).padStart(2, "0")}:00`;
     const lista = porHora.get(hora);
     if (lista) lista.push(nota);
     else porHora.set(hora, [nota]);
@@ -225,7 +232,7 @@ function DiaAberto({ dia, notas, onFechar, onAbrirNota }: { dia: string; notas: 
                     onClick={() => onAbrirNota(nota)}
                     className={`flex w-full items-center gap-3 rounded-xl border bg-surface px-4 py-2.5 text-left transition hover:bg-rvd-plum-pale/60 ${urgente ? "border-state-stop" : "border-line"}`}
                   >
-                    <span className="w-11 shrink-0 text-[11px] font-extrabold text-ink-soft">{new Date(nota.scheduledFor).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+                    <span className="w-11 shrink-0 text-[11px] font-extrabold text-ink-soft">{new Date(nota.dataDoCalendario).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-extrabold text-ink">{fornecedor}</span>
                       <span className="mt-0.5 block truncate text-[11px] text-ink-soft">

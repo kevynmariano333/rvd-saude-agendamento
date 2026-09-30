@@ -34,6 +34,7 @@ import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 import { getReceiptTimestampForStatus } from "./receiptStatus";
 import { getSaoPauloDayRange } from "../shared/dateFilters";
 import type { ChaveDeDuplicidade } from "../shared/duplicidadeDeNota";
+import { notasDoCalendario, propostasNoPeriodo } from "../shared/dataDoCalendario";
 import { ehDoPlanejamento, sugestaoPrioritaria } from "../shared/prioridadeDaSugestao";
 
 /**
@@ -594,12 +595,7 @@ export async function listUnreadAppointmentMessages(input: { userId: number; isO
  * abrir a nota ali mesmo, e voltar ao banco por cada uma seria uma consulta
  * por clique. Os itens continuam de fora, que é o único campo pesado.
  */
-export async function listAppointmentsBetween(start: Date, end: Date, status?: AppointmentStatus[]) {
-  const db = await getDb();
-  if (!db) return [];
-  if (status && !status.length) return [];
-  return db
-    .select({
+const COLUNAS_DA_NOTA_NO_CALENDARIO = {
       id: appointments.id,
       supplierId: appointments.supplierId,
       supplierName: users.name,
@@ -637,11 +633,57 @@ export async function listAppointmentsBetween(start: Date, end: Date, status?: A
       status: appointments.status,
       createdAt: appointments.createdAt,
       updatedAt: appointments.updatedAt,
-    })
+} as const;
+
+async function listAppointmentsBetween(start: Date, end: Date, status?: AppointmentStatus[]) {
+  const db = await getDb();
+  if (!db) return [];
+  if (status && !status.length) return [];
+  return db
+    .select(COLUNAS_DA_NOTA_NO_CALENDARIO)
     .from(appointments)
     .innerJoin(users, eq(appointments.supplierId, users.id))
     .where(and(gte(appointments.scheduledFor, start), lte(appointments.scheduledFor, end), ...(status ? [inArray(appointments.status, status)] : [])))
     .orderBy(appointments.scheduledFor);
+}
+
+/** As mesmas notas, buscadas por id — para o calendário completar o mês. */
+async function listAppointmentsByIds(ids: number[], status?: AppointmentStatus[]) {
+  const db = await getDb();
+  if (!db || !ids.length) return [];
+  if (status && !status.length) return [];
+  return db
+    .select(COLUNAS_DA_NOTA_NO_CALENDARIO)
+    .from(appointments)
+    .innerJoin(users, eq(appointments.supplierId, users.id))
+    .where(and(inArray(appointments.id, ids), ...(status ? [inArray(appointments.status, status)] : [])))
+    .orderBy(appointments.scheduledFor);
+}
+
+/** Os status que o calendário mostra: o que ainda vai chegar. */
+const STATUS_DO_CALENDARIO: AppointmentStatus[] = ["pending", "scheduled"];
+
+/**
+ * As notas do calendário, cada uma no dia em que a operação a espera.
+ *
+ * A nota pendente com data proposta é o caso que obrigava esta função a
+ * existir. O quadro a colocava no `scheduledFor` — a data que o fornecedor
+ * pediu quando mandou a nota — enquanto a lista já mostrava a data proposta
+ * pelo planejamento. A mesma nota aparecia em dois dias diferentes conforme a
+ * tela, e sumia do mês da proposta. Aqui a data que vale é decidida uma vez,
+ * pela mesma regra de prioridade da janela de agendamento, e é ela que filtra
+ * o mês e escolhe a célula.
+ */
+export async function listCalendarAppointments(start: Date, end: Date) {
+  const sugestoes = await sugestoesPendentesPorNota();
+  // Duas buscas porque a proposta pode estar num mês e o `scheduledFor` em
+  // outro: uma traz quem está marcado no período, a outra quem foi proposto
+  // para ele.
+  const [porData, porProposta] = await Promise.all([
+    listAppointmentsBetween(start, end, STATUS_DO_CALENDARIO),
+    listAppointmentsByIds(propostasNoPeriodo(sugestoes, start, end), STATUS_DO_CALENDARIO),
+  ]);
+  return notasDoCalendario([...porData, ...porProposta], sugestoes, start, end);
 }
 
 export async function createAppointmentSuggestion(input: {

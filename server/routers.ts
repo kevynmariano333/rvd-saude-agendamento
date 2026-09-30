@@ -31,7 +31,7 @@ import {
   listAppointmentHistory,
   listAppointmentMessages,
   listAppointments,
-  listAppointmentsBetween,
+  listCalendarAppointments,
   listAppointmentInternalNotes,
   listAppointmentSuggestions,
   listBacklogReportRows,
@@ -1583,7 +1583,7 @@ export const appRouter = router({
         // chegou, concluída já foi lançada e recusada não vem — deixá-las no
         // quadro faz o número do dia contar trabalho que não existe mais. O
         // histórico delas continua na lista e no relatório.
-        return listAppointmentsBetween(start, end, ["pending", "scheduled"]);
+        return listCalendarAppointments(start, end);
       }),
   }),
   attendances: router({
