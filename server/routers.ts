@@ -35,6 +35,7 @@ import {
   ultimasNotasNoBacklog,
   conversasRecentesDoBacklog,
   listAppointmentInternalNotes,
+  marcarConversaDaTratativaLida,
   listAppointmentSuggestions,
   listBacklogReportRows,
   contarMensagensPorNota,
@@ -1613,6 +1614,19 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         assertSchedulingDesk(ctx.user.role);
         return listAppointmentInternalNotes(input.appointmentId);
+      }),
+    /**
+     * Abrir a conversa é a leitura: some do sino o que a pessoa acabou de ver.
+     *
+     * Sem isto o aviso não tinha fim — clicar levava até a conversa e o número
+     * continuava no sino, então ele parava de querer dizer alguma coisa.
+     */
+    marcarLida: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        assertSchedulingDesk(ctx.user.role);
+        await marcarConversaDaTratativaLida({ userId: ctx.user.id, appointmentId: input.appointmentId });
+        return { ok: true };
       }),
     create: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), body: z.string().trim().min(1, "Escreva a observação.").max(2000) }))

@@ -267,6 +267,13 @@
       "when": 1790777191391,
       "tag": "0037_backlog_codigo_de_origem",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "5",
+      "when": 1790799536882,
+      "tag": "0038_conversa_da_tratativa_lida",
+      "breakpoints": true
     }
   ]
 }

@@ -305,6 +305,29 @@ export const appointmentInternalNotes = mysqlTable(
   table => [index("appointment_internal_notes_idx").on(table.appointmentId, table.createdAt)]
 );
 
+/**
+ * Até onde cada pessoa já leu a conversa da tratativa de uma nota.
+ *
+ * O aviso da tratativa não tinha como parar de aparecer: a anotação interna é
+ * lida por todo o balcão, e "lida" não cabe numa coluna da própria anotação —
+ * ela seria lida por um e continuaria nova para os outros. Uma linha por pessoa
+ * e por nota responde isso sem tocar no que já está gravado.
+ */
+export const appointmentInternalNoteReads = mysqlTable(
+  "appointmentInternalNoteReads",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    appointmentId: int("appointmentId")
+      .notNull()
+      .references(() => appointments.id, { onDelete: "cascade" }),
+    lastReadAt: timestamp("lastReadAt").defaultNow().notNull(),
+  },
+  table => [uniqueIndex("appointment_internal_note_reads_unq").on(table.userId, table.appointmentId)]
+);
+
 export const appointmentSuggestions = mysqlTable(
   "appointmentSuggestions",
   {

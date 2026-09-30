@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   treatBacklogAppointment: vi.fn(),
   listAppointmentInternalNotes: vi.fn(),
   conversasRecentesDoBacklog: vi.fn(),
+  marcarConversaDaTratativaLida: vi.fn(),
   createAppointmentInternalNote: vi.fn(),
   createLocalUser: vi.fn(),
   deleteAppointmentById: vi.fn(),
@@ -898,6 +899,27 @@ describe("o aviso da conversa do backlog", () => {
     const caller = appRouter.createCaller(context("planejador"));
     await caller.appointments.conversaDoBacklog();
     expect(mocks.conversasRecentesDoBacklog).toHaveBeenCalledWith(expect.objectContaining({ exceptoAutorId: 24 }));
+  });
+});
+
+/*
+ * Abrir a conversa é a leitura. Sem isso o aviso não tinha fim: clicar levava
+ * até a conversa e o número continuava no sino, então ele parava de querer
+ * dizer alguma coisa.
+ */
+describe("marcar a conversa da tratativa como lida", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("guarda a leitura no nome de quem abriu", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.internalNotes.marcarLida({ appointmentId: 7 });
+    expect(mocks.marcarConversaDaTratativaLida).toHaveBeenCalledWith({ userId: 24, appointmentId: 7 });
+  });
+
+  it("o fornecedor não marca leitura de uma conversa que ele nem vê", async () => {
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.internalNotes.marcarLida({ appointmentId: 7 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.marcarConversaDaTratativaLida).not.toHaveBeenCalled();
   });
 });
 

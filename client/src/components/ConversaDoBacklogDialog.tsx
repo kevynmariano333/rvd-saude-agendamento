@@ -40,6 +40,18 @@ export default function ConversaDoBacklogDialog({
   );
   const falas = conversa.data ?? [];
 
+  // Abrir a conversa é a leitura. O aviso daquela nota sai do sino assim que
+  // ela aparece na tela — era isso que faltava para o número querer dizer
+  // alguma coisa.
+  const marcarLida = trpc.internalNotes.marcarLida.useMutation({
+    onSuccess: () => { void utils.appointments.conversaDoBacklog.invalidate(); },
+  });
+  const marcar = marcarLida.mutate;
+  useEffect(() => {
+    if (!open || !appointmentId) return;
+    marcar({ appointmentId });
+  }, [open, appointmentId, marcar, falas.length]);
+
   // A conversa abre no fim: o que interessa é a última fala, não a primeira.
   useEffect(() => {
     if (!open) return;

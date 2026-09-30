@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, like, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, lte, ne, or, sql } from "drizzle-orm";
 import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
 import { customAlphabet, nanoid } from "nanoid";
@@ -6,6 +6,7 @@ import {
   appointments,
   appointmentMessages,
   appointmentStatusHistory,
+  appointmentInternalNoteReads,
   appointmentInternalNotes,
   appointmentSuggestions,
   attendanceEvents,
@@ -1692,9 +1693,41 @@ export async function conversasRecentesDoBacklog(input: { exceptoAutorId: number
     .from(appointmentInternalNotes)
     .innerJoin(appointments, eq(appointments.id, appointmentInternalNotes.appointmentId))
     .leftJoin(users, eq(users.id, appointmentInternalNotes.authorId))
-    .where(and(eq(appointments.status, "backlog"), ne(appointmentInternalNotes.authorId, input.exceptoAutorId)))
+    .leftJoin(
+      appointmentInternalNoteReads,
+      and(
+        eq(appointmentInternalNoteReads.appointmentId, appointmentInternalNotes.appointmentId),
+        eq(appointmentInternalNoteReads.userId, input.exceptoAutorId),
+      ),
+    )
+    .where(
+      and(
+        eq(appointments.status, "backlog"),
+        ne(appointmentInternalNotes.authorId, input.exceptoAutorId),
+        // Some do sino o que a pessoa já leu. Sem isto o aviso ficava para
+        // sempre: clicar levava até a conversa e o número continuava lá.
+        or(isNull(appointmentInternalNoteReads.lastReadAt), gt(appointmentInternalNotes.createdAt, appointmentInternalNoteReads.lastReadAt)),
+      ),
+    )
     .orderBy(desc(appointmentInternalNotes.createdAt))
     .limit(input.limite ?? 10);
+}
+
+/**
+ * Marca a conversa de uma nota como lida por quem abriu.
+ *
+ * Abrir a conversa é a leitura — não existe um segundo gesto que signifique
+ * "li" melhor do que esse. A marca é por pessoa: o que um leu continua novo
+ * para os outros.
+ */
+export async function marcarConversaDaTratativaLida(input: { userId: number; appointmentId: number }) {
+  const db = await getDb();
+  if (!db) return;
+  const agora = new Date();
+  await db
+    .insert(appointmentInternalNoteReads)
+    .values({ userId: input.userId, appointmentId: input.appointmentId, lastReadAt: agora })
+    .onDuplicateKeyUpdate({ set: { lastReadAt: agora } });
 }
 
 export async function createAppointmentInternalNote(input: { appointmentId: number; authorId: number; body: string }) {
