@@ -56,4 +56,26 @@ describe("por qual critério procurar a nota", () => {
     expect(chaveDeDuplicidade({ accessKey: "", supplierCnpj: "12345678000199", invoiceNumber: "" })).toBeNull();
     expect(chaveDeDuplicidade({ accessKey: "", supplierCnpj: "", invoiceNumber: "123" })).toBeNull();
   });
+
+  it("usa a empresa de quem registrou quando não há emitente", () => {
+    // É o caso da nota de serviço: número digitado à mão, sem XML e sem chave.
+    // Sem esta reserva ela entrava duas vezes sem o portal dizer nada.
+    expect(chaveDeDuplicidade({ companyCnpj: "98.765.432/0001-10", invoiceNumber: "0045" })).toEqual({
+      tipo: "fornecedorENumero",
+      cnpj: "98765432000110",
+      numero: "45",
+    });
+  });
+
+  it("o emitente do XML vem antes da empresa do login", () => {
+    // Quem emitiu a nota identifica o documento; o login pode ser de uma
+    // transportadora enviando pela empresa.
+    expect(
+      chaveDeDuplicidade({ supplierCnpj: "12345678000199", companyCnpj: "98765432000110", invoiceNumber: "45" }),
+    ).toEqual({ tipo: "fornecedorENumero", cnpj: "12345678000199", numero: "45" });
+  });
+
+  it("empresa sem número continua não identificando nota nenhuma", () => {
+    expect(chaveDeDuplicidade({ companyCnpj: "98765432000110", invoiceNumber: "" })).toBeNull();
+  });
 });

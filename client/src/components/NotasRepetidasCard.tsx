@@ -1,9 +1,10 @@
 import { trpc } from "@/lib/trpc";
 import { statusCopy, type PortalStatus } from "@/lib/portal";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Copy, Trash2 } from "lucide-react";
+import { CheckCircle2, Copy, Trash2, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { copiaQueFica } from "@shared/copiaQueFica";
 
 const dia = (valor: Date | string) =>
   new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(valor));
@@ -24,10 +25,22 @@ export default function NotasRepetidasCard() {
   // que aparece em todas as linhas ao mesmo tempo é confirmação que se clica
   // sem ler.
   const [confirmando, setConfirmando] = useState<number | null>(null);
+  /** Qual grupo está perguntando "limpo tudo?". Um de cada vez, pela mesma razão. */
+  const [limpando, setLimpando] = useState<string | null>(null);
   const excluir = trpc.manutencao.excluirNotaRepetida.useMutation({
     onSuccess: resultado => {
       toast.success(`Cópia apagada: ${resultado.resumo}`);
       setConfirmando(null);
+      void utils.manutencao.notasRepetidas.invalidate();
+      void utils.appointments.list.invalidate();
+      void utils.appointments.counts.invalidate();
+    },
+    onError: erro => toast.error(erro.message),
+  });
+  const limpar = trpc.manutencao.limparCopiasRepetidas.useMutation({
+    onSuccess: resultado => {
+      toast.success(`${resultado.apagadas.length} cópia(s) apagada(s). Ficou a nota ${resultado.fica}.`);
+      setLimpando(null);
       void utils.manutencao.notasRepetidas.invalidate();
       void utils.appointments.list.invalidate();
       void utils.appointments.counts.invalidate();
@@ -50,6 +63,10 @@ export default function NotasRepetidasCard() {
             onde a importação do acervo repetia nota. Esta lista mostra as que entraram <strong>antes</strong> dessa
             trava existir — pela data de cada registro dá para saber se é herança ou coisa nova.
           </p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-soft">
+            O mesmo número vindo de <strong>outro fornecedor</strong> não é repetição: são duas notas
+            diferentes, e o portal deixa as duas entrarem.
+          </p>
           <p className="mt-2 max-w-2xl rounded-xl bg-state-stop-bg px-3 py-2 text-[12px] leading-5 text-state-stop">
             Apagar uma cópia leva junto as mensagens, o histórico e as anotações dela, e não tem
             volta. Olhe o status e a data antes: a cópia mais trabalhada costuma ser a que fica. A
@@ -65,19 +82,58 @@ export default function NotasRepetidasCard() {
             </p>
           )}
 
-          {grupos.map(grupo => (
+          {grupos.map(grupo => {
+            const fica = copiaQueFica(grupo.notas);
+            return (
             <div key={grupo.identidade} className="mt-4 overflow-hidden rounded-2xl border border-line">
               <div className="flex flex-wrap items-center justify-between gap-2 bg-sunken px-4 py-2.5">
                 <p className="break-all font-mono text-xs font-bold text-ink">{grupo.identidade}</p>
-                <p className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-                  {grupo.notas.length} registros · mesma {grupo.porQue}
-                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+                    {grupo.notas.length} registros · mesma {grupo.porQue}
+                  </p>
+                  {limpando === grupo.identidade ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-state-stop">
+                        Apagar {grupo.notas.length - 1} e manter a nota {fica?.id}?
+                      </span>
+                      <Button
+                        type="button"
+                        onClick={() => limpar.mutate({ identidade: grupo.identidade })}
+                        disabled={limpar.isPending}
+                        className="h-8 rounded-lg bg-state-stop px-2.5 text-[11px] font-bold text-white hover:bg-state-stop"
+                      >
+                        {limpar.isPending ? "Apagando..." : "Sim, limpar"}
+                      </Button>
+                      <button type="button" onClick={() => setLimpando(null)} className="text-[11px] font-bold text-ink-soft underline">
+                        não
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setLimpando(grupo.identidade)}
+                      title="Apagar as cópias e manter a que carrega mais trabalho"
+                      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-ink-soft transition hover:bg-state-stop-bg hover:text-state-stop"
+                    >
+                      <Wand2 className="size-3.5" />
+                      Limpar as cópias
+                    </button>
+                  )}
+                </div>
               </div>
               <table className="w-full text-left text-[13px]">
                 <tbody>
                   {grupo.notas.map(nota => (
-                    <tr key={nota.id} className="border-t border-line">
-                      <td className="px-4 py-2 font-bold text-rvd-plum">NF {nota.invoiceNumber || "sem número"}</td>
+                    <tr key={nota.id} className={`border-t border-line ${fica?.id === nota.id ? "bg-state-go-bg/40" : ""}`}>
+                      <td className="px-4 py-2 font-bold text-rvd-plum">
+                        NF {nota.invoiceNumber || "sem número"}
+                        {fica?.id === nota.id && (
+                          <span className="ml-2 rounded bg-state-go px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white">
+                            fica
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-ink-soft">{nota.invoiceSupplierName || "fornecedor não informado"}</td>
                       <td className="px-4 py-2 text-ink-soft">{statusCopy[nota.status as PortalStatus] ?? nota.status}</td>
                       <td className="px-4 py-2 text-ink-soft">{nota.source}</td>
@@ -115,7 +171,8 @@ export default function NotasRepetidasCard() {
                 </tbody>
               </table>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

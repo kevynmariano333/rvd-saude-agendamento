@@ -47,14 +47,24 @@ export function numeroComparavel(valor: string | null | undefined): string {
 export function chaveDeDuplicidade(nota: {
   accessKey?: string | null;
   supplierCnpj?: string | null;
+  /**
+   * O CNPJ da empresa de quem está registrando, quando o emitente não é
+   * conhecido — a nota de serviço não tem XML, e as do acervo antigo não
+   * trouxeram o emitente. Sem esta reserva, esses dois caminhos entravam sem
+   * conferência nenhuma.
+   */
+  companyCnpj?: string | null;
   invoiceNumber?: string | null;
 }): ChaveDeDuplicidade | null {
   const chave = soDigitos(nota.accessKey);
   if (chave.length === DIGITOS_DA_CHAVE) return { tipo: "chaveDeAcesso", chave };
 
-  const cnpj = soDigitos(nota.supplierCnpj);
   const numero = numeroComparavel(nota.invoiceNumber);
-  if (cnpj.length === DIGITOS_DO_CNPJ && numero) return { tipo: "fornecedorENumero", cnpj, numero };
+  const emitente = soDigitos(nota.supplierCnpj);
+  if (emitente.length === DIGITOS_DO_CNPJ && numero) return { tipo: "fornecedorENumero", cnpj: emitente, numero };
+
+  const empresa = soDigitos(nota.companyCnpj);
+  if (empresa.length === DIGITOS_DO_CNPJ && numero) return { tipo: "fornecedorENumero", cnpj: empresa, numero };
 
   return null;
 }

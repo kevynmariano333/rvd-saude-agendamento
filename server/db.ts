@@ -34,6 +34,7 @@ import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 import { getReceiptTimestampForStatus } from "./receiptStatus";
 import { getSaoPauloDayRange } from "../shared/dateFilters";
 import type { ChaveDeDuplicidade } from "../shared/duplicidadeDeNota";
+import { copiaQueFica, copiasQueSaem } from "../shared/copiaQueFica";
 import { notasDoCalendario, propostasNoPeriodo } from "../shared/dataDoCalendario";
 import { ehDoPlanejamento, sugestaoPrioritaria } from "../shared/prioridadeDaSugestao";
 
@@ -2280,7 +2281,11 @@ export async function notaJaRegistrada(chave: ChaveDeDuplicidade) {
         // prefixo "NFe" na frente. Sem `REGEXP_REPLACE`, que exige MySQL 8.
         sql`RIGHT(REPLACE(REPLACE(${appointments.invoiceAccessKey}, ' ', ''), '-', ''), 44) = ${chave.chave}`
       : and(
-          eq(appointments.invoiceSupplierCnpj, chave.cnpj),
+          // O CNPJ vale contra os dois lados: o emitente lido do XML e a
+          // empresa do login que enviou. A mesma nota chega com um ou com o
+          // outro conforme o caminho — XML, nota de serviço ou acervo — e
+          // olhar só uma coluna deixava a segunda cópia entrar.
+          or(eq(appointments.invoiceSupplierCnpj, chave.cnpj), eq(users.companyCnpj, chave.cnpj)),
           // Compara sem os zeros da frente: "000123" e "123" são a mesma nota.
           sql`TRIM(LEADING '0' FROM ${appointments.invoiceNumber}) = ${chave.numero}`,
         );
@@ -2295,6 +2300,7 @@ export async function notaJaRegistrada(chave: ChaveDeDuplicidade) {
       scheduledFor: appointments.scheduledFor,
     })
     .from(appointments)
+    .innerJoin(users, eq(users.id, appointments.supplierId))
     .where(condicao)
     .orderBy(desc(appointments.createdAt))
     .limit(1);
@@ -2376,10 +2382,12 @@ export async function notasRepetidas(limite = 50) {
     invoiceSupplierCnpj: appointments.invoiceSupplierCnpj,
     status: appointments.status,
     source: appointments.source,
+    // Quem tem MIRO tem lançamento no SAP: é a cópia que não pode sumir.
+    miroNumber: appointments.miroNumber,
     createdAt: appointments.createdAt,
   };
 
-  type NotaRepetida = { id: number; invoiceNumber: string | null; invoiceSupplierName: string | null; invoiceSupplierCnpj: string | null; status: string; source: string; createdAt: Date };
+  type NotaRepetida = { id: number; invoiceNumber: string | null; invoiceSupplierName: string | null; invoiceSupplierCnpj: string | null; status: string; source: string; miroNumber: string | null; createdAt: Date };
   const grupos: { identidade: string; porQue: "chave de acesso" | "fornecedor e número" | "empresa e número"; notas: NotaRepetida[] }[] = [];
 
   for (const linha of porChave) {
@@ -2457,6 +2465,34 @@ export async function excluirNotaRepetida(input: { appointmentId: number; adminI
   if (!grupo) throw new Error("Esta nota não aparece como repetida. Aqui só se apaga cópia de nota repetida.");
   if (grupo.notas.length < 2) throw new Error("Esta é a única cópia da nota. Apagar deixaria a entrega sem registro.");
 
+  return apagarCopiaDaNota(alvo.id, input.adminId);
+}
+
+/**
+ * Apaga uma cópia e deixa escrito o que foi embora com ela.
+ *
+ * Quem chama é que responde por "esta é mesmo uma cópia" — aqui só se apaga. O
+ * resumo é gravado antes da exclusão porque depois dela não há mais o que
+ * contar: é ele que responde, meses depois, o que existia naquele registro.
+ */
+async function apagarCopiaDaNota(appointmentId: number, adminId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  const alvo = (
+    await db
+      .select({
+        id: appointments.id,
+        invoiceNumber: appointments.invoiceNumber,
+        status: appointments.status,
+        source: appointments.source,
+        miroNumber: appointments.miroNumber,
+      })
+      .from(appointments)
+      .where(eq(appointments.id, appointmentId))
+      .limit(1)
+  )[0];
+  if (!alvo) throw new Error("Nota não encontrada.");
+
   const [mensagens] = await db
     .select({ total: count() })
     .from(appointmentMessages)
@@ -2474,7 +2510,7 @@ export async function excluirNotaRepetida(input: { appointmentId: number; adminI
     alvo.miroNumber ? `MIRO ${alvo.miroNumber}` : null,
     `${mensagens?.total ?? 0} mensagem(ns)`,
     `${historico?.total ?? 0} linha(s) de histórico`,
-    `apagada pelo usuário ${input.adminId}`,
+    `apagada pelo usuário ${adminId}`,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -2483,6 +2519,34 @@ export async function excluirNotaRepetida(input: { appointmentId: number; adminI
   await db.insert(systemAlerts).values({ kind: "nota-repetida-excluida", sentAt: new Date(), detail: resumo.slice(0, 500) });
   console.warn(`[Notas repetidas] ${resumo}`);
   return { apagada: alvo.id, resumo };
+}
+
+/**
+ * Apaga de uma vez as cópias de um grupo, deixando a que carrega mais trabalho.
+ *
+ * Apagar uma por uma funciona com três notas e não funciona com trinta — e é
+ * com trinta que alguém erra e apaga a cópia errada. Qual fica é decidido por
+ * regra escrita (`copiaQueFica`), e não por quem está com o mouse na mão.
+ *
+ * A validação é feita sobre o grupo recém-lido, e não nota a nota: reconferir
+ * cada uma custaria uma varredura inteira do banco por cópia apagada. O que
+ * garante a segurança é o recorte — só saem as cópias que `copiasQueSaem`
+ * devolve, e ela nunca devolve todas.
+ */
+export async function limparCopiasRepetidas(input: { identidade: string; adminId: number }) {
+  const grupos = await notasRepetidas(200);
+  const grupo = grupos.find(item => item.identidade === input.identidade);
+  if (!grupo) throw new Error("Este grupo não aparece mais como repetido. Recarregue a lista.");
+  const fica = copiaQueFica(grupo.notas);
+  const saem = copiasQueSaem(grupo.notas);
+  if (!fica || !saem.length) throw new Error("Não há cópia para apagar neste grupo.");
+
+  const resumos: string[] = [];
+  for (const nota of saem) {
+    const { resumo } = await apagarCopiaDaNota(nota.id, input.adminId);
+    resumos.push(resumo);
+  }
+  return { fica: fica.id, apagadas: saem.map(nota => nota.id), resumos };
 }
 
 /**

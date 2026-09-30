@@ -111,7 +111,7 @@ import { isS3Configured } from "./_core/s3Client";
 import { conteudoDoAgendamento } from "./emailDeAgendamento";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
-import { excluirNotaRepetida, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
+import { excluirNotaRepetida, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
 import { chaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 import { countAppointments, countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
 import { executarBackup } from "./backup";
@@ -304,7 +304,7 @@ const NOME_DO_STATUS: Record<string, string> = {
  * mercadoria na mão precisa saber onde continuar, e não só que não pode seguir.
  */
 async function recusarNotaRepetida(
-  nota: { accessKey?: string | null; supplierCnpj?: string | null; invoiceNumber?: string | null },
+  nota: { accessKey?: string | null; supplierCnpj?: string | null; companyCnpj?: string | null; invoiceNumber?: string | null },
   dica?: string,
 ) {
   const chave = chaveDeDuplicidade(nota);
@@ -829,6 +829,15 @@ export const appRouter = router({
         const invalido = pedidos.find(pedido => pedido.length !== 10);
         if (invalido) throw new TRPCError({ code: "BAD_REQUEST", message: `O pedido ${invalido} não tem 10 dígitos.` });
 
+        // A nota de serviço era o único caminho sem conferência: número digitado
+        // à mão, sem XML e sem chave, duas pessoas registrando a mesma nota do
+        // mesmo fornecedor sem o portal dizer nada. O CNPJ da empresa escolhida
+        // é o que identifica aqui — mesmo número de outro fornecedor continua
+        // sendo outra nota, e passa.
+        const empresa = await getUserById(input.supplierId);
+        if (!empresa) throw new TRPCError({ code: "BAD_REQUEST", message: "Fornecedor não encontrado." });
+        await recusarNotaRepetida({ companyCnpj: empresa.companyCnpj, invoiceNumber: input.invoiceNumber });
+
         let documento: { key: string; url: string } | null = null;
         if (input.documentBase64 && input.documentFileName) {
           const conteudo = Buffer.from(input.documentBase64, "base64");
@@ -1008,7 +1017,9 @@ export const appRouter = router({
         // uma vez para cada um. Recusar sem dizer isso não resolve o problema
         // dele — só o deixa sem saída.
         await recusarNotaRepetida(
-          { accessKey: invoice.accessKey, supplierCnpj: invoice.supplierCnpj, invoiceNumber: invoice.invoiceNumber },
+          // A empresa do login entra como reserva: XML sem o CNPJ do emitente
+          // passava sem conferência nenhuma.
+          { accessKey: invoice.accessKey, supplierCnpj: invoice.supplierCnpj, companyCnpj: ctx.user.companyCnpj, invoiceNumber: invoice.invoiceNumber },
           'Se esta nota cobre mais de um pedido de compra, eles vão todos num envio só: use o botão "Outro pedido" antes de enviar. Se faltou incluir um pedido, fale com a equipe de recebimento em vez de enviar a nota de novo.',
         );
         const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -1301,6 +1312,22 @@ export const appRouter = router({
           return await excluirNotaRepetida({ appointmentId: input.appointmentId, adminId: ctx.user.id });
         } catch (erro) {
           throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "Não consegui apagar esta nota." });
+        }
+      }),
+    /**
+     * Limpa de uma vez as cópias de um grupo repetido.
+     *
+     * A tela passa a identidade do grupo, e não a lista de notas: assim o que
+     * é apagado vem do que o servidor acabou de ler, e não do que o navegador
+     * estava mostrando quando alguém clicou.
+     */
+    limparCopiasRepetidas: adminProcedure
+      .input(z.object({ identidade: z.string().min(1).max(200) }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await limparCopiasRepetidas({ identidade: input.identidade, adminId: ctx.user.id });
+        } catch (erro) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "Não consegui limpar as cópias." });
         }
       }),
     /**
