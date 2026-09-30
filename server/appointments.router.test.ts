@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   updateAppointmentStatus: vi.fn(),
   treatBacklogAppointment: vi.fn(),
   listAppointmentInternalNotes: vi.fn(),
+  conversasRecentesDoBacklog: vi.fn(),
   createAppointmentInternalNote: vi.fn(),
   createLocalUser: vi.fn(),
   deleteAppointmentById: vi.fn(),
@@ -839,3 +840,46 @@ describe("alcance da Portaria", () => {
     }
   });
 });
+
+/*
+ * A conversa da tratativa é interna e é do planejamento. Deixá-la no sino de
+ * todo mundo encheria a caixa de quem não vai tratar a nota — e foi por isso
+ * que ela nasceu separada da conversa com o fornecedor.
+ */
+describe("o aviso da conversa do backlog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.conversasRecentesDoBacklog.mockResolvedValue([
+      { id: 1, appointmentId: 7, body: "Cotação saiu.", createdAt: new Date(), authorName: "Planejamento", invoiceNumber: "324055", recipientCnpj: null },
+    ]);
+  });
+
+  it("chega para o planejador", async () => {
+    const caller = appRouter.createCaller(context("planejador"));
+    await expect(caller.appointments.conversaDoBacklog()).resolves.toHaveLength(1);
+  });
+
+  it("chega para o administrador, que também trata o backlog", async () => {
+    const caller = appRouter.createCaller(context("admin"));
+    await expect(caller.appointments.conversaDoBacklog()).resolves.toHaveLength(1);
+  });
+
+  it("não chega para o operador, que não trata a fila", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await expect(caller.appointments.conversaDoBacklog()).resolves.toEqual([]);
+    expect(mocks.conversasRecentesDoBacklog).not.toHaveBeenCalled();
+  });
+
+  it("não chega para o fornecedor: ele nem enxerga esta conversa", async () => {
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.appointments.conversaDoBacklog()).resolves.toEqual([]);
+    expect(mocks.conversasRecentesDoBacklog).not.toHaveBeenCalled();
+  });
+
+  it("não avisa quem escreveu sobre a própria fala", async () => {
+    const caller = appRouter.createCaller(context("planejador"));
+    await caller.appointments.conversaDoBacklog();
+    expect(mocks.conversasRecentesDoBacklog).toHaveBeenCalledWith(expect.objectContaining({ exceptoAutorId: 24 }));
+  });
+});
+

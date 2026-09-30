@@ -6,6 +6,7 @@ import { unidadePorCnpj } from "@shared/recipients";
 import { trpc } from "@/lib/trpc";
 import {
   AlertTriangle,
+  MessagesSquare,
   BarChart3,
   Bell,
   Building2,
@@ -113,8 +114,12 @@ export default function PortalLayout({
   // agora nem por quê, e é isso que faz alguém abrir a tela.
   const backlogRecente = trpc.appointments.novosNoBacklog.useQuery(undefined, { enabled: podeTratarBacklog, refetchInterval: 60_000 });
   const novosNoBacklog = podeTratarBacklog ? (backlogRecente.data ?? []) : [];
+  // A conversa da tratativa é interna e é do planejamento: quem não vai tratar
+  // a nota não precisa do aviso dela na caixa.
+  const conversaDoBacklog = trpc.appointments.conversaDoBacklog.useQuery(undefined, { enabled: podeTratarBacklog, refetchInterval: 30_000 });
+  const falasDoBacklog = podeTratarBacklog ? (conversaDoBacklog.data ?? []) : [];
   const releaseCount = pendingReleases.length;
-  const alertCount = unreadCount + releaseCount + backlogCount;
+  const alertCount = unreadCount + releaseCount + backlogCount + falasDoBacklog.length;
 
   // Cada perfil vê só o seu posto de trabalho: quem cuida de agendamentos não
   // tem o pátio no menu, e quem trabalha no portão não tem a agenda. O
@@ -216,6 +221,21 @@ export default function PortalLayout({
       action: { label: "Ver", onClick: () => setLocation("/operador/backlog") },
     });
   }, [podeTratarBacklog, backlogFila.data, backlogCount, novosNoBacklog, setLocation]);
+
+  // Uma fala nova na tratativa avisa na hora: a resposta que destrava a nota
+  // ficava esperando alguém abrir a tela do backlog para ser descoberta.
+  const falasVistas = useRef<number | null>(null);
+  useEffect(() => {
+    if (!podeTratarBacklog || !conversaDoBacklog.data) return;
+    const anterior = falasVistas.current;
+    const ultima = conversaDoBacklog.data[0];
+    falasVistas.current = ultima?.id ?? 0;
+    if (anterior === null || !ultima || ultima.id <= anterior) return;
+    toast.info("Nova mensagem na tratativa do backlog", {
+      description: `NF ${ultima.invoiceNumber || "sem número"} · ${ultima.authorName || "Colaborador"}: ${ultima.body.slice(0, 90)}`,
+      action: { label: "Ver", onClick: () => setLocation("/operador/backlog") },
+    });
+  }, [podeTratarBacklog, conversaDoBacklog.data, setLocation]);
 
   const [menuAberto, setMenuAberto] = useState<string | null>(null);
   const homePath = nav[0]?.path ?? "/";
@@ -405,8 +425,8 @@ export default function PortalLayout({
                 <p className="text-xs text-ink-soft">
                   {releaseCount > 0
                     ? "Liberações no portão e conversas das notas"
-                    : backlogCount > 0
-                      ? "Notas no backlog e conversas das notas"
+                    : backlogCount > 0 || falasDoBacklog.length > 0
+                      ? "Backlog, tratativa e conversas das notas"
                       : "Conversas vinculadas às notas"}
                 </p>
               </div>
@@ -493,6 +513,43 @@ export default function PortalLayout({
                 </div>
               </div>
             )}
+            {falasDoBacklog.length > 0 && (
+              <div className="border-b border-line bg-rvd-plum-pale/40 p-2">
+                <p className="px-2 pb-1 pt-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-rvd-plum">
+                  Conversa da tratativa · {falasDoBacklog.length}
+                </p>
+                <div className="max-h-56 overflow-y-auto">
+                  {falasDoBacklog.map(fala => (
+                    <button
+                      key={fala.id}
+                      onClick={() => {
+                        setNotificationsOpen(false);
+                        go("/operador/backlog");
+                      }}
+                      className="w-full rounded-xl p-3 text-left hover:bg-surface"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 rounded-lg bg-rvd-plum-pale p-2 text-rvd-plum">
+                          <MessagesSquare className="size-4" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-xs font-bold text-ink">
+                            NF {fala.invoiceNumber || "sem número"}
+                            {unidadePorCnpj(fala.recipientCnpj) ? ` · ${unidadePorCnpj(fala.recipientCnpj)?.sigla}` : ""}
+                          </span>
+                          <span className="mt-0.5 block truncate text-sm text-ink-soft">
+                            {fala.authorName || "Colaborador"}: {fala.body}
+                          </span>
+                          <span className="mt-1 block text-[10px] text-ink-faint">
+                            {new Date(fala.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                          </span>
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {notifications.data?.length ? (
               <div className="max-h-80 overflow-y-auto p-2">
                 {notifications.data.map(message => (
@@ -524,7 +581,7 @@ export default function PortalLayout({
                 ))}
               </div>
             ) : (
-              releaseCount === 0 && novosNoBacklog.length === 0 && (
+              releaseCount === 0 && novosNoBacklog.length === 0 && falasDoBacklog.length === 0 && (
                 <div className="px-5 py-10 text-center">
                   <Bell className="mx-auto size-6 text-ink-faint" />
                   <p className="mt-3 text-sm font-bold text-ink">Nenhum aviso novo</p>

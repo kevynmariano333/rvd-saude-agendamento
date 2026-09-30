@@ -1642,6 +1642,36 @@ export async function listAppointmentInternalNotes(appointmentId: number) {
     .orderBy(appointmentInternalNotes.createdAt);
 }
 
+/**
+ * As últimas falas da conversa das notas que estão no backlog.
+ *
+ * A tratativa acontece por escrito na própria nota, e quem trata não fica com a
+ * tela do backlog aberta o dia inteiro — a resposta ficava lá esperando ser
+ * descoberta. Isto é o que o sino do planejamento lê.
+ *
+ * O que a pessoa mesma escreveu fica de fora: aviso da própria fala é ruído.
+ */
+export async function conversasRecentesDoBacklog(input: { exceptoAutorId: number; limite?: number }) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: appointmentInternalNotes.id,
+      appointmentId: appointmentInternalNotes.appointmentId,
+      body: appointmentInternalNotes.body,
+      createdAt: appointmentInternalNotes.createdAt,
+      authorName: users.name,
+      invoiceNumber: appointments.invoiceNumber,
+      recipientCnpj: appointments.recipientCnpj,
+    })
+    .from(appointmentInternalNotes)
+    .innerJoin(appointments, eq(appointments.id, appointmentInternalNotes.appointmentId))
+    .leftJoin(users, eq(users.id, appointmentInternalNotes.authorId))
+    .where(and(eq(appointments.status, "backlog"), ne(appointmentInternalNotes.authorId, input.exceptoAutorId)))
+    .orderBy(desc(appointmentInternalNotes.createdAt))
+    .limit(input.limite ?? 10);
+}
+
 export async function createAppointmentInternalNote(input: { appointmentId: number; authorId: number; body: string }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");

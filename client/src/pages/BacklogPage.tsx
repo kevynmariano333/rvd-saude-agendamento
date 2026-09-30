@@ -8,7 +8,7 @@ import UrgenciaBadge from "../components/UrgenciaBadge";
 import { curtoDoMotivo } from "@shared/backlogReasons";
 import { baixarPlanilha, nomeDaPlanilha } from "@/lib/planilha";
 import { COLUNAS_DA_FILA_DO_BACKLOG, toBacklogQueueRows } from "@/lib/reports";
-import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardCheck, Download, FileText, Filter, Search, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardCheck, Download, FileText, Filter, MessagesSquare, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,7 @@ import AppointmentDetailsDialog from "../components/AppointmentDetailsDialog";
 import AppointmentDateHistoryDialog from "../components/AppointmentDateHistoryDialog";
 import LoadingTruck from "../components/LoadingTruck";
 import TratarPendenciaDialog from "../components/TratarPendenciaDialog";
+import ConversaDoBacklogDialog from "../components/ConversaDoBacklogDialog";
 import PortalLayout from "./PortalLayout";
 
 /**
@@ -79,6 +80,7 @@ export default function BacklogPage() {
   const backlog = trpc.appointments.list.useQuery(consulta, { placeholderData: anterior => anterior });
   const [tratando, setTratando] = useState<AppointmentDetail | null>(null);
   const [detalhes, setDetalhes] = useState<AppointmentDetail | null>(null);
+  const [conversando, setConversando] = useState<AppointmentDetail | null>(null);
   const [historico, setHistorico] = useState<AppointmentDetail | null>(null);
   // Reagendar é para a nota que travou por data — chegou fora da hora, não
   // chegou. Ela volta para a agenda com data nova em vez de esperar tratativa
@@ -226,6 +228,8 @@ export default function BacklogPage() {
                   <td className="px-3 py-3">
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => setDetalhes(item)} title="Abrir detalhes da nota" className="rounded-lg p-1.5 text-rvd-plum hover:bg-rvd-plum-pale"><FileText className="size-4" /></button>
+                      {/* A tratativa é conversa, e conversa que vai por WhatsApp se perde: aqui ela fica na nota. */}
+                      <button onClick={() => setConversando(item)} title="Conversa da tratativa — interna, o fornecedor não vê" className="rounded-lg p-1.5 text-rvd-plum hover:bg-rvd-plum-pale"><MessagesSquare className="size-4" /></button>
                       {podeAgendar && <Button onClick={() => abrirReagendamento(item)} variant="outline" className="h-8 shrink-0 rounded-xl border-line bg-surface px-3 text-[11px] font-bold text-rvd-plum hover:bg-rvd-plum-pale"><CalendarDays className="size-3.5" />Reagendar</Button>}
                       <Button onClick={() => setTratando(item)} className="h-8 shrink-0 rounded-xl bg-brand px-3.5 text-[11px] font-bold text-white hover:bg-brand"><ClipboardCheck className="size-3.5" />Tratar</Button>
                     </div>
@@ -247,6 +251,12 @@ export default function BacklogPage() {
           </div>}
     </section>
 
+    <ConversaDoBacklogDialog
+      appointmentId={conversando?.id ?? null}
+      invoiceNumber={conversando?.invoiceNumber ?? null}
+      open={Boolean(conversando)}
+      onOpenChange={aberto => !aberto && setConversando(null)}
+    />
     <TratarPendenciaDialog
       appointment={tratando}
       open={Boolean(tratando)}

@@ -33,6 +33,7 @@ import {
   listAppointments,
   listCalendarAppointments,
   ultimasNotasNoBacklog,
+  conversasRecentesDoBacklog,
   listAppointmentInternalNotes,
   listAppointmentSuggestions,
   listBacklogReportRows,
@@ -719,6 +720,17 @@ export const appRouter = router({
     novosNoBacklog: protectedProcedure.query(async ({ ctx }) => {
       if (!canTreatBacklog(ctx.user.role)) return [];
       return ultimasNotasNoBacklog(10);
+    }),
+    /**
+     * As últimas falas da conversa das notas em backlog.
+     *
+     * A conversa da tratativa é interna — o fornecedor não lê esta tabela —, e
+     * o aviso dela é do planejamento: é ele que responde por destravar a nota.
+     * Deixá-la no sino de todo mundo encheria a caixa de quem não vai tratar.
+     */
+    conversaDoBacklog: protectedProcedure.query(async ({ ctx }) => {
+      if (!canTreatBacklog(ctx.user.role)) return [];
+      return conversasRecentesDoBacklog({ exceptoAutorId: ctx.user.id, limite: 10 });
     }),
     total: protectedProcedure
       .input(filtrosDaLista)
