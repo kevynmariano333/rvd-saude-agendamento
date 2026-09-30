@@ -1099,9 +1099,15 @@ export async function createUnscheduledReceipt(input: {
     const inserted = await tx.insert(appointments).values({
       supplierId: input.operatorId,
       serviceType: serviceType.slice(0, 80),
+      // A nota entra na fila, e não fechada.
+      //
+      // Ela nascia Recebida: o XML subia e o recebimento já estava dado, sem
+      // ninguém conferir a carga contra a nota. Agora ela entra Pendente e anda
+      // pelo fluxo como qualquer outra — quem confere é que a marca como
+      // recebida, e é isso que faz o registro valer alguma coisa depois.
       scheduledFor: registeredAt,
-      receivedAt: registeredAt,
-      notes: "Recebimento registrado sem agendamento prévio, a partir do XML da nota fiscal.",
+      receivedAt: null,
+      notes: "Nota registrada a partir do XML, sem agendamento prévio. Aguarda a confirmação de quem receber a carga.",
       source: "manual_xml",
       xmlStorageKey: input.xmlStorageKey,
       xmlUrl: input.xmlUrl,
@@ -1116,11 +1122,11 @@ export async function createUnscheduledReceipt(input: {
       invoiceTotalCents: input.invoiceTotalCents,
       invoiceItemsJson: input.invoiceItemsJson,
       invoiceVolumeCount: input.invoiceVolumeCount,
-      status: "received",
+      status: "pending",
       handledBy: input.operatorId,
     });
     const appointmentId = Number(inserted[0].insertId);
-    await tx.insert(appointmentStatusHistory).values({ appointmentId, previousStatus: null, nextStatus: "received", handledBy: input.operatorId, eventNote: "Recebimento registrado sem agendamento prévio." });
+    await tx.insert(appointmentStatusHistory).values({ appointmentId, previousStatus: null, nextStatus: "pending", handledBy: input.operatorId, eventNote: "Nota registrada sem agendamento prévio, a partir do XML." });
     return appointmentId;
   });
   return getAppointmentById(result);
