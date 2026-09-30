@@ -58,10 +58,26 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // Os arquivos de `assets` levam o hash do conteúdo no nome — mudou o
+  // conteúdo, muda o nome —, então o navegador pode guardá-los para sempre.
+  // Sem dizer isso, ele reperguntava por todos a cada abertura de tela; e como
+  // o portal fica aberto o dia inteiro, era pergunta o dia inteiro.
+  //
+  // O `index.html` é a exceção, e por isso fica de fora: é ele que aponta para
+  // os nomes novos depois de um deploy. Guardado, a pessoa continuaria abrindo
+  // a versão velha até limpar o navegador.
+  app.use(
+    express.static(distPath, {
+      setHeaders: (res, arquivo) => {
+        const ehAsset = arquivo.includes(`${path.sep}assets${path.sep}`);
+        res.setHeader("Cache-Control", ehAsset ? "public, max-age=31536000, immutable" : "no-cache");
+      },
+    })
+  );
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

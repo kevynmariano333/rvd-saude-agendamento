@@ -1,4 +1,5 @@
 import "dotenv/config";
+import compression from "compression";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -122,6 +123,14 @@ async function startServer() {
   // — e bloquearia todo mundo junto.
   app.set("trust proxy", 1);
   const server = createServer(app);
+  // Comprimir antes de qualquer coisa que escreva resposta.
+  //
+  // Nada saía comprimido: nem as telas, nem as respostas da API. A lista de
+  // notas — a consulta que toda tela de agendamento repete — tem 26,6 KB de
+  // JSON cru, e JSON desse tipo encolhe uma ordem de grandeza. Numa conta paga
+  // por gigabyte que sai, era o maior desperdício do servidor, e o navegador
+  // já sabia descomprimir desde sempre.
+  app.use(compression());
   app.use(cabecalhosDeSeguranca);
   // Antes de ler o corpo: um corpo enorme de quem não fez login não chega a ser
   // guardado na memória.
