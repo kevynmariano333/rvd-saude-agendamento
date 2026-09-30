@@ -1062,7 +1062,10 @@ export const appRouter = router({
         });
       }),
     registerUnscheduledReceipt: protectedProcedure
-      .input(z.object({ fileName: z.string().min(5).max(255), xmlBase64: z.string().min(4).max(2_800_000) }))
+      // Quem registra diz em que fila a nota entra: a carga que já chegou e foi
+      // conferida vai para Recebido; a nota que veio antes do caminhão fica em
+      // Pendente, esperando data.
+      .input(z.object({ fileName: z.string().min(5).max(255), xmlBase64: z.string().min(4).max(2_800_000), situacao: z.enum(["recebida", "pendente"]) }))
       .mutation(async ({ ctx, input }) => {
         assertOperator(ctx.user.role);
         if (!input.fileName.toLowerCase().endsWith(".xml")) throw new TRPCError({ code: "BAD_REQUEST", message: "Envie apenas o arquivo XML da nota fiscal." });
@@ -1074,7 +1077,7 @@ export const appRouter = router({
         await recusarNotaRepetida({ accessKey: invoice.accessKey, supplierCnpj: invoice.supplierCnpj, invoiceNumber: invoice.invoiceNumber });
         const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
         const stored = await storagePut(`recebimentos-avulsos/${ctx.user.id}/${safeName}`, content, "application/xml");
-        return createUnscheduledReceipt({ operatorId: ctx.user.id, xmlStorageKey: stored.key, xmlUrl: stored.url, xmlFileName: safeName, invoiceNumber: invoice.invoiceNumber, invoiceAccessKey: invoice.accessKey, purchaseOrder: invoice.purchaseOrder, invoiceSupplierName: invoice.supplierName, invoiceSupplierCnpj: invoice.supplierCnpj, recipientCnpj: invoice.recipientCnpj, invoiceIssuedAt: invoice.issuedAt, serviceDescription: invoice.serviceDescription, invoiceTotalCents: invoice.totalCents, invoiceItemsJson: JSON.stringify(invoice.items), invoiceVolumeCount: invoice.volumeCount });
+        return createUnscheduledReceipt({ operatorId: ctx.user.id, xmlStorageKey: stored.key, xmlUrl: stored.url, xmlFileName: safeName, invoiceNumber: invoice.invoiceNumber, invoiceAccessKey: invoice.accessKey, purchaseOrder: invoice.purchaseOrder, invoiceSupplierName: invoice.supplierName, invoiceSupplierCnpj: invoice.supplierCnpj, recipientCnpj: invoice.recipientCnpj, invoiceIssuedAt: invoice.issuedAt, serviceDescription: invoice.serviceDescription, invoiceTotalCents: invoice.totalCents, invoiceItemsJson: JSON.stringify(invoice.items), invoiceVolumeCount: invoice.volumeCount, situacao: input.situacao });
       }),
     updateStatus: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), status: z.enum(["scheduled", "received", "completed", "backlog", "rejected"]), rejectionReason: z.string().max(1000).optional(), miroNumber: z.string().max(40).optional(), note: z.string().max(1000).optional(), backlogReasonCode: z.string().max(60).optional() }))

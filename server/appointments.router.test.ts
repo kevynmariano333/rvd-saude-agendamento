@@ -395,8 +395,26 @@ describe("procedures de agendamento", () => {
     mocks.createUnscheduledReceipt.mockResolvedValue({ id: 9, status: "received" });
     const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>987654</nNF></ide><emit><xNome>Fornecedor XML</xNome></emit><dest><CNPJ>12.345.678/0001-99</CNPJ></dest><det><prod><xProd>Recebimento avulso</xProd></prod></det></infNFe></NFe>').toString("base64");
     const caller = appRouter.createCaller(context("operator"));
-    await caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml });
-    expect(mocks.createUnscheduledReceipt).toHaveBeenCalledWith(expect.objectContaining({ operatorId: 24, invoiceNumber: "987654", invoiceSupplierName: "Fornecedor XML", recipientCnpj: "12345678000199" }));
+    await caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml, situacao: "recebida" });
+    expect(mocks.createUnscheduledReceipt).toHaveBeenCalledWith(expect.objectContaining({ operatorId: 24, invoiceNumber: "987654", invoiceSupplierName: "Fornecedor XML", recipientCnpj: "12345678000199", situacao: "recebida" }));
+  });
+
+  it("deixa registrar a nota que chegou antes do caminhão, em pendente", async () => {
+    // São duas situações diferentes entrando pela mesma porta, e quem registra
+    // é quem sabe qual é: carga na doca vira Recebido; nota adiantada, não.
+    mocks.createUnscheduledReceipt.mockResolvedValue({ id: 10, status: "pending" });
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000021000000029"><ide><nNF>987655</nNF></ide><emit><xNome>Fornecedor XML</xNome></emit><dest><CNPJ>12.345.678/0001-99</CNPJ></dest><det><prod><xProd>Nota adiantada</xProd></prod></det></infNFe></NFe>').toString("base64");
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml, situacao: "pendente" });
+    expect(mocks.createUnscheduledReceipt).toHaveBeenCalledWith(expect.objectContaining({ invoiceNumber: "987655", situacao: "pendente" }));
+  });
+
+  it("não aceita uma situação que não existe", async () => {
+    const xml = Buffer.from("<NFe></NFe>").toString("base64");
+    const caller = appRouter.createCaller(context("operator"));
+    // @ts-expect-error a situação é fechada de propósito: sem ela, a nota
+    // entraria em qualquer fila que o navegador mandasse.
+    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml, situacao: "qualquer" })).rejects.toThrow();
   });
 
   it("recusa o mesmo XML enviado duas vezes", async () => {
@@ -414,7 +432,7 @@ describe("procedures de agendamento", () => {
     });
     const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>987654</nNF></ide><emit><xNome>Fornecedor XML</xNome></emit><dest><CNPJ>12.345.678/0001-99</CNPJ></dest></infNFe></NFe>').toString("base64");
     const caller = appRouter.createCaller(context("operator"));
-    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml })).rejects.toThrow(/já está no sistema/i);
+    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml, situacao: "recebida" })).rejects.toThrow(/já está no sistema/i);
     expect(mocks.createUnscheduledReceipt).not.toHaveBeenCalled();
   });
 
@@ -432,7 +450,7 @@ describe("procedures de agendamento", () => {
     });
     const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>987654</nNF></ide><emit><xNome>Fornecedor XML</xNome></emit></infNFe></NFe>').toString("base64");
     const caller = appRouter.createCaller(context("operator"));
-    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml })).rejects.toThrow(/NF 987654 de Fornecedor XML.*20\/09\/2026.*recebida/i);
+    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml, situacao: "recebida" })).rejects.toThrow(/NF 987654 de Fornecedor XML.*20\/09\/2026.*recebida/i);
   });
 
   it("recusa também pela porta do fornecedor", async () => {
@@ -451,7 +469,7 @@ describe("procedures de agendamento", () => {
     mocks.notaJaRegistrada.mockResolvedValue({ id: 7, invoiceNumber: "987654", invoiceSupplierName: null, status: "scheduled", source: "portal", createdAt: new Date(), scheduledFor: new Date() });
     const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>987654</nNF></ide></infNFe></NFe>').toString("base64");
     const caller = appRouter.createCaller(context("operator"));
-    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml })).rejects.toThrow();
+    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml, situacao: "recebida" })).rejects.toThrow();
     expect(storagePut).not.toHaveBeenCalled();
   });
 
@@ -679,7 +697,7 @@ describe("perfil planejador", () => {
     await expect(caller.attendances.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.attendances.dayLog()).rejects.toMatchObject({ code: "FORBIDDEN" });
     const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>1</nNF></ide></infNFe></NFe>').toString("base64");
-    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.appointments.registerUnscheduledReceipt({ fileName: "nota.xml", xmlBase64: xml, situacao: "recebida" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("não alcança a administração", async () => {

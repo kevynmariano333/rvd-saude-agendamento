@@ -1090,24 +1090,35 @@ export async function createUnscheduledReceipt(input: {
   invoiceTotalCents: number | null;
   invoiceItemsJson: string | null;
   invoiceVolumeCount: number | null;
+  /**
+   * Em que fila a nota entra.
+   *
+   * São duas situações diferentes que entravam pela mesma porta: a carga que
+   * já chegou e foi conferida, e a nota que veio antes do caminhão e ainda
+   * precisa de data. Gravar as duas como recebida dizia que a mercadoria
+   * entrou quando ninguém tinha olhado nada; gravar as duas como pendente
+   * obrigaria a receber de novo o que já está na doca. Quem sabe qual é o caso
+   * é quem está registrando, e agora ele diz.
+   */
+  situacao: "recebida" | "pendente";
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
   const registeredAt = getUnscheduledReceiptRegisteredAt();
+  const jaRecebida = input.situacao === "recebida";
   const result = await db.transaction(async tx => {
     const serviceType = input.serviceDescription || (input.invoiceNumber ? `Recebimento NF ${input.invoiceNumber}` : "Recebimento avulso");
     const inserted = await tx.insert(appointments).values({
       supplierId: input.operatorId,
       serviceType: serviceType.slice(0, 80),
-      // A nota entra na fila, e não fechada.
-      //
-      // Ela nascia Recebida: o XML subia e o recebimento já estava dado, sem
-      // ninguém conferir a carga contra a nota. Agora ela entra Pendente e anda
-      // pelo fluxo como qualquer outra — quem confere é que a marca como
-      // recebida, e é isso que faz o registro valer alguma coisa depois.
       scheduledFor: registeredAt,
-      receivedAt: null,
-      notes: "Nota registrada a partir do XML, sem agendamento prévio. Aguarda a confirmação de quem receber a carga.",
+      // A data de recebimento só existe quando houve recebimento. Preenchê-la
+      // na nota que ainda espera agendamento faria o relatório contar como
+      // recebida uma carga que ninguém viu.
+      receivedAt: jaRecebida ? registeredAt : null,
+      notes: jaRecebida
+        ? "Recebimento registrado sem agendamento prévio, a partir do XML da nota fiscal."
+        : "Nota registrada a partir do XML, antes do agendamento. Aguarda data e a confirmação de quem receber a carga.",
       source: "manual_xml",
       xmlStorageKey: input.xmlStorageKey,
       xmlUrl: input.xmlUrl,
@@ -1122,11 +1133,19 @@ export async function createUnscheduledReceipt(input: {
       invoiceTotalCents: input.invoiceTotalCents,
       invoiceItemsJson: input.invoiceItemsJson,
       invoiceVolumeCount: input.invoiceVolumeCount,
-      status: "pending",
+      status: jaRecebida ? "received" : "pending",
       handledBy: input.operatorId,
     });
     const appointmentId = Number(inserted[0].insertId);
-    await tx.insert(appointmentStatusHistory).values({ appointmentId, previousStatus: null, nextStatus: "pending", handledBy: input.operatorId, eventNote: "Nota registrada sem agendamento prévio, a partir do XML." });
+    await tx.insert(appointmentStatusHistory).values({
+      appointmentId,
+      previousStatus: null,
+      nextStatus: jaRecebida ? "received" : "pending",
+      handledBy: input.operatorId,
+      eventNote: jaRecebida
+        ? "Recebimento registrado sem agendamento prévio."
+        : "Nota registrada a partir do XML, antes do agendamento.",
+    });
     return appointmentId;
   });
   return getAppointmentById(result);
