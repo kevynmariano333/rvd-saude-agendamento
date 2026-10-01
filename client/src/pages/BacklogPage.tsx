@@ -1,14 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { canTreatBacklogPortal, formatAppointmentDate, homePathFor, isPortalOperator, type PortalRole } from "@/lib/portal";
+import { canTreatBacklogPortal, formatAppointmentDate, homePathFor, isPortalAdmin, isPortalOperator, type PortalRole } from "@/lib/portal";
 import { cnpjsDoDestinatario, rotuloDoDestinatario } from "@shared/recipients";
 import SeletorDeDestinatario from "../components/SeletorDeDestinatario";
 import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
 import UrgenciaBadge from "../components/UrgenciaBadge";
-import { curtoDoMotivo } from "@shared/backlogReasons";
+import { curtoDoMotivo, rotuloDoMotivo } from "@shared/backlogReasons";
 import { baixarPlanilha, nomeDaPlanilha } from "@/lib/planilha";
 import { COLUNAS_DA_FILA_DO_BACKLOG, toBacklogQueueRows } from "@/lib/reports";
-import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardCheck, Download, FileText, Filter, MessagesSquare, Search, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardCheck, Download, FileText, Filter, MessagesSquare, ScrollText, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,7 @@ import AppointmentDateHistoryDialog from "../components/AppointmentDateHistoryDi
 import LoadingTruck from "../components/LoadingTruck";
 import TratarPendenciaDialog from "../components/TratarPendenciaDialog";
 import ConversaDoBacklogDialog from "../components/ConversaDoBacklogDialog";
+import CorrigirMotivoDoBacklogDialog from "../components/CorrigirMotivoDoBacklogDialog";
 import PortalLayout from "./PortalLayout";
 
 /**
@@ -81,6 +82,9 @@ export default function BacklogPage() {
   const [tratando, setTratando] = useState<AppointmentDetail | null>(null);
   const [detalhes, setDetalhes] = useState<AppointmentDetail | null>(null);
   const [conversando, setConversando] = useState<AppointmentDetail | null>(null);
+  // Motivo clicado errado numa lista de catorze parecidos: o conserto tem que
+  // estar onde a fila é trabalhada, e não numa tela que o planejamento não abre.
+  const [corrigindoMotivo, setCorrigindoMotivo] = useState<AppointmentDetail | null>(null);
   const [historico, setHistorico] = useState<AppointmentDetail | null>(null);
   // Reagendar é para a nota que travou por data — chegou fora da hora, não
   // chegou. Ela volta para a agenda com data nova em vez de esperar tratativa
@@ -119,6 +123,7 @@ export default function BacklogPage() {
   const notas = backlog.data ?? [];
   // Quem crava data é o Operador; o planejador trata, mas não agenda.
   const podeAgendar = isPortalOperator(auth.data.role as PortalRole);
+  const ehAdmin = isPortalAdmin(auth.data.role as PortalRole);
   // A planilha sai do que está na tela: o que a fila mostra é o que o arquivo
   // leva, sem uma segunda consulta que pudesse trazer outro conjunto.
   const exportarFila = async () => {
@@ -230,6 +235,7 @@ export default function BacklogPage() {
                       <button onClick={() => setDetalhes(item)} title="Abrir detalhes da nota" className="rounded-lg p-1.5 text-rvd-plum hover:bg-rvd-plum-pale"><FileText className="size-4" /></button>
                       {/* A tratativa é conversa, e conversa que vai por WhatsApp se perde: aqui ela fica na nota. */}
                       <button onClick={() => setConversando(item)} title="Conversa da tratativa — interna, o fornecedor não vê" className="rounded-lg p-1.5 text-rvd-plum hover:bg-rvd-plum-pale"><MessagesSquare className="size-4" /></button>
+                      {ehAdmin && <button onClick={() => setCorrigindoMotivo(item)} title={`Corrigir o motivo do backlog — hoje: ${rotuloDoMotivo(item.backlogReasonCode)}`} className="rounded-lg p-1.5 text-rvd-plum hover:bg-rvd-plum-pale"><ScrollText className="size-4" /></button>}
                       {podeAgendar && <Button onClick={() => abrirReagendamento(item)} variant="outline" className="h-8 shrink-0 rounded-xl border-line bg-surface px-3 text-[11px] font-bold text-rvd-plum hover:bg-rvd-plum-pale"><CalendarDays className="size-3.5" />Reagendar</Button>}
                       <Button onClick={() => setTratando(item)} className="h-8 shrink-0 rounded-xl bg-brand px-3.5 text-[11px] font-bold text-white hover:bg-brand"><ClipboardCheck className="size-3.5" />Tratar</Button>
                     </div>
@@ -256,6 +262,12 @@ export default function BacklogPage() {
       invoiceNumber={conversando?.invoiceNumber ?? null}
       open={Boolean(conversando)}
       onOpenChange={aberto => !aberto && setConversando(null)}
+    />
+    <CorrigirMotivoDoBacklogDialog
+      nota={corrigindoMotivo}
+      aberto={Boolean(corrigindoMotivo)}
+      onFechar={() => setCorrigindoMotivo(null)}
+      onCorrigido={() => { utils.appointments.list.invalidate(); utils.appointments.counts.invalidate(); }}
     />
     <TratarPendenciaDialog
       appointment={tratando}

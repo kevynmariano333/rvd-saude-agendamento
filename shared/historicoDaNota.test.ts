@@ -28,3 +28,9 @@ describe("histórico da nota", () => {
     expect(tomDoEvento("scheduled")).toBe("neutro");
   });
 });
+
+describe("corrigir o motivo de uma nota que já está em backlog", () => {
+  it("não diz que ela foi para o backlog de novo: ela nunca saiu", () => {
+    expect(descricaoDoEvento({ previousStatus: "backlog", nextStatus: "backlog" })).toBe("Motivo do backlog corrigido");
+  });
+});

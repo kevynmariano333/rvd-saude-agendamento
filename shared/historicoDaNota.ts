@@ -26,6 +26,9 @@ export function descricaoDoEvento(evento: EventoDaNota): string {
   if (previousStatus === "backlog" && nextStatus === "scheduled") return "Devolvida do backlog para a agenda";
   if (previousStatus === "rejected" && nextStatus === "pending") return "Resgatada da recusa";
   if (previousStatus === "scheduled" && nextStatus === "scheduled") return "Reagendada";
+  // Nota que já está em backlog e continua lá: ninguém a mandou de novo, o que
+  // mudou foi o enunciado do problema.
+  if (previousStatus === "backlog" && nextStatus === "backlog") return "Motivo do backlog corrigido";
 
   switch (nextStatus) {
     case "pending":

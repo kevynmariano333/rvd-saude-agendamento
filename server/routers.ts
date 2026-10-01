@@ -43,6 +43,8 @@ import {
   listUnreadAppointmentMessages,
   listSupplierActiveAppointments,
   markAppointmentMessagesRead,
+  corrigirMotivoDoBacklog,
+  linhasDeBacklogNoHistorico,
   devolverParaBacklog,
   reabrirComoPendente,
   returnAppointmentForRescheduling,
@@ -92,6 +94,8 @@ import { supplierNameRule } from "../shared/attendanceFields";
 import { canApplySuggestion, canMoveAppointmentStatus, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, canTreatBacklog, isOperator, isSchedulingDesk } from "./permissions";
 import { validarTratativa, resumoDaTratativa } from "../shared/tratativa";
 import { ehMotivoConhecido, rotuloDoMotivo } from "../shared/backlogReasons";
+import { codigoDoAgilizaNoHistorico } from "../shared/motivoDoAgiliza";
+import { codigoDeOrigem, MOTIVOS_DO_AGILIZA } from "./agilizaImport";
 import { clearRvdSession, createRvdSession } from "./session";
 import { systemRouter } from "./_core/systemRouter";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -990,14 +994,75 @@ export const appRouter = router({
         if (appointment.status !== "completed") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Somente notas concluídas voltam para o backlog por aqui." });
         }
-        const tinha = appointment.miroNumber ? ` A nota estava concluída com MIRO ${appointment.miroNumber}, que foi apagado.` : "";
+        // O motivo anterior vai para o histórico antes de ser escrito por cima.
+        // Sem isto, devolver uma nota ao backlog apagava em silêncio o motivo
+        // que veio do acervo, e ele só existia naquele campo.
+        const tinha = [
+          appointment.miroNumber ? `MIRO ${appointment.miroNumber}` : null,
+          appointment.backlogReasonCode ? `o motivo anterior "${rotuloDoMotivo(appointment.backlogReasonCode)}"` : null,
+        ].filter(Boolean).join(" e ");
         return devolverParaBacklog({
           appointmentId: appointment.id,
           previousStatus: appointment.status,
           handledBy: ctx.user.id,
           backlogReasonCode: input.backlogReasonCode,
           backlogReason: input.backlogReason?.trim() || null,
-          eventNote: `Devolvida ao backlog pelo administrador: ${rotuloDoMotivo(input.backlogReasonCode)}.${input.backlogReason?.trim() ? ` ${input.backlogReason.trim()}` : ""}${tinha}`,
+          eventNote: `Devolvida ao backlog pelo administrador: ${rotuloDoMotivo(input.backlogReasonCode)}.${input.backlogReason?.trim() ? ` ${input.backlogReason.trim()}` : ""}${tinha ? ` A nota tinha ${tinha}.` : ""}`,
+        });
+      }),
+    /**
+     * Corrige o motivo de uma nota que já está em backlog.
+     *
+     * Catorze motivos parecidos numa lista: errar o clique é questão de tempo,
+     * e é por esse código que o fim do mês conta quantas notas travaram por
+     * cada coisa. A nota não se move — só o enunciado do problema muda.
+     */
+    /**
+     * O motivo que o Agiliza tinha dado para esta nota.
+     *
+     * Quem devolve uma nota ao backlog escreve por cima do campo de motivo, e
+     * aí o que veio do acervo some da nota — mas não do histórico, que a
+     * importação escreveu com o código de origem entre parênteses. É de lá que
+     * isto lê, para a tela poder oferecer "era isto, restaura" em vez de deixar
+     * a pessoa adivinhar entre catorze motivos parecidos.
+     *
+     * Devolve null quando a nota não veio do acervo, ou veio sem motivo: não
+     * tem o que restaurar, e inventar um seria pior do que não oferecer nada.
+     */
+    motivoOriginalDoBacklog: protectedProcedure
+      .input(z.object({ appointmentId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        assertSchedulingDesk(ctx.user.role);
+        const codigoOriginal = codigoDoAgilizaNoHistorico(await linhasDeBacklogNoHistorico(input.appointmentId));
+        if (!codigoOriginal) return null;
+        // O mesmo mapeamento da importação: um código que não tem par na lista
+        // do portal vira a sua própria forma maiúscula, como lá.
+        const codigo = MOTIVOS_DO_AGILIZA[codigoOriginal] ?? codigoDeOrigem(codigoOriginal);
+        if (!codigo) return null;
+        return { codigoOriginal, codigo, rotulo: rotuloDoMotivo(codigo), naLista: ehMotivoConhecido(codigo) };
+      }),
+    corrigirMotivoDoBacklog: protectedProcedure
+      .input(z.object({
+        appointmentId: z.number().int().positive(),
+        backlogReasonCode: z.string().max(60),
+        backlogReason: z.string().max(500).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        assertAdmin(ctx.user.role);
+        if (!ehMotivoConhecido(input.backlogReasonCode)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Escolha um motivo de backlog da lista." });
+        }
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
+        if (appointment.status !== "backlog") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Só dá para corrigir o motivo de uma nota que está em backlog." });
+        }
+        return corrigirMotivoDoBacklog({
+          appointmentId: appointment.id,
+          handledBy: ctx.user.id,
+          backlogReasonCode: input.backlogReasonCode,
+          backlogReason: input.backlogReason?.trim() || null,
+          eventNote: `Motivo do backlog corrigido pelo administrador: de "${rotuloDoMotivo(appointment.backlogReasonCode)}" para "${rotuloDoMotivo(input.backlogReasonCode)}".${input.backlogReason?.trim() ? ` ${input.backlogReason.trim()}` : ""}`,
         });
       }),
     returnForRescheduling: protectedProcedure

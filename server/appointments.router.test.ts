@@ -27,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   marcarConversaDaTratativaLida: vi.fn(),
   ultimasNotasNoBacklog: vi.fn(),
   devolverParaBacklog: vi.fn(),
+  corrigirMotivoDoBacklog: vi.fn(),
+  linhasDeBacklogNoHistorico: vi.fn(),
   limparAvisos: vi.fn(),
   createAppointmentInternalNote: vi.fn(),
   createLocalUser: vi.fn(),
@@ -1040,5 +1042,116 @@ describe("devolver uma nota concluída ao backlog", () => {
       await expect(caller.appointments.voltarParaBacklog({ appointmentId: 5, backlogReasonCode: "DIVERGENCIA_PRECO" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
     expect(mocks.devolverParaBacklog).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * Catorze motivos parecidos numa lista — "Divergência de quantidade" e
+ * "Divergência de quantidade nota x pedido" ficam uma embaixo da outra. Errar o
+ * clique é questão de tempo, e é por esse código que o fim do mês conta quantas
+ * notas travaram por cada coisa.
+ */
+describe("corrigir o motivo de uma nota em backlog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getAppointmentById.mockResolvedValue({ id: 5, status: "backlog", backlogReasonCode: "DIVERGENCIA_QUANTIDADE", invoiceNumber: "401514" });
+  });
+
+  it("troca o motivo sem mover a nota", async () => {
+    const caller = appRouter.createCaller(context("admin"));
+    await caller.appointments.corrigirMotivoDoBacklog({ appointmentId: 5, backlogReasonCode: "DIVERGENCIA_PRECO", backlogReason: "É preço, não quantidade." });
+    expect(mocks.corrigirMotivoDoBacklog).toHaveBeenCalledWith(expect.objectContaining({
+      appointmentId: 5,
+      handledBy: 24,
+      backlogReasonCode: "DIVERGENCIA_PRECO",
+      backlogReason: "É preço, não quantidade.",
+    }));
+    // Não é um envio novo ao backlog: a nota nunca saiu de lá.
+    expect(mocks.devolverParaBacklog).not.toHaveBeenCalled();
+    expect(mocks.updateAppointmentStatus).not.toHaveBeenCalled();
+  });
+
+  it("o histórico guarda o motivo velho e o novo", async () => {
+    await appRouter.createCaller(context("admin")).appointments.corrigirMotivoDoBacklog({ appointmentId: 5, backlogReasonCode: "DIVERGENCIA_PRECO" });
+    const chamada = mocks.corrigirMotivoDoBacklog.mock.calls[0]![0] as { eventNote: string };
+    expect(chamada.eventNote).toContain("Divergência de quantidade");
+    expect(chamada.eventNote).toContain("Divergência de preço");
+  });
+
+  it("recusa motivo fora da lista", async () => {
+    const caller = appRouter.createCaller(context("admin"));
+    await expect(caller.appointments.corrigirMotivoDoBacklog({ appointmentId: 5, backlogReasonCode: "INVENTADO" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.corrigirMotivoDoBacklog).not.toHaveBeenCalled();
+  });
+
+  it("recusa nota que não está em backlog", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 5, status: "completed", backlogReasonCode: null });
+    const caller = appRouter.createCaller(context("admin"));
+    await expect(caller.appointments.corrigirMotivoDoBacklog({ appointmentId: 5, backlogReasonCode: "DIVERGENCIA_PRECO" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.corrigirMotivoDoBacklog).not.toHaveBeenCalled();
+  });
+
+  it("só o administrador corrige: o motivo é o número do fim do mês", async () => {
+    for (const perfil of ["operator", "planejador", "supplier"] as const) {
+      const caller = appRouter.createCaller(context(perfil));
+      await expect(caller.appointments.corrigirMotivoDoBacklog({ appointmentId: 5, backlogReasonCode: "DIVERGENCIA_PRECO" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    expect(mocks.corrigirMotivoDoBacklog).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * Devolver uma nota ao backlog escreve por cima do motivo, e para o acervo
+ * importado aquele campo era a única cópia do que o Agiliza disse. O histórico
+ * não é sobrescrito: é de lá que dá para trazer o motivo de volta.
+ */
+describe("recuperar o motivo que o Agiliza tinha dado", () => {
+  const linha = (codigo: string) => `Importação do histórico do Agiliza: Nota enviada ao backlog no sistema Agiliza (motivo: ${codigo}).`;
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("traduz o código do acervo para o motivo da lista do portal", async () => {
+    mocks.linhasDeBacklogNoHistorico.mockResolvedValue([linha("divergencia_preco")]);
+    const caller = appRouter.createCaller(context("admin"));
+    await expect(caller.appointments.motivoOriginalDoBacklog({ appointmentId: 5 })).resolves.toEqual({
+      codigoOriginal: "divergencia_preco",
+      codigo: "DIVERGENCIA_PRECO",
+      rotulo: "Divergência de preço",
+      naLista: true,
+    });
+  });
+
+  it("um código do acervo sem par na lista não vira 'Outro': diz o que o Agiliza disse", async () => {
+    mocks.linhasDeBacklogNoHistorico.mockResolvedValue([linha("nota sem pedido")]);
+    const caller = appRouter.createCaller(context("planejador"));
+    const resposta = await caller.appointments.motivoOriginalDoBacklog({ appointmentId: 5 });
+    expect(resposta).toMatchObject({ codigoOriginal: "nota sem pedido", codigo: "NOTA_SEM_PEDIDO", naLista: false });
+  });
+
+  it("nota que não veio do acervo não tem o que restaurar", async () => {
+    mocks.linhasDeBacklogNoHistorico.mockResolvedValue(["Devolvida ao backlog pelo administrador: Divergência de preço."]);
+    const caller = appRouter.createCaller(context("admin"));
+    await expect(caller.appointments.motivoOriginalDoBacklog({ appointmentId: 5 })).resolves.toBeNull();
+  });
+
+  it("o fornecedor não lê o histórico de backlog de nota nenhuma", async () => {
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.appointments.motivoOriginalDoBacklog({ appointmentId: 5 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.linhasDeBacklogNoHistorico).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * Devolver ao backlog apagava em silêncio o motivo que vinha do acervo. O
+ * histórico é o único lugar onde ele pode sobreviver.
+ */
+describe("o que a devolução ao backlog guarda do que apagou", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("escreve no histórico o motivo anterior, junto do MIRO", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 5, status: "completed", miroNumber: "5100042", backlogReasonCode: "DIVERGENCIA_PRECO" });
+    await appRouter.createCaller(context("admin")).appointments.voltarParaBacklog({ appointmentId: 5, backlogReasonCode: "ERRO_SISTEMA_ERP" });
+    const chamada = mocks.devolverParaBacklog.mock.calls[0]![0] as { eventNote: string };
+    expect(chamada.eventNote).toContain("5100042");
+    expect(chamada.eventNote).toContain("Divergência de preço");
   });
 });

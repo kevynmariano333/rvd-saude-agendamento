@@ -1040,6 +1040,69 @@ export async function devolverParaBacklog(input: {
   return getAppointmentById(input.appointmentId);
 }
 
+/**
+ * Corrige o motivo de uma nota que já está em backlog.
+ *
+ * O motivo é escolhido numa lista fechada, e numa lista de catorze itens muito
+ * parecidos entre si — "Divergência de quantidade" e "Divergência de quantidade
+ * nota x pedido" ficam uma embaixo da outra — errar o clique é questão de
+ * tempo. Sem conserto, o erro vira número errado no fim do mês, porque é por
+ * esse código que se conta quantas notas travaram por cada coisa.
+ *
+ * A nota não se move: ela estava em backlog e continua em backlog. O que muda é
+ * o enunciado do problema — e a troca fica escrita no histórico, com o motivo
+ * velho e o novo, porque uma correção que não deixa rastro é indistinguível de
+ * alguém reescrevendo o passado.
+ */
+/**
+ * As idas ao backlog que o histórico da nota guarda, da mais nova para a mais
+ * velha — só o texto, que é onde o motivo do Agiliza ficou escrito.
+ *
+ * O campo de motivo da nota é um só e vale para a última ida; quem manda a nota
+ * ao backlog de novo escreve por cima. O histórico não é sobrescrito, e por
+ * isso é dele que dá para recuperar o que o sistema de origem tinha dito.
+ */
+export async function linhasDeBacklogNoHistorico(appointmentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const linhas = await db
+    .select({ eventNote: appointmentStatusHistory.eventNote })
+    .from(appointmentStatusHistory)
+    .where(and(eq(appointmentStatusHistory.appointmentId, appointmentId), eq(appointmentStatusHistory.nextStatus, "backlog")))
+    .orderBy(desc(appointmentStatusHistory.createdAt), desc(appointmentStatusHistory.id));
+  return linhas.map(linha => linha.eventNote);
+}
+
+export async function corrigirMotivoDoBacklog(input: {
+  appointmentId: number;
+  handledBy: number;
+  backlogReasonCode: string;
+  backlogReason: string | null;
+  eventNote: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.transaction(async tx => {
+    await tx
+      .update(appointments)
+      .set({
+        backlogReasonCode: input.backlogReasonCode,
+        backlogReason: input.backlogReason?.slice(0, 500) ?? null,
+        handledBy: input.handledBy,
+        updatedAt: new Date(),
+      })
+      .where(eq(appointments.id, input.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({
+      appointmentId: input.appointmentId,
+      previousStatus: "backlog",
+      nextStatus: "backlog",
+      handledBy: input.handledBy,
+      eventNote: input.eventNote,
+    });
+  });
+  return getAppointmentById(input.appointmentId);
+}
+
 export async function returnAppointmentForRescheduling(input: {
   appointmentId: number;
   previousStatus: "received" | "completed";
