@@ -31,6 +31,7 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { normalizeCnpj } from "./fiscalFilters";
+import { termosDaBusca } from "../shared/termosDaBusca";
 import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 import { getReceiptTimestampForStatus } from "./receiptStatus";
 import { getSaoPauloDayRange } from "../shared/dateFilters";
@@ -340,7 +341,10 @@ function condicoesDaLista(filters: AppointmentFilters) {
   else if (filters.excludeBacklog) conditions.push(ne(appointments.status, "backlog"));
   if (filters.source) conditions.push(eq(appointments.source, filters.source));
   else if (filters.excluirServico) conditions.push(ne(appointments.source, "servico"));
-  if (filters.invoiceNumber) conditions.push(like(appointments.invoiceNumber, `%${filters.invoiceNumber.trim()}%`));
+  // Várias NFs de uma vez: conferir uma lista é o trabalho de todo dia, e
+  // procurar onze números um a um é onde some um.
+  const nfsProcuradas = termosDaBusca(filters.invoiceNumber);
+  if (nfsProcuradas.length) conditions.push(or(...nfsProcuradas.map(nf => like(appointments.invoiceNumber, `%${nf}%`))));
   if (filters.supplierName) {
     const supplierName = `%${filters.supplierName.trim()}%`;
     conditions.push(or(like(users.name, supplierName), like(appointments.invoiceSupplierName, supplierName)));
@@ -349,14 +353,21 @@ function condicoesDaLista(filters: AppointmentFilters) {
   // ou do pedido — e para quem só lembra do nome do fornecedor. Procura nos
   // três, porque perguntar "em qual campo isso está?" é justamente o que ela
   // evita.
-  if (filters.busca?.trim()) {
-    const procurado = `%${filters.busca.trim()}%`;
+  // Vários números de uma vez: quem confere nota tem uma lista na mão, não um
+  // número. Cada termo procura nos mesmos quatro campos, e basta um casar.
+  const termos = termosDaBusca(filters.busca);
+  if (termos.length) {
     conditions.push(
       or(
-        like(users.name, procurado),
-        like(appointments.invoiceSupplierName, procurado),
-        like(appointments.invoiceNumber, procurado),
-        like(appointments.purchaseOrder, procurado),
+        ...termos.flatMap(termo => {
+          const procurado = `%${termo}%`;
+          return [
+            like(users.name, procurado),
+            like(appointments.invoiceSupplierName, procurado),
+            like(appointments.invoiceNumber, procurado),
+            like(appointments.purchaseOrder, procurado),
+          ];
+        }),
       ),
     );
   }
@@ -971,6 +982,57 @@ export async function reabrirComoPendente(input: {
       appointmentId: input.appointmentId,
       previousStatus: input.previousStatus,
       nextStatus: "pending",
+      handledBy: input.handledBy,
+      eventNote: input.eventNote,
+    });
+  });
+  return getAppointmentById(input.appointmentId);
+}
+
+/**
+ * Devolve uma nota concluída ao backlog, para o planejamento retomar.
+ *
+ * É diferente de "voltar para pendente": ali a nota recomeça o caminho inteiro,
+ * aqui ela volta para a mesa de quem trata divergência. Serve para a nota que
+ * foi fechada antes da hora — o MIRO lançado não resolvia o que estava errado,
+ * ou a divergência voltou depois de fechada.
+ *
+ * O que a conclusão afirmou cai junto: o MIRO, a data de tratativa e quem
+ * tratou. Deixar o MIRO numa nota em backlog é dizer que ela está lançada no
+ * SAP e travada ao mesmo tempo, e aí ninguém sabe mais qual das duas é verdade.
+ * O recebimento fica, porque a carga chegou mesmo — isso não se desfaz.
+ *
+ * O motivo é obrigatório: é o que o planejador lê para saber o que fazer com
+ * ela, e sem isso a nota chega lá como um problema sem enunciado.
+ */
+export async function devolverParaBacklog(input: {
+  appointmentId: number;
+  previousStatus: AppointmentStatus;
+  handledBy: number;
+  backlogReasonCode: string;
+  backlogReason: string | null;
+  eventNote: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.transaction(async tx => {
+    await tx
+      .update(appointments)
+      .set({
+        status: "backlog",
+        backlogReasonCode: input.backlogReasonCode,
+        backlogReason: input.backlogReason?.slice(0, 500) ?? null,
+        miroNumber: null,
+        treatedAt: null,
+        treatedById: null,
+        handledBy: input.handledBy,
+        updatedAt: new Date(),
+      })
+      .where(eq(appointments.id, input.appointmentId));
+    await tx.insert(appointmentStatusHistory).values({
+      appointmentId: input.appointmentId,
+      previousStatus: input.previousStatus,
+      nextStatus: "backlog",
       handledBy: input.handledBy,
       eventNote: input.eventNote,
     });

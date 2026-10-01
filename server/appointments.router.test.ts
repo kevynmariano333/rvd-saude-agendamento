@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   conversasRecentesDoBacklog: vi.fn(),
   marcarConversaDaTratativaLida: vi.fn(),
   ultimasNotasNoBacklog: vi.fn(),
+  devolverParaBacklog: vi.fn(),
   limparAvisos: vi.fn(),
   createAppointmentInternalNote: vi.fn(),
   createLocalUser: vi.fn(),
@@ -981,5 +982,63 @@ describe("o aviso de nota caindo no backlog", () => {
   it("o fornecedor não recebe aviso de backlog nenhum", async () => {
     await expect(appRouter.createCaller(context("supplier")).appointments.novosNoBacklog()).resolves.toEqual([]);
     expect(mocks.ultimasNotasNoBacklog).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * Fechar a nota é afirmar que a divergência acabou. Quando não acabou, ela tem
+ * que voltar para quem trata divergência — e não para o começo da fila, porque
+ * o caminhão já veio e a carga já entrou.
+ */
+describe("devolver uma nota concluída ao backlog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getAppointmentById.mockResolvedValue({ id: 5, status: "completed", miroNumber: "5100042", invoiceNumber: "401514" });
+  });
+
+  it("o administrador devolve, com motivo e descrição", async () => {
+    const caller = appRouter.createCaller(context("admin"));
+    await caller.appointments.voltarParaBacklog({ appointmentId: 5, backlogReasonCode: "DIVERGENCIA_PRECO", backlogReason: "Preço do pedido mudou depois." });
+    expect(mocks.devolverParaBacklog).toHaveBeenCalledWith(expect.objectContaining({
+      appointmentId: 5,
+      previousStatus: "completed",
+      handledBy: 24,
+      backlogReasonCode: "DIVERGENCIA_PRECO",
+      backlogReason: "Preço do pedido mudou depois.",
+    }));
+  });
+
+  it("o histórico guarda o MIRO que foi apagado", async () => {
+    await appRouter.createCaller(context("admin")).appointments.voltarParaBacklog({ appointmentId: 5, backlogReasonCode: "DIVERGENCIA_PRECO" });
+    expect(mocks.devolverParaBacklog).toHaveBeenCalledWith(expect.objectContaining({
+      eventNote: expect.stringContaining("5100042"),
+    }));
+  });
+
+  it("recusa um motivo que não está na lista: o filtro do planejamento não o enxergaria", async () => {
+    const caller = appRouter.createCaller(context("admin"));
+    await expect(caller.appointments.voltarParaBacklog({ appointmentId: 5, backlogReasonCode: "INVENTADO" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.devolverParaBacklog).not.toHaveBeenCalled();
+  });
+
+  it("recusa nota que não está concluída", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 5, status: "received", miroNumber: null });
+    const caller = appRouter.createCaller(context("admin"));
+    await expect(caller.appointments.voltarParaBacklog({ appointmentId: 5, backlogReasonCode: "DIVERGENCIA_PRECO" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.devolverParaBacklog).not.toHaveBeenCalled();
+  });
+
+  it("recusa nota que não existe", async () => {
+    mocks.getAppointmentById.mockResolvedValue(null);
+    const caller = appRouter.createCaller(context("admin"));
+    await expect(caller.appointments.voltarParaBacklog({ appointmentId: 999, backlogReasonCode: "DIVERGENCIA_PRECO" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("não é do operador nem do planejador: desfazer conclusão é do administrador", async () => {
+    for (const perfil of ["operator", "planejador", "supplier"] as const) {
+      const caller = appRouter.createCaller(context(perfil));
+      await expect(caller.appointments.voltarParaBacklog({ appointmentId: 5, backlogReasonCode: "DIVERGENCIA_PRECO" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    expect(mocks.devolverParaBacklog).not.toHaveBeenCalled();
   });
 });

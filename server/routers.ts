@@ -43,6 +43,7 @@ import {
   listUnreadAppointmentMessages,
   listSupplierActiveAppointments,
   markAppointmentMessagesRead,
+  devolverParaBacklog,
   reabrirComoPendente,
   returnAppointmentForRescheduling,
   rescueAppointment,
@@ -961,6 +962,42 @@ export const appRouter = router({
           previousStatus: appointment.status,
           handledBy: ctx.user.id,
           eventNote: `Status revertido pelo administrador: de ${appointment.status === "completed" ? "Concluída" : "Recebida"} para Pendente.${tinha ? ` A nota estava com ${tinha}.` : ""}`,
+        });
+      }),
+    /**
+     * Devolve uma nota concluída ao backlog.
+     *
+     * Só o administrador, e só a partir de "Concluída": uma nota recebida já
+     * tem o caminho dela para o backlog na própria janela de finalizar. Aqui é
+     * o caso de quem fechou e descobriu depois que não estava resolvido.
+     *
+     * O motivo é obrigatório, e tem que ser um dos conhecidos: é por ele que o
+     * planejamento filtra a fila, e um motivo inventado some do filtro.
+     */
+    voltarParaBacklog: protectedProcedure
+      .input(z.object({
+        appointmentId: z.number().int().positive(),
+        backlogReasonCode: z.string().max(60),
+        backlogReason: z.string().max(500).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        assertAdmin(ctx.user.role);
+        if (!ehMotivoConhecido(input.backlogReasonCode)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Escolha um motivo de backlog da lista." });
+        }
+        const appointment = await getAppointmentById(input.appointmentId);
+        if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
+        if (appointment.status !== "completed") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Somente notas concluídas voltam para o backlog por aqui." });
+        }
+        const tinha = appointment.miroNumber ? ` A nota estava concluída com MIRO ${appointment.miroNumber}, que foi apagado.` : "";
+        return devolverParaBacklog({
+          appointmentId: appointment.id,
+          previousStatus: appointment.status,
+          handledBy: ctx.user.id,
+          backlogReasonCode: input.backlogReasonCode,
+          backlogReason: input.backlogReason?.trim() || null,
+          eventNote: `Devolvida ao backlog pelo administrador: ${rotuloDoMotivo(input.backlogReasonCode)}.${input.backlogReason?.trim() ? ` ${input.backlogReason.trim()}` : ""}${tinha}`,
         });
       }),
     returnForRescheduling: protectedProcedure
