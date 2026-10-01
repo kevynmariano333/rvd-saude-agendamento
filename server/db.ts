@@ -1733,6 +1733,75 @@ export async function marcarConversaDaTratativaLida(input: { userId: number; app
     .onDuplicateKeyUpdate({ set: { lastReadAt: agora } });
 }
 
+/**
+ * Limpar o sino: dar por visto tudo o que está nele agora.
+ *
+ * Trinta e dois avisos de backlog que não somem nunca deixam de ser aviso e
+ * viram papel de parede — e aí o de hoje passa despercebido no meio dos de
+ * semana passada. Quem limpa está dizendo "li todos", e é isso que o botão
+ * grava.
+ *
+ * Os três tipos de aviso guardam "já vi" em lugares diferentes, porque são
+ * coisas diferentes: a conversa com o fornecedor marca a mensagem; a conversa
+ * da tratativa marca o par pessoa-e-nota; o backlog não marcava nada, e agora
+ * guarda na conta até quando aquela pessoa já viu.
+ *
+ * O que NÃO é limpo: pedido de liberação do portão. Aquilo não é aviso de algo
+ * que aconteceu — é caminhão parado esperando alguém decidir, e sumir da tela
+ * não faz o caminhão ir embora.
+ */
+export async function limparAvisos(input: { userId: number; isOperator: boolean; trataBacklog: boolean }) {
+  const db = await getDb();
+  if (!db) return;
+  const agora = new Date();
+
+  // As mensagens das notas, que são as do sino: as mesmas que
+  // listUnreadAppointmentMessages devolveria.
+  const colunaDeLeitura = input.isOperator ? appointmentMessages.operatorReadAt : appointmentMessages.supplierReadAt;
+  // O fornecedor só dá por lida a conversa das notas dele. Vai por subconsulta
+  // porque um UPDATE não junta tabela: comparar com `appointments.id` aqui
+  // marcaria mensagem de nota de outra empresa como lida.
+  const escopo = input.isOperator
+    ? []
+    : [inArray(appointmentMessages.appointmentId, db.select({ id: appointments.id }).from(appointments).where(eq(appointments.supplierId, input.userId)))];
+  await db
+    .update(appointmentMessages)
+    .set(input.isOperator ? { operatorReadAt: agora } : { supplierReadAt: agora })
+    .where(and(ne(appointmentMessages.senderId, input.userId), isNull(colunaDeLeitura), ...escopo));
+
+  if (!input.trataBacklog && !input.isOperator) return;
+
+  // A conversa da tratativa: uma linha por nota que tem fala não lida. Só o
+  // balcão escreve e lê essa tabela.
+  if (input.isOperator) {
+    const comFalaNova = await db
+      .selectDistinct({ appointmentId: appointmentInternalNotes.appointmentId })
+      .from(appointmentInternalNotes)
+      .leftJoin(
+        appointmentInternalNoteReads,
+        and(
+          eq(appointmentInternalNoteReads.appointmentId, appointmentInternalNotes.appointmentId),
+          eq(appointmentInternalNoteReads.userId, input.userId),
+        ),
+      )
+      .where(
+        and(
+          ne(appointmentInternalNotes.authorId, input.userId),
+          or(isNull(appointmentInternalNoteReads.lastReadAt), gt(appointmentInternalNotes.createdAt, appointmentInternalNoteReads.lastReadAt)),
+        ),
+      );
+    if (comFalaNova.length) {
+      await db
+        .insert(appointmentInternalNoteReads)
+        .values(comFalaNova.map(linha => ({ userId: input.userId, appointmentId: linha.appointmentId, lastReadAt: agora })))
+        .onDuplicateKeyUpdate({ set: { lastReadAt: agora } });
+    }
+  }
+
+  // O backlog: uma data só, na conta de quem limpou.
+  if (input.trataBacklog) await db.update(users).set({ avisosDoBacklogVistosEm: agora }).where(eq(users.id, input.userId));
+}
+
 export async function createAppointmentInternalNote(input: { appointmentId: number; authorId: number; body: string }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
@@ -1757,7 +1826,7 @@ export async function createAppointmentInternalNote(input: { appointmentId: numb
  * inteira — a fila tem quinhentas linhas e meio megabyte, e o sino precisa de
  * dez.
  */
-export async function ultimasNotasNoBacklog(limite = 10) {
+export async function ultimasNotasNoBacklog(limite = 10, vistosEm: Date | null = null) {
   const db = await getDb();
   if (!db) return [];
   const linhas = await db
@@ -1774,7 +1843,7 @@ export async function ultimasNotasNoBacklog(limite = 10) {
     .from(appointments)
     .innerJoin(users, eq(appointments.supplierId, users.id))
     .innerJoin(appointmentStatusHistory, eq(appointmentStatusHistory.appointmentId, appointments.id))
-    .where(and(eq(appointments.status, "backlog"), eq(appointmentStatusHistory.nextStatus, "backlog")))
+    .where(and(eq(appointments.status, "backlog"), eq(appointmentStatusHistory.nextStatus, "backlog"), ...(vistosEm ? [gt(appointmentStatusHistory.createdAt, vistosEm)] : [])))
     .orderBy(desc(appointmentStatusHistory.createdAt))
     .limit(limite * 4);
 

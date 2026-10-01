@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   listAppointmentInternalNotes: vi.fn(),
   conversasRecentesDoBacklog: vi.fn(),
   marcarConversaDaTratativaLida: vi.fn(),
+  ultimasNotasNoBacklog: vi.fn(),
+  limparAvisos: vi.fn(),
   createAppointmentInternalNote: vi.fn(),
   createLocalUser: vi.fn(),
   deleteAppointmentById: vi.fn(),
@@ -923,3 +925,61 @@ describe("marcar a conversa da tratativa como lida", () => {
   });
 });
 
+
+/*
+ * O sino vivia em "9+" porque somava a fila do backlog inteira — 557 notas que
+ * estão lá há semanas não são novidade de ninguém. Limpar é dizer "li todos":
+ * não apaga nota, nem mensagem, nem backlog.
+ */
+describe("limpar os avisos do sino", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("o operador limpa mensagem e tratativa, mas não o backlog: ele não trata backlog", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await expect(caller.messages.limparAvisos()).resolves.toEqual({ ok: true });
+    expect(mocks.limparAvisos).toHaveBeenCalledWith({ userId: 24, isOperator: true, trataBacklog: false });
+  });
+
+  it("o planejador limpa também o backlog, que é a fila dele", async () => {
+    const caller = appRouter.createCaller(context("planejador"));
+    await caller.messages.limparAvisos();
+    expect(mocks.limparAvisos).toHaveBeenCalledWith({ userId: 24, isOperator: true, trataBacklog: true });
+  });
+
+  it("o fornecedor limpa só as mensagens dele, e nada de backlog", async () => {
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.messages.limparAvisos();
+    expect(mocks.limparAvisos).toHaveBeenCalledWith({ userId: 12, isOperator: false, trataBacklog: false });
+  });
+});
+
+/*
+ * O aviso de backlog não tinha onde guardar "já vi": as mesmas notas voltavam
+ * toda vez que o sino abria. Agora cada pessoa tem a sua data.
+ */
+describe("o aviso de nota caindo no backlog", () => {
+  beforeEach(() => { vi.clearAllMocks(); mocks.ultimasNotasNoBacklog.mockResolvedValue([]); });
+
+  it("traz só o que chegou depois da última limpeza daquela pessoa", async () => {
+    const quando = new Date("2026-09-30T12:00:00Z");
+    const ctx = context("planejador");
+    (ctx.user as unknown as { avisosDoBacklogVistosEm: Date }).avisosDoBacklogVistosEm = quando;
+    await appRouter.createCaller(ctx).appointments.novosNoBacklog();
+    expect(mocks.ultimasNotasNoBacklog).toHaveBeenCalledWith(10, quando);
+  });
+
+  it("quem nunca limpou vê as últimas, como antes", async () => {
+    await appRouter.createCaller(context("admin")).appointments.novosNoBacklog();
+    expect(mocks.ultimasNotasNoBacklog).toHaveBeenCalledWith(10, null);
+  });
+
+  it("o operador não recebe este aviso: quem trata o backlog é o planejamento", async () => {
+    await expect(appRouter.createCaller(context("operator")).appointments.novosNoBacklog()).resolves.toEqual([]);
+    expect(mocks.ultimasNotasNoBacklog).not.toHaveBeenCalled();
+  });
+
+  it("o fornecedor não recebe aviso de backlog nenhum", async () => {
+    await expect(appRouter.createCaller(context("supplier")).appointments.novosNoBacklog()).resolves.toEqual([]);
+    expect(mocks.ultimasNotasNoBacklog).not.toHaveBeenCalled();
+  });
+});

@@ -122,7 +122,24 @@ export default function PortalLayout({
   const conversaDoBacklog = trpc.appointments.conversaDoBacklog.useQuery(undefined, { enabled: ehBalcao, refetchInterval: 30_000 });
   const falasDoBacklog = ehBalcao ? (conversaDoBacklog.data ?? []) : [];
   const releaseCount = pendingReleases.length;
-  const alertCount = unreadCount + releaseCount + backlogCount + falasDoBacklog.length;
+  // Limpar não apaga nada: grava que esta pessoa leu o que está na lista. A
+  // liberação do portão fica de fora — é caminhão parado esperando decisão.
+  const limparAvisos = trpc.messages.limparAvisos.useMutation({
+    onSuccess: () => {
+      void utils.messages.notifications.invalidate();
+      void utils.messages.porNota.invalidate();
+      void utils.appointments.novosNoBacklog.invalidate();
+      void utils.appointments.conversaDoBacklog.invalidate();
+    },
+  });
+  const temAvisoParaLimpar = unreadCount + novosNoBacklog.length + falasDoBacklog.length > 0;
+  // O número no sino é de aviso por ler, não do tamanho da fila.
+  //
+  // Antes ele somava as 557 notas que estão em backlog — uma fila de trabalho,
+  // não uma novidade —, e por isso nunca zerava: o sino vivia em "9+" e parou
+  // de querer dizer qualquer coisa. Agora conta o que chegou e esta pessoa
+  // ainda não viu. A fila continua no contador do menu, que é o lugar dela.
+  const alertCount = unreadCount + releaseCount + novosNoBacklog.length + falasDoBacklog.length;
 
   // Cada perfil vê só o seu posto de trabalho: quem cuida de agendamentos não
   // tem o pátio no menu, e quem trabalha no portão não tem a agenda. O
@@ -428,12 +445,24 @@ export default function PortalLayout({
                 <p className="text-xs text-ink-soft">
                   {releaseCount > 0
                     ? "Liberações no portão e conversas das notas"
-                    : backlogCount > 0 || falasDoBacklog.length > 0
+                    : novosNoBacklog.length > 0 || falasDoBacklog.length > 0
                       ? "Backlog, tratativa e conversas das notas"
                       : "Conversas vinculadas às notas"}
                 </p>
               </div>
-              <Bell className="size-4 text-ink-faint" />
+              {temAvisoParaLimpar ? (
+                <button
+                  type="button"
+                  onClick={() => limparAvisos.mutate()}
+                  disabled={limparAvisos.isPending}
+                  title="Dar por lidos os avisos desta lista. Nada é apagado, e o pedido de liberação do portão continua aqui até alguém decidir."
+                  className="shrink-0 rounded-lg border border-line px-2.5 py-1.5 text-[11px] font-bold text-rvd-plum hover:bg-rvd-plum-pale disabled:opacity-50"
+                >
+                  {limparAvisos.isPending ? "Limpando..." : "Limpar"}
+                </button>
+              ) : (
+                <Bell className="size-4 text-ink-faint" />
+              )}
             </div>
             {releaseCount > 0 && (
               <div className="border-b border-line bg-state-stop-bg/50 p-2">
@@ -476,7 +505,7 @@ export default function PortalLayout({
             {novosNoBacklog.length > 0 && (
               <div className="border-b border-line bg-state-stop-bg/40 p-2">
                 <p className="px-2 pb-1 pt-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-state-stop">
-                  Foram para o backlog · {backlogCount}
+                  Foram para o backlog · {novosNoBacklog.length}
                 </p>
                 <div className="max-h-56 overflow-y-auto">
                   {novosNoBacklog.map(nota => {

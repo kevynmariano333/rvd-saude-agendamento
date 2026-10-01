@@ -112,6 +112,16 @@ export const users = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
     lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+    /**
+     * Até quando esta pessoa já viu os avisos de nota caindo no backlog.
+     *
+     * O aviso de backlog não tinha onde guardar "já vi": ele listava as últimas
+     * notas travadas, e as mesmas trinta e duas voltavam toda vez que o sino
+     * abria. Vazio quer dizer que a pessoa nunca limpou, e aí ela vê as últimas
+     * como antes. Fica na conta, e não na nota, porque o que foi visto é visto
+     * por alguém — limpar o meu sino não pode limpar o do colega.
+     */
+    avisosDoBacklogVistosEm: timestamp("avisosDoBacklogVistosEm"),
   },
   table => [uniqueIndex("users_email_unique").on(table.email), index("users_company_cnpj_idx").on(table.companyCnpj), index("users_company_id_idx").on(table.companyId)]
 );

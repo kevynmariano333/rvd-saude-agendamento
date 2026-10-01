@@ -113,7 +113,7 @@ import { isS3Configured } from "./_core/s3Client";
 import { conteudoDoAgendamento } from "./emailDeAgendamento";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
-import { excluirNotaRepetida, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
+import { excluirNotaRepetida, limparAvisos, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
 import { chaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 import { countAppointments, countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
 import { executarBackup } from "./backup";
@@ -720,7 +720,7 @@ export const appRouter = router({
      */
     novosNoBacklog: protectedProcedure.query(async ({ ctx }) => {
       if (!canTreatBacklog(ctx.user.role)) return [];
-      return ultimasNotasNoBacklog(10);
+      return ultimasNotasNoBacklog(10, ctx.user.avisosDoBacklogVistosEm ?? null);
     }),
     /**
      * As últimas falas da conversa das notas em backlog.
@@ -1552,6 +1552,22 @@ export const appRouter = router({
         return { id };
       }),
     notifications: protectedProcedure.query(({ ctx }) => listUnreadAppointmentMessages({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
+    /**
+     * O botão "Limpar" do sino: dar por visto tudo o que está nele.
+     *
+     * Não apaga nada — nem mensagem, nem nota, nem backlog. Só grava que esta
+     * pessoa já leu, e o que ela não leu continua lá. O pedido de liberação do
+     * portão fica de fora de propósito: é caminhão parado esperando decisão, e
+     * some da tela só quando alguém decide.
+     */
+    limparAvisos: protectedProcedure.mutation(async ({ ctx }) => {
+      await limparAvisos({
+        userId: ctx.user.id,
+        isOperator: isSchedulingDesk(ctx.user.role),
+        trataBacklog: canTreatBacklog(ctx.user.role),
+      });
+      return { ok: true };
+    }),
     /** Quantas mensagens cada nota tem, e quantas são novas, para marcar a conversa certa. */
     porNota: protectedProcedure.query(({ ctx }) => contarMensagensPorNota({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
   }),
