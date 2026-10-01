@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { AlertTriangle, Clock, DatabaseBackup, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Clock, DatabaseBackup, Download, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -68,11 +68,29 @@ export default function BackupCard() {
   const situacao = trpc.manutencao.situacaoDoBackup.useQuery();
   const utils = trpc.useUtils();
 
+  const copias = trpc.manutencao.backupsParaBaixar.useQuery();
+
+  /**
+   * Baixar a cópia no computador de quem administra.
+   *
+   * O backup saía todo dia e parava no bucket. Para pegar o arquivo era preciso
+   * ter conta no provedor de armazenamento — que quem administra o sistema não
+   * tem —, e backup que o dono não consegue baixar é metade de um backup: dá
+   * para restaurar de dentro, não dá para levar os dados embora.
+   *
+   * O link vem assinado e expira; a navegação para ele é que puxa o arquivo.
+   */
+  const baixar = trpc.manutencao.linkDoBackup.useMutation({
+    onSuccess: ({ url }) => { window.location.href = url; },
+    onError: erro => toast.error(erro.message),
+  });
+
   const backup = trpc.manutencao.gerarBackup.useMutation({
     onSuccess: dados => {
       setResumo(dados);
       void utils.manutencao.situacaoDoBackup.invalidate();
-      toast.success("Backup gravado no armazenamento.");
+      void utils.manutencao.backupsParaBaixar.invalidate();
+      toast.success("Backup gravado. Já dá para baixar aqui embaixo.");
     },
     onError: erro => {
       void utils.manutencao.situacaoDoBackup.invalidate();
@@ -87,6 +105,8 @@ export default function BackupCard() {
   const falhaAtual = ultimaTentativa?.error && !ultimaTentativa.finishedAt ? ultimaTentativa.error : null;
 
   const mb = resumo ? (resumo.tamanhoBytes / 1024 / 1024).toFixed(2) : null;
+  const disponiveis = copias.data ?? [];
+  const maisRecente = disponiveis[0] ?? null;
 
   return (
     <section className="panel p-5 shadow-sm sm:p-7">
@@ -108,13 +128,26 @@ export default function BackupCard() {
             </div>
           </div>
         </div>
-        <Button
-          onClick={() => backup.mutate()}
-          disabled={backup.isPending}
-          className="h-11 shrink-0 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand"
-        >
-          {backup.isPending ? "Gerando..." : "Gerar backup agora"}
-        </Button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button
+            onClick={() => backup.mutate()}
+            disabled={backup.isPending}
+            className="h-11 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand"
+          >
+            {backup.isPending ? "Gerando..." : "Gerar backup agora"}
+          </Button>
+          {maisRecente?.storageKey && (
+            <Button
+              onClick={() => baixar.mutate({ chave: maisRecente.storageKey! })}
+              disabled={baixar.isPending}
+              variant="outline"
+              className="h-11 rounded-xl border-line bg-surface px-5 font-bold text-rvd-plum hover:bg-rvd-plum-pale"
+            >
+              <Download className="size-4" />
+              {baixar.isPending ? "Preparando..." : "Baixar a última"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {resumo && (
@@ -134,9 +167,43 @@ export default function BackupCard() {
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-xs leading-5 text-ink-faint">
-            Para conferir, abra o bucket no Cloudflare R2 e procure a pasta <code>backups/</code>.
+        </div>
+      )}
+
+      {disponiveis.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-line bg-canvas p-5">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-faint">Cópias guardadas</p>
+          <p className="mt-2 text-[13px] leading-5 text-ink-soft">
+            Cada arquivo é o banco inteiro — todas as tabelas, todas as linhas — em JSON compactado
+            (<code>.json.gz</code>). Abre em qualquer editor depois de descompactar, e serve tanto para
+            guardar fora do sistema quanto para restaurar.
           </p>
+          <ul className="mt-4 divide-y divide-line">
+            {disponiveis.map(copia => (
+              <li key={copia.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0">
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-bold text-ink">
+                    {copia.finishedAt ? quando(copia.finishedAt) : "—"}
+                    <span className="ml-2 rounded bg-rvd-plum-pale px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">
+                      {copia.origin === "manual" ? "manual" : "automático"}
+                    </span>
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-ink-soft">
+                    {(copia.rowCount ?? 0).toLocaleString("pt-BR")} registros · {((copia.sizeBytes ?? 0) / 1024 / 1024).toFixed(2)} MB
+                  </span>
+                </span>
+                <Button
+                  onClick={() => copia.storageKey && baixar.mutate({ chave: copia.storageKey })}
+                  disabled={baixar.isPending}
+                  variant="outline"
+                  className="h-9 shrink-0 rounded-xl border-line bg-surface px-3.5 text-xs font-bold text-rvd-plum hover:bg-rvd-plum-pale"
+                >
+                  <Download className="size-3.5" />
+                  Baixar
+                </Button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </section>

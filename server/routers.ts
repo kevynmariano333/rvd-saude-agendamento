@@ -118,10 +118,11 @@ import { isS3Configured } from "./_core/s3Client";
 import { conteudoDoAgendamento } from "./emailDeAgendamento";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
-import { excluirNotaRepetida, limparAvisos, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
+import { backupConhecido, backupsDisponiveis, excluirNotaRepetida, limparAvisos, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
 import { chaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 import { countAppointments, countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
 import { executarBackup } from "./backup";
+import { storageGetSignedUrl } from "./storage";
 import { decodificarCsv, importarAcervo } from "./agilizaImport";
 import { lerPedidosDoSap } from "./pedidosSap";
 import { pedidosDaNota as numerosDosPedidos } from "../shared/purchaseOrders";
@@ -1478,6 +1479,35 @@ export const appRouter = router({
         backupConfigurado: isS3Configured(),
       }),
     ),
+    /**
+     * O link para baixar uma cópia do banco no computador de quem administra.
+     *
+     * O backup saía todo dia e ia para o bucket — e parava ali. Para pegar o
+     * arquivo era preciso ter conta no provedor de armazenamento, que quem
+     * administra o sistema não tem. Backup que o dono não consegue baixar é
+     * metade de um backup: serve para restaurar de dentro, não serve para levar
+     * os dados embora, nem para abrir numa planilha, nem para entregar a um
+     * contador ou a uma auditoria.
+     *
+     * O link é assinado e expira. É melhor do que servir o arquivo por aqui:
+     * são dezenas de megabytes que não precisam atravessar o processo do app, e
+     * um link que vaza morre sozinho.
+     *
+     * Só administrador, porque o arquivo é a base inteira: todas as notas,
+     * todos os fornecedores, todas as conversas.
+     */
+    linkDoBackup: adminProcedure
+      .input(z.object({ chave: z.string().min(1).max(512) }))
+      .mutation(async ({ input }) => {
+        // A chave tem que ser de um backup que este sistema gerou, e não um
+        // caminho qualquer vindo da tela: senão esta rota vira um jeito de ler
+        // qualquer arquivo do bucket, inclusive XML de nota de fornecedor.
+        const conhecida = await backupConhecido(input.chave);
+        if (!conhecida) throw new TRPCError({ code: "NOT_FOUND", message: "Este backup não está na lista de cópias geradas pelo sistema." });
+        return { url: await storageGetSignedUrl(input.chave), chave: input.chave };
+      }),
+    /** As cópias já gravadas, da mais nova para a mais velha, para baixar. */
+    backupsParaBaixar: adminProcedure.query(async () => backupsDisponiveis(20)),
     /** O que a tela mostra para provar que a cópia da madrugada está saindo. */
     situacaoDoBackup: adminProcedure.query(async () => ({
       ultimo: await ultimoBackupConcluido(),

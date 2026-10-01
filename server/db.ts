@@ -2480,6 +2480,49 @@ export async function registrarFalhaDeBackup(id: number | null, erro: unknown): 
 }
 
 /** O último backup que chegou ao fim. É o que diz se a proteção está viva. */
+/**
+ * As cópias do banco que o sistema gerou e que ainda dá para baixar.
+ *
+ * Só as que terminaram e gravaram arquivo: tentativa que falhou não tem o que
+ * baixar, e oferecê-la seria prometer um arquivo que não existe.
+ */
+export async function backupsDisponiveis(limite = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: backupRuns.id,
+      origin: backupRuns.origin,
+      finishedAt: backupRuns.finishedAt,
+      storageKey: backupRuns.storageKey,
+      rowCount: backupRuns.rowCount,
+      sizeBytes: backupRuns.sizeBytes,
+    })
+    .from(backupRuns)
+    .where(and(isNotNull(backupRuns.finishedAt), isNotNull(backupRuns.storageKey)))
+    .orderBy(desc(backupRuns.finishedAt))
+    .limit(limite);
+}
+
+/**
+ * A chave é de um backup que este sistema gerou?
+ *
+ * A tela manda a chave de volta para pedir o link, e sem esta conferência a
+ * rota de download viraria um jeito de ler qualquer arquivo do bucket — XML de
+ * nota de fornecedor inclusive. O que vale é o que está gravado aqui, não o que
+ * o navegador mandou.
+ */
+export async function backupConhecido(chave: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const linhas = await db
+    .select({ id: backupRuns.id })
+    .from(backupRuns)
+    .where(and(eq(backupRuns.storageKey, chave), isNotNull(backupRuns.finishedAt)))
+    .limit(1);
+  return linhas.length > 0;
+}
+
 export async function ultimoBackupConcluido() {
   const db = await getDb();
   if (!db) return null;

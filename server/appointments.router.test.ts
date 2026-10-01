@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   devolverParaBacklog: vi.fn(),
   corrigirMotivoDoBacklog: vi.fn(),
   linhasDeBacklogNoHistorico: vi.fn(),
+  backupsDisponiveis: vi.fn(),
+  backupConhecido: vi.fn(),
   limparAvisos: vi.fn(),
   createAppointmentInternalNote: vi.fn(),
   createLocalUser: vi.fn(),
@@ -60,7 +62,7 @@ vi.mock("./session", () => ({
   createRvdSession: vi.fn(),
 }));
 vi.mock("./_core/mailer", () => ({ isMailerConfigured: () => true, sendMail: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("./storage", () => ({ storagePut: vi.fn().mockResolvedValue({ key: "recebimentos-avulsos/teste.xml", url: "https://storage.example/recebimentos-avulsos/teste.xml" }) }));
+vi.mock("./storage", () => ({ storagePut: vi.fn().mockResolvedValue({ key: "recebimentos-avulsos/teste.xml", url: "https://storage.example/recebimentos-avulsos/teste.xml" }), storageGetSignedUrl: vi.fn().mockResolvedValue("https://storage.example/backups/assinado?exp=1") }));
 
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -1153,5 +1155,45 @@ describe("o que a devolução ao backlog guarda do que apagou", () => {
     const chamada = mocks.devolverParaBacklog.mock.calls[0]![0] as { eventNote: string };
     expect(chamada.eventNote).toContain("5100042");
     expect(chamada.eventNote).toContain("Divergência de preço");
+  });
+});
+
+/*
+ * O backup saía todo dia e parava no bucket. Para pegar o arquivo era preciso
+ * ter conta no provedor de armazenamento — que quem administra o sistema não
+ * tem. Backup que o dono não consegue baixar é metade de um backup.
+ */
+describe("baixar a cópia do banco", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("o administrador recebe um link assinado para a cópia", async () => {
+    mocks.backupConhecido.mockResolvedValue(true);
+    const caller = appRouter.createCaller(context("admin"));
+    const resposta = await caller.manutencao.linkDoBackup({ chave: "backups/rvd-saude-2026-10-01-0300.json.gz" });
+    expect(resposta.chave).toBe("backups/rvd-saude-2026-10-01-0300.json.gz");
+    expect(resposta.url).toContain("http");
+  });
+
+  it("recusa uma chave que não é de um backup: não serve para ler o bucket inteiro", async () => {
+    // Sem isto, a rota viraria um jeito de baixar XML de nota de fornecedor.
+    mocks.backupConhecido.mockResolvedValue(false);
+    const caller = appRouter.createCaller(context("admin"));
+    await expect(caller.manutencao.linkDoBackup({ chave: "notas/2026/nota-secreta.xml" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("não é de operador, planejador nem fornecedor: o arquivo é a base inteira", async () => {
+    mocks.backupConhecido.mockResolvedValue(true);
+    for (const perfil of ["operator", "planejador", "supplier"] as const) {
+      const caller = appRouter.createCaller(context(perfil));
+      await expect(caller.manutencao.linkDoBackup({ chave: "backups/x.json.gz" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.manutencao.backupsParaBaixar()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+  });
+
+  it("lista só as cópias que terminaram e gravaram arquivo", async () => {
+    mocks.backupsDisponiveis.mockResolvedValue([{ id: 1, origin: "automatico", storageKey: "backups/a.json.gz" }]);
+    const caller = appRouter.createCaller(context("admin"));
+    await expect(caller.manutencao.backupsParaBaixar()).resolves.toHaveLength(1);
+    expect(mocks.backupsDisponiveis).toHaveBeenCalledWith(20);
   });
 });
