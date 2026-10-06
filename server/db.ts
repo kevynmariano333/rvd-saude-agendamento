@@ -915,6 +915,8 @@ export async function updateAppointmentStatus(input: {
   miroNumber?: string;
   /** Categoria do motivo, quando a nota vai para o backlog. */
   backlogReasonCode?: string;
+  /** Categoria do motivo, quando a nota é recusada. É por ela que se conta. */
+  rejectionReasonCode?: string;
   /** Descrição do que houve. Sem o rótulo do motivo: ele já vem no código. */
   backlogReason?: string;
 }) {
@@ -929,7 +931,14 @@ export async function updateAppointmentStatus(input: {
         handledBy: input.handledBy,
         updatedAt: new Date(),
         ...(receivedAt ? { receivedAt } : {}),
-        ...(input.status === "rejected" ? { rejectionReason: input.rejectionReason?.trim() || "Motivo não informado" } : {}),
+        ...(input.status === "rejected"
+          ? {
+              rejectionReason: input.rejectionReason?.trim() || "Motivo não informado",
+              // Uma recusa nova apaga o código da anterior: a nota resgatada e
+              // recusada de novo foi recusada por outra coisa.
+              rejectionReasonCode: input.rejectionReasonCode ?? null,
+            }
+          : {}),
         ...(input.miroNumber ? { miroNumber: input.miroNumber } : {}),
         // O motivo acompanha a nota até a tratativa; um backlog novo apaga o
         // motivo do backlog anterior, que já não descreve esta ida.

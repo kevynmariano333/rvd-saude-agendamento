@@ -214,6 +214,15 @@ export const appointments = mysqlTable(
     semAgendamento: boolean("semAgendamento").default(false).notNull(),
     notes: text("notes"),
     rejectionReason: text("rejectionReason"),
+    /**
+     * A categoria da recusa, da lista fechada.
+     *
+     * O texto acima guarda a frase que a pessoa lê; ele não serve para contar.
+     * "Carga avariada — caixa violada" e "Carga avariada" são a mesma coisa
+     * para quem vai medir qualidade de fornecedor, e nenhum dos dois é
+     * comparável se a próxima pessoa escrever "avaria na carga".
+     */
+    rejectionReasonCode: varchar("rejectionReasonCode", { length: 60 }),
     source: mysqlEnum("source", appointmentSources).default("portal").notNull(),
     /**
      * Quando alguém do planejamento marcou esta nota como prioridade.

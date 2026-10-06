@@ -418,9 +418,9 @@ export default function OperatorDashboard() {
       aberto={Boolean(rejeitarPendente)}
       onFechar={() => setRejeitarPendente(null)}
       carregando={updateStatus.isPending}
-      onConfirmar={motivo => {
+      onConfirmar={(motivo, codigo) => {
         if (!rejeitarPendente) return;
-        updateStatus.mutate({ appointmentId: rejeitarPendente.id, status: "rejected", rejectionReason: motivo });
+        updateStatus.mutate({ appointmentId: rejeitarPendente.id, status: "rejected", rejectionReason: motivo, rejectionReasonCode: codigo });
         setRejeitarPendente(null);
       }}
     />
@@ -926,7 +926,7 @@ function BarraDePaginas({ pagina, totalDePaginas, total, primeira, ultima, onPag
  * é opcional — exigir texto em toda recusa faria a operação escrever "x" para
  * o botão liberar.
  */
-function RecusaDialog({ item, aberto, onFechar, carregando, onConfirmar }: { item: Appointment | null; aberto: boolean; onFechar: () => void; carregando: boolean; onConfirmar: (motivo: string) => void }) {
+function RecusaDialog({ item, aberto, onFechar, carregando, onConfirmar }: { item: Appointment | null; aberto: boolean; onFechar: () => void; carregando: boolean; onConfirmar: (motivo: string, codigo: string) => void }) {
   const [codigo, setCodigo] = useState("");
   const [descricao, setDescricao] = useState("");
   // Cada nota começa do zero: o motivo da anterior não pode vir marcado na
@@ -991,7 +991,7 @@ function RecusaDialog({ item, aberto, onFechar, carregando, onConfirmar }: { ite
           <Button type="button" variant="ghost" onClick={onFechar} className="font-bold text-ink-soft hover:bg-sunken">Cancelar</Button>
           <Button
             type="button"
-            onClick={() => onConfirmar(textoDaRecusa(codigo, descricao))}
+            onClick={() => onConfirmar(textoDaRecusa(codigo, descricao), codigo)}
             disabled={carregando || !podeConfirmar}
             title={podeConfirmar ? undefined : faltaDescricao ? "Descreva o motivo" : "Escolha o motivo da recusa"}
             className="h-10 rounded-xl bg-state-stop px-5 text-sm font-bold text-white hover:bg-state-stop disabled:cursor-not-allowed disabled:opacity-50"

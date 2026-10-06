@@ -288,6 +288,13 @@
       "when": 1791310543249,
       "tag": "0040_sem_agendamento",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "5",
+      "when": 1791313003602,
+      "tag": "0041_codigo_da_recusa",
+      "breakpoints": true
     }
   ]
 }

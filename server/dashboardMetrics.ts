@@ -1,3 +1,4 @@
+import { ranquearFornecedores } from "../shared/qualificacaoDoFornecedor";
 import type { AppointmentStatus } from "../drizzle/schema";
 import { UNIDADES, unidadePorCnpj } from "../shared/recipients";
 
@@ -13,6 +14,14 @@ export type DashboardAppointment = {
   recipientCnpj: string | null;
   /** Quantos volumes a nota trouxe. Nem toda nota informa. */
   invoiceVolumeCount: number | null;
+  /** O CNPJ de quem emitiu — é por ele que o fornecedor é identificado. */
+  invoiceSupplierCnpj: string | null;
+  /** O horário agendado nunca foi combinado com ninguém. */
+  semAgendamento?: boolean | null;
+  /** A categoria da recusa, quando houve. */
+  rejectionReasonCode?: string | null;
+  /** Quando a nota mudou de estado pela última vez — é quando a recusa aconteceu. */
+  updatedAt?: Date | null;
 };
 
 /**
@@ -54,8 +63,17 @@ function isWithinPeriod(date: Date | null, start: Date, end: Date) {
   return Boolean(date && date >= start && date < end);
 }
 
+/**
+ * De quem é a entrega.
+ *
+ * Do emitente da nota, e não da conta que lançou o agendamento. Eram tratados
+ * como a mesma coisa, e por isso o operador do sistema aparecia em primeiro
+ * lugar no ranking de fornecedores: as notas que ele lança à mão carregam o
+ * usuário dele como "fornecedor". O nome do emitente vem do XML; o da conta só
+ * serve quando não há emitente — nota de serviço, por exemplo.
+ */
 function supplierLabel(item: DashboardAppointment) {
-  return item.supplierName?.trim() || item.invoiceSupplierName?.trim() || "Fornecedor não informado";
+  return item.invoiceSupplierName?.trim() || item.supplierName?.trim() || "Fornecedor não informado";
 }
 
 export function buildDashboardMetrics(items: DashboardAppointment[], period: DashboardPeriod) {
@@ -132,6 +150,22 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
     })),
     dailyReceived,
     monthlyReceived,
+    // A qualificação olha o período inteiro escolhido, e não só o que foi
+    // recebido: a entrega recusada nunca é recebida, e é justamente ela que
+    // precisa pesar na nota do fornecedor.
+    qualificacao: ranquearFornecedores(
+      items
+        .filter(item => isWithinPeriod(item.receivedAt, start, end) || (item.status === "rejected" && isWithinPeriod(item.updatedAt ?? null, start, end)))
+        .map(item => ({
+          cnpj: item.invoiceSupplierCnpj,
+          nome: item.invoiceSupplierName,
+          status: item.status,
+          scheduledFor: item.scheduledFor,
+          receivedAt: item.receivedAt,
+          semAgendamento: item.semAgendamento,
+          rejectionReasonCode: item.rejectionReasonCode,
+        })),
+    ).slice(0, 12),
     topSuppliers: Array.from(receivedBySupplier, ([name, notesReceived]) => ({ name, notesReceived }))
       .sort((a, b) => b.notesReceived - a.notesReceived || a.name.localeCompare(b.name, "pt-BR"))
       .slice(0, 5),
