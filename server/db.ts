@@ -1172,7 +1172,9 @@ export async function scheduleAppointment(input: { appointmentId: number; previo
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
   await db.transaction(async tx => {
-    await tx.update(appointments).set({ status: "scheduled", scheduledFor: input.scheduledFor, handledBy: input.handledBy, updatedAt: new Date() }).where(eq(appointments.id, input.appointmentId));
+    // Agendar é o ato que torna a data um compromisso: a marca de "sem
+    // agendamento" sai aqui, e não antes.
+    await tx.update(appointments).set({ status: "scheduled", scheduledFor: input.scheduledFor, semAgendamento: false, handledBy: input.handledBy, updatedAt: new Date() }).where(eq(appointments.id, input.appointmentId));
     if (input.acceptedSuggestionId) {
       await tx.update(appointmentSuggestions).set({ status: "accepted", handledBy: input.handledBy, respondedAt: new Date() }).where(eq(appointmentSuggestions.id, input.acceptedSuggestionId));
     }
@@ -1242,6 +1244,10 @@ export async function createUnscheduledReceipt(input: {
       supplierId: input.operatorId,
       serviceType: serviceType.slice(0, 80),
       scheduledFor: registeredAt,
+      // O horário acima é o do clique, não um combinado: a coluna não aceita
+      // vazio e alguma data precisa ir. A marca é o que impede o relatório de
+      // afirmar que esta carga tinha hora marcada.
+      semAgendamento: true,
       // A data de recebimento só existe quando houve recebimento. Preenchê-la
       // na nota que ainda espera agendamento faria o relatório contar como
       // recebida uma carga que ninguém viu.
@@ -2142,6 +2148,8 @@ export async function listReportRows(filtros: {
   const colunas = {
     id: appointments.id,
     createdAt: appointments.createdAt,
+    // Se aquele horário foi combinado com alguém ou é só o instante do registro.
+    semAgendamento: appointments.semAgendamento,
     // Quando o status mudou pela última vez — a coluna "Data do Último Status".
     updatedAt: appointments.updatedAt,
     // Quantas linhas a nota tem. Contado no banco: trazer o JSON dos itens só

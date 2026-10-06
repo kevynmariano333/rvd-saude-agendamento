@@ -28,6 +28,8 @@ export type ReportAppointment = {
   status: PortalStatus;
   source?: PortalSource | string | null;
   scheduledFor: Date | string;
+  /** O horário acima foi combinado, ou é só o instante do registro? */
+  semAgendamento?: boolean | null;
   receivedAt: Date | string | null;
   /** O que ficou gravado da passagem pelo backlog, mesmo em nota já concluída. */
   backlogReasonCode?: string | null;
@@ -165,6 +167,22 @@ export function statusDoRelatorio(item: ReportAppointment): string {
   return passouPeloBacklog(item) ? `${base} (com backlog)` : base;
 }
 
+/**
+ * O que vai na coluna de agendamento.
+ *
+ * A nota que entra por "recebimento sem agendamento" leva no banco o instante
+ * do clique, porque a coluna de data não aceita vazio. Imprimir aquilo aqui
+ * faz o relatório afirmar "agendada para as 10:14" sobre uma carga que
+ * apareceu na doca sem hora marcada — e deixa a coluna de criação parecendo
+ * repetida, já que as duas trazem o mesmo minuto.
+ *
+ * Dizer que não houve agendamento é mais útil do que mostrar um horário que
+ * ninguém combinou.
+ */
+export function dataDoAgendamento(item: { scheduledFor: Date | string; semAgendamento?: boolean | null }): string {
+  return item.semAgendamento ? "Sem agendamento" : formatReportDate(item.scheduledFor);
+}
+
 function baseRow(item: ReportAppointment): ConsolidatedReportRow {
   return {
     "Data de Criação": formatReportDate(item.createdAt ?? null),
@@ -172,7 +190,7 @@ function baseRow(item: ReportAppointment): ConsolidatedReportRow {
     // marca é o que separa quem entrou direto de quem entrou depois de briga.
     "Último Status": statusDoRelatorio(item),
     "Data do Último Status": formatReportDate(item.updatedAt ?? null),
-    "Data de Agendamento": formatReportDate(item.scheduledFor),
+    "Data de Agendamento": dataDoAgendamento(item),
     "Número da Nota": item.invoiceNumber || "—",
     "Número do Pedido": item.purchaseOrder || "—",
     "CNPJ Fornecedor": cnpjDoRemetente(item) ? formatarCnpj(cnpjDoRemetente(item)) : "—",

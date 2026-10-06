@@ -1,4 +1,5 @@
 import {
+  boolean,
   datetime,
   decimal,
   index,
@@ -198,6 +199,19 @@ export const appointments = mysqlTable(
       .references(() => users.id, { onDelete: "cascade" }),
     serviceType: varchar("serviceType", { length: 80 }).notNull(),
     scheduledFor: datetime("scheduledFor", { mode: "date" }).notNull(),
+    /**
+     * A data acima nunca foi combinada com ninguém.
+     *
+     * A nota que entra por "recebimento sem agendamento" precisa de uma data
+     * para gravar — a coluna não aceita vazio —, e o sistema põe o instante do
+     * clique. Isso faz o relatório afirmar "agendada para as 10:14" sobre uma
+     * carga que apareceu na doca sem data marcada, e deixa a coluna de criação
+     * parecendo repetida: as duas trazem o mesmo minuto.
+     *
+     * Esta marca diz que aquele horário é registro, não compromisso. Some no
+     * momento em que alguém de fato agenda a nota.
+     */
+    semAgendamento: boolean("semAgendamento").default(false).notNull(),
     notes: text("notes"),
     rejectionReason: text("rejectionReason"),
     source: mysqlEnum("source", appointmentSources).default("portal").notNull(),
