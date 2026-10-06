@@ -95,6 +95,7 @@ import { canApplySuggestion, canMoveAppointmentStatus, canRequestAppointment, ca
 import { validarTratativa, resumoDaTratativa } from "../shared/tratativa";
 import { ehMotivoConhecido, rotuloDoMotivo } from "../shared/backlogReasons";
 import { codigoDoAgilizaNoHistorico } from "../shared/motivoDoAgiliza";
+import { BASES_DA_DATA } from "../shared/baseDaData";
 import { codigoDeOrigem, MOTIVOS_DO_AGILIZA } from "./agilizaImport";
 import { clearRvdSession, createRvdSession } from "./session";
 import { systemRouter } from "./_core/systemRouter";
@@ -1725,6 +1726,7 @@ export const appRouter = router({
         z.object({
           scheduledStart: z.string().optional(),
           scheduledEnd: z.string().optional(),
+          baseDaData: z.enum(BASES_DA_DATA).optional(),
           receivedStart: z.string().optional(),
           receivedEnd: z.string().optional(),
           status: statusSchema.optional(),
@@ -1739,6 +1741,7 @@ export const appRouter = router({
         return listReportRows({
           scheduledStart: input?.scheduledStart,
           scheduledEnd: input?.scheduledEnd,
+          baseDaData: input?.baseDaData,
           receivedStart: input?.receivedStart,
           receivedEnd: input?.receivedEnd,
           status: input?.status as AppointmentStatus | undefined,

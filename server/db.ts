@@ -32,6 +32,7 @@ import {
 import { ENV } from "./_core/env";
 import { normalizeCnpj } from "./fiscalFilters";
 import { termosDaBusca } from "../shared/termosDaBusca";
+import { BASE_DA_DATA_PADRAO, type BaseDaData } from "../shared/baseDaData";
 import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 import { getReceiptTimestampForStatus } from "./receiptStatus";
 import { getSaoPauloDayRange } from "../shared/dateFilters";
@@ -2088,8 +2089,10 @@ export async function contarAgendamentos() {
  * devolve quinze campos curtos; o total diz quantas ficaram fora do teto.
  */
 export async function listReportRows(filtros: {
+  /** O começo e o fim do período; a que data ele se aplica vem em `baseDaData`. */
   scheduledStart?: string;
   scheduledEnd?: string;
+  baseDaData?: BaseDaData;
   receivedStart?: string;
   receivedEnd?: string;
   status?: AppointmentStatus;
@@ -2104,10 +2107,20 @@ export async function listReportRows(filtros: {
 
   const condicoes = [];
   if (filtros.status) condicoes.push(eq(appointments.status, filtros.status));
-  const inicioAgenda = getSaoPauloDayRange(filtros.scheduledStart ?? "");
-  const fimAgenda = getSaoPauloDayRange(filtros.scheduledEnd ?? "");
-  if (inicioAgenda) condicoes.push(gte(appointments.scheduledFor, inicioAgenda.start));
-  if (fimAgenda) condicoes.push(lte(appointments.scheduledFor, fimAgenda.end));
+  // O período vale sobre a data que a tela escolheu. Era sempre o agendamento,
+  // e quem fechava o mês estranhava ver outubro na coluna do último status: a
+  // nota agendada no dia 30 foi concluída no dia 1º, e as duas coisas são
+  // verdade. Agora a pergunta é explícita.
+  const colunaDoPeriodo = {
+    agendamento: appointments.scheduledFor,
+    recebimento: appointments.receivedAt,
+    criacao: appointments.createdAt,
+  }[filtros.baseDaData ?? BASE_DA_DATA_PADRAO];
+  const inicioDoPeriodo = getSaoPauloDayRange(filtros.scheduledStart ?? "");
+  const fimDoPeriodo = getSaoPauloDayRange(filtros.scheduledEnd ?? "");
+  if (inicioDoPeriodo) condicoes.push(gte(colunaDoPeriodo, inicioDoPeriodo.start));
+  if (fimDoPeriodo) condicoes.push(lte(colunaDoPeriodo, fimDoPeriodo.end));
+  // O recebimento continua podendo ser filtrado à parte, por cima do período.
   const inicioRecebimento = getSaoPauloDayRange(filtros.receivedStart ?? "");
   const fimRecebimento = getSaoPauloDayRange(filtros.receivedEnd ?? "");
   if (inicioRecebimento) condicoes.push(gte(appointments.receivedAt, inicioRecebimento.start));

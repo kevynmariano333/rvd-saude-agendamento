@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   linhasDeBacklogNoHistorico: vi.fn(),
   backupsDisponiveis: vi.fn(),
   backupConhecido: vi.fn(),
+  listReportRows: vi.fn(),
   limparAvisos: vi.fn(),
   createAppointmentInternalNote: vi.fn(),
   createLocalUser: vi.fn(),
@@ -1195,5 +1196,47 @@ describe("baixar a cópia do banco", () => {
     const caller = appRouter.createCaller(context("admin"));
     await expect(caller.manutencao.backupsParaBaixar()).resolves.toHaveLength(1);
     expect(mocks.backupsDisponiveis).toHaveBeenCalledWith(20);
+  });
+});
+
+/*
+ * O relatório sempre cortou pela data de agendamento, e os campos diziam isso.
+ * Mas quem fecha o mês lê aquilo como "período do relatório": puxa setembro e
+ * estranha ver outubro na coluna do último status — a nota agendada no dia 30
+ * foi concluída no dia 1º, e as duas coisas são verdade. Agora a tela pergunta
+ * a que data o período se aplica.
+ */
+describe("a que data o período do relatório se aplica", () => {
+  beforeEach(() => { vi.clearAllMocks(); mocks.listReportRows.mockResolvedValue({ linhas: [], total: 0 }); });
+
+  it("sem escolher nada, segue pelo agendamento — como sempre foi", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.reports.notas({ scheduledStart: "2026-09-01", scheduledEnd: "2026-09-30" });
+    expect(mocks.listReportRows).toHaveBeenCalledWith(expect.objectContaining({ baseDaData: undefined }));
+  });
+
+  it("passa adiante a escolha de recebimento", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.reports.notas({ scheduledStart: "2026-09-01", scheduledEnd: "2026-09-30", baseDaData: "recebimento" });
+    expect(mocks.listReportRows).toHaveBeenCalledWith(expect.objectContaining({
+      baseDaData: "recebimento", scheduledStart: "2026-09-01", scheduledEnd: "2026-09-30",
+    }));
+  });
+
+  it("passa adiante a escolha de criação", async () => {
+    await appRouter.createCaller(context("planejador")).reports.notas({ baseDaData: "criacao" });
+    expect(mocks.listReportRows).toHaveBeenCalledWith(expect.objectContaining({ baseDaData: "criacao" }));
+  });
+
+  it("recusa uma data que a tela não oferece", async () => {
+    const caller = appRouter.createCaller(context("operator"));
+    await expect(caller.reports.notas({ baseDaData: "conclusao" } as never)).rejects.toBeTruthy();
+    expect(mocks.listReportRows).not.toHaveBeenCalled();
+  });
+
+  it("o fornecedor não tira relatório da operação", async () => {
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.reports.notas({ baseDaData: "recebimento" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.listReportRows).not.toHaveBeenCalled();
   });
 });

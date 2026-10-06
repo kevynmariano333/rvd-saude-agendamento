@@ -1,3 +1,4 @@
+import type { BaseDaData } from "@shared/baseDaData";
 import { type PortalSource, type PortalStatus, statusCopy } from "./portal";
 import { apenasDigitos, formatarCnpj, unidadePorCnpj } from "@shared/recipients";
 import { passouPeloBacklog, rotuloDoMotivo } from "@shared/backlogReasons";
@@ -37,6 +38,8 @@ export type ReportAppointment = {
 export type ReportFilters = {
   scheduledStart?: string;
   scheduledEnd?: string;
+  /** A que data o período se aplica: agendamento, recebimento ou criação. */
+  baseDaData?: BaseDaData;
   receivedStart?: string;
   receivedEnd?: string;
   status?: PortalStatus | "all";
