@@ -1307,3 +1307,86 @@ describe("o link de redefinição gerado pelo administrador", () => {
     expect(mocks.createPasswordResetToken).not.toHaveBeenCalled();
   });
 });
+
+describe("o aviso de recusa para o fornecedor", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const recusar = async (entrada: Record<string, unknown> = {}) => {
+    mocks.getAppointmentById.mockResolvedValue({
+      id: 9,
+      supplierId: 12,
+      status: "scheduled",
+      invoiceNumber: "8507",
+      purchaseOrder: "4000123456",
+      scheduledFor: new Date(Date.UTC(2026, 9, 6, 13, 0, 0)),
+      recipientCnpj: null,
+      semAgendamento: false,
+      ...entrada,
+    });
+    mocks.updateAppointmentStatus.mockResolvedValue({ id: 9, status: "rejected" });
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.updateStatus({
+      appointmentId: 9,
+      status: "rejected",
+      rejectionReasonCode: "DOCUMENTO_IRREGULAR",
+      note: "A nota veio sem o XML.",
+    });
+    await new Promise(resolve => setImmediate(resolve));
+  };
+
+  it("manda o motivo, e não só o aviso de que foi recusada", async () => {
+    // "Sua nota foi recusada", sozinho, obriga o fornecedor a ligar para
+    // perguntar o que houve — e quem atende é a mesma doca que recusou.
+    const { sendMail } = await import("./_core/mailer");
+    mocks.getUserById.mockResolvedValue({ id: 12, email: "fornecedor@exemplo.com", role: "supplier" });
+    await recusar();
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: "fornecedor@exemplo.com" }));
+    const mensagem = (sendMail as unknown as { mock: { calls: { text: string; subject: string }[][] } }).mock.calls[0]![0]!;
+    expect(mensagem.subject).toContain("Documento fiscal irregular");
+    expect(mensagem.text).toContain("A nota veio sem o XML.");
+    expect(mensagem.text).toContain("NF 8507");
+  });
+
+  it("não deixa uma falha de e-mail desfazer a recusa", async () => {
+    // A carga já foi recusada na doca quando o aviso sai.
+    const { sendMail } = await import("./_core/mailer");
+    (sendMail as unknown as { mockRejectedValueOnce: (erro: Error) => void }).mockRejectedValueOnce(new Error("servidor de e-mail fora do ar"));
+    mocks.getUserById.mockResolvedValue({ id: 12, email: "fornecedor@exemplo.com", role: "supplier" });
+    await expect(recusar()).resolves.toBeUndefined();
+    expect(mocks.registrarNoHistorico).toHaveBeenCalledWith(expect.objectContaining({ eventNote: expect.stringContaining("não entregue") }));
+  });
+
+  it("registra quando o fornecedor não tem e-mail", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 12, email: null, role: "supplier" });
+    await recusar();
+    expect(mocks.registrarNoHistorico).toHaveBeenCalledWith(expect.objectContaining({ eventNote: expect.stringContaining("não tem e-mail") }));
+  });
+
+  it("carga que chegou sem agendamento não ganha uma data que ninguém marcou", async () => {
+    // O horário gravado ali é o do clique de quem registrou o recebimento.
+    const { sendMail } = await import("./_core/mailer");
+    mocks.getUserById.mockResolvedValue({ id: 12, email: "fornecedor@exemplo.com", role: "supplier" });
+    await recusar({ semAgendamento: true });
+    const mensagem = (sendMail as unknown as { mock: { calls: { text: string }[][] } }).mock.calls[0]![0]!;
+    expect(mensagem.text).not.toContain("Data que estava marcada");
+  });
+
+  it("nota lançada à mão pelo balcão não avisa a própria mesa", async () => {
+    // A nota manual fica no nome de quem a lançou, que é gente de dentro:
+    // o aviso iria para o operador, e não para o fornecedor.
+    const { sendMail } = await import("./_core/mailer");
+    mocks.getUserById.mockResolvedValue({ id: 24, email: "operador@rvdsaude.com.br", role: "operator" });
+    await recusar();
+    expect(sendMail).not.toHaveBeenCalled();
+    expect(mocks.registrarNoHistorico).toHaveBeenCalledWith(expect.objectContaining({ eventNote: expect.stringContaining("conta de fornecedor") }));
+  });
+
+  it("mudar a nota para outro status não manda aviso de recusa", async () => {
+    const { sendMail } = await import("./_core/mailer");
+    mocks.getAppointmentById.mockResolvedValue({ id: 9, supplierId: 12, status: "scheduled", invoiceNumber: "8507", purchaseOrder: null, scheduledFor: new Date(), recipientCnpj: null });
+    mocks.updateAppointmentStatus.mockResolvedValue({ id: 9, status: "received" });
+    await appRouter.createCaller(context("operator")).appointments.updateStatus({ appointmentId: 9, status: "received" });
+    await new Promise(resolve => setImmediate(resolve));
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+});

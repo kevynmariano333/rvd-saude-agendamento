@@ -120,6 +120,7 @@ import { conteudoDoTeste, motivoDaFalha } from "./emailDeTeste";
 import { montarEstadoDeSeguranca } from "./estadoDeSeguranca";
 import { isS3Configured } from "./_core/s3Client";
 import { conteudoDoAgendamento } from "./emailDeAgendamento";
+import { conteudoDaRecusa } from "./emailDeRecusa";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
 import { apagarNotaRegistrando, backupConhecido, backupsDisponiveis, excluirNotaRepetida, limparAvisos, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
@@ -390,6 +391,71 @@ async function avisarFornecedorDoAgendamento(agendamento: { id: number; supplier
   } catch (erro) {
     console.error("[Agendamento] falha ao enviar o aviso ao fornecedor:", erro);
     await registrar(`Aviso de agendamento não entregue em ${fornecedor.email}.`);
+  }
+}
+
+/**
+ * Avisa o fornecedor de que a nota foi recusada, com o motivo.
+ *
+ * A recusa é a única decisão do portal que custa dinheiro do outro lado — o
+ * caminhão já saiu, a carga volta, alguém refaz o agendamento — e acontecia em
+ * silêncio: o fornecedor só descobria se voltasse ao portal, e muitos
+ * descobriam pelo motorista ligando da estrada.
+ *
+ * Nunca derruba a recusa: ela já está gravada quando isto roda. Um e-mail que
+ * não sai não pode fazer a doca ficar com a carga que recusou.
+ */
+async function avisarFornecedorDaRecusa(
+  agendamento: { id: number; supplierId: number; invoiceNumber: string | null; purchaseOrder: string | null; scheduledFor: Date | null; recipientCnpj: string | null; semAgendamento?: boolean | null },
+  recusa: { motivoCodigo: string | null; descricao: string | null },
+  operadorId: number,
+) {
+  const registrar = async (nota: string) => {
+    try {
+      await registrarNoHistorico({ appointmentId: agendamento.id, status: "rejected", handledBy: operadorId, eventNote: nota });
+    } catch (erro) {
+      // O histórico é o registro do aviso, não o aviso: falhar aqui não pode
+      // apagar o e-mail que já saiu.
+      console.error("[Recusa] falha ao registrar o aviso no histórico:", erro);
+    }
+  };
+
+  if (!isMailerConfigured()) {
+    // Igual ao agendamento: o envio estar desligado é estado do sistema, não
+    // evento daquela nota. Escrever isso no histórico de toda nota recusada
+    // esconderia o que de fato aconteceu com ela.
+    console.warn("[Recusa] envio de e-mail desligado — o fornecedor não foi avisado da recusa.");
+    return;
+  }
+  const fornecedor = await getUserById(agendamento.supplierId);
+  // Nota lançada à mão pelo balcão fica no nome de quem a lançou, que é gente
+  // de dentro. Mandar a esse endereço o aviso de "sua entrega foi recusada"
+  // avisa a própria mesa do que ela acabou de decidir, e não o fornecedor.
+  if (fornecedor && fornecedor.role !== "supplier") {
+    await registrar("Aviso de recusa não enviado: esta nota não está no nome de uma conta de fornecedor.");
+    return;
+  }
+  if (!fornecedor?.email) {
+    await registrar("Aviso de recusa não enviado: o fornecedor não tem e-mail cadastrado.");
+    return;
+  }
+  const conteudo = conteudoDaRecusa({
+    invoiceNumber: agendamento.invoiceNumber,
+    purchaseOrder: agendamento.purchaseOrder,
+    // Carga que chegou sem data marcada não tem "data que estava marcada": o
+    // horário gravado ali é o do clique de quem registrou o recebimento.
+    scheduledFor: agendamento.semAgendamento ? null : agendamento.scheduledFor,
+    recipientCnpj: agendamento.recipientCnpj,
+    motivoCodigo: recusa.motivoCodigo,
+    descricao: recusa.descricao,
+    recusadaEm: new Date(),
+  });
+  try {
+    await sendMail({ to: fornecedor.email, ...conteudo });
+    await registrar(`Recusa avisada por e-mail para ${fornecedor.email}.`);
+  } catch (erro) {
+    console.error("[Recusa] falha ao enviar o aviso ao fornecedor:", erro);
+    await registrar(`Aviso de recusa não entregue em ${fornecedor.email}.`);
   }
 }
 
@@ -1242,7 +1308,25 @@ export const appRouter = router({
         const notaDoEvento = input.status === "backlog"
           ? `${rotuloDoMotivo(backlogReasonCode)}: ${observacao}`
           : observacao || (input.status === "received" ? "Recebimento confirmado pelo operador." : input.status === "completed" ? `Recebimento concluído. MIRO ${miroNumber}.` : undefined);
-        return updateAppointmentStatus({ ...input, miroNumber, backlogReasonCode, backlogReason: observacao, previousStatus: appointment.status, handledBy: ctx.user.id, eventNote: notaDoEvento });
+        const atualizada = await updateAppointmentStatus({ ...input, miroNumber, backlogReasonCode, backlogReason: observacao, previousStatus: appointment.status, handledBy: ctx.user.id, eventNote: notaDoEvento });
+
+        // O aviso sai depois de a recusa estar gravada, e sem poder desfazê-la.
+        if (input.status === "rejected") {
+          await avisarFornecedorDaRecusa(
+            {
+              id: appointment.id,
+              supplierId: appointment.supplierId,
+              invoiceNumber: appointment.invoiceNumber,
+              purchaseOrder: appointment.purchaseOrder,
+              scheduledFor: appointment.scheduledFor,
+              recipientCnpj: appointment.recipientCnpj,
+              semAgendamento: appointment.semAgendamento,
+            },
+            { motivoCodigo: input.rejectionReasonCode ?? null, descricao: observacao ?? input.rejectionReason ?? null },
+            ctx.user.id,
+          );
+        }
+        return atualizada;
       }),
     confirmPreNote: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))
