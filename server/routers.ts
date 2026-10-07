@@ -548,7 +548,7 @@ export const appRouter = router({
         return { razaoSocial };
       }),
     registerSupplier: publicProcedure
-      .input(z.object({ companyName: z.string().trim().min(2, "Informe a razão social.").max(255), companyCnpj: z.string().min(14, "Informe o CNPJ.").max(20), email: z.string().email("Informe um e-mail válido."), password: z.string().min(6, "A senha deve conter pelo menos 6 caracteres.") }))
+      .input(z.object({ companyName: z.string().trim().min(2, "Informe a razão social.").max(255), companyCnpj: z.string().trim().min(14, "Informe o CNPJ.").max(20), email: z.string().trim().email("Informe um e-mail válido."), password: z.string().min(6, "A senha deve conter pelo menos 6 caracteres.") }))
       .mutation(async ({ ctx, input }) => {
         const email = input.email.trim().toLowerCase();
         const companyCnpj = input.companyCnpj.replace(/\D/g, "");
@@ -572,7 +572,7 @@ export const appRouter = router({
         return { pending: false, ...publicUser(user) } as const;
       }),
     register: publicProcedure
-      .input(z.object({ profile: localProfileSchema, name: z.string().trim().min(2, "Informe o nome.").max(255), companyCnpj: z.string().max(20).optional(), email: z.string().email("Informe um e-mail válido."), password: z.string().min(6, "A senha deve conter pelo menos 6 caracteres.") }))
+      .input(z.object({ profile: localProfileSchema, name: z.string().trim().min(2, "Informe o nome.").max(255), companyCnpj: z.string().max(20).optional(), email: z.string().trim().email("Informe um e-mail válido."), password: z.string().min(6, "A senha deve conter pelo menos 6 caracteres.") }))
       .mutation(async ({ ctx, input }) => {
         const email = input.email.trim().toLowerCase();
         if (await getUserByEmail(email)) throw new TRPCError({ code: "CONFLICT", message: "Este e-mail já possui uma conta. Entre pelo formulário de acesso." });
