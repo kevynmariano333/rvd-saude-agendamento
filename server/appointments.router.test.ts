@@ -46,6 +46,8 @@ const mocks = vi.hoisted(() => ({
   listApprovedCompanyUserIds: vi.fn(),
   listPendingAccessRequests: vi.fn(),
   setUserAccessStatus: vi.fn(),
+  createPasswordResetToken: vi.fn(),
+  registrarAvisoDoSistema: vi.fn(),
   updateUserName: vi.fn(),
   createAttendance: vi.fn(),
   decideAttendanceEntry: vi.fn(),
@@ -1241,5 +1243,65 @@ describe("a que data o período do relatório se aplica", () => {
     const caller = appRouter.createCaller(context("supplier"));
     await expect(caller.reports.notas({ baseDaData: "recebimento" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(mocks.listReportRows).not.toHaveBeenCalled();
+  });
+});
+
+describe("o link de redefinição gerado pelo administrador", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Em produção o endereço vem do APP_URL ou do cabeçalho do proxy; aqui ele
+  // precisa vir de algum lugar para o link ter como ser montado.
+  const contextoDoPortal = (papel: User["role"]) => {
+    const base = context(papel);
+    return { ...base, req: { ...base.req, headers: { host: "agendamento.exemplo.com.br", "x-forwarded-proto": "https" } } as TrpcContext["req"] };
+  };
+
+  it("devolve o link do portal e guarda só o resumo do pedido", async () => {
+    // O caminho normal é o e-mail. Ele falha quando cai no spam da empresa, o
+    // endereço tem erro de digitação, ou quem abria a caixa saiu — e sem isto
+    // a conta ficava trancada para sempre.
+    mocks.getUserById.mockResolvedValue({ id: 12, email: "vendas@fornecedor.com", role: "supplier", accessStatus: "approved" });
+    const caller = appRouter.createCaller(contextoDoPortal("admin"));
+    const resultado = await caller.staff.linkDeRedefinicao({ userId: 12 });
+
+    expect(resultado.url).toMatch(/\/redefinir-senha\?token=/);
+    expect(resultado.precisaAprovar).toBe(false);
+    expect(mocks.createPasswordResetToken).toHaveBeenCalledWith(expect.objectContaining({ userId: 12 }));
+
+    // O que vai para o banco é o hash, nunca o link: quem lê a tabela não pode
+    // entrar na conta de ninguém.
+    const guardado = mocks.createPasswordResetToken.mock.calls[0]![0] as { tokenHash: string };
+    expect(resultado.url).not.toContain(guardado.tokenHash);
+
+    // E o registro guarda quem pediu, não a credencial.
+    const aviso = mocks.registrarAvisoDoSistema.mock.calls[0] as [string, string];
+    expect(aviso[1]).not.toContain("token");
+  });
+
+  it("avisa quando a conta ainda não está liberada", async () => {
+    // Senha nova não resolve sozinha: a conta continua barrada na entrada.
+    mocks.getUserById.mockResolvedValue({ id: 13, email: "novo@fornecedor.com", role: "supplier", accessStatus: "pending" });
+    const resultado = await appRouter.createCaller(contextoDoPortal("admin")).staff.linkDeRedefinicao({ userId: 13 });
+    expect(resultado.precisaAprovar).toBe(true);
+  });
+
+  it("não serve para a conta de outro administrador", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 99, email: "outro@rvdsaude.com.br", role: "admin", accessStatus: "approved" });
+    await expect(appRouter.createCaller(contextoDoPortal("admin")).staff.linkDeRedefinicao({ userId: 99 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.createPasswordResetToken).not.toHaveBeenCalled();
+  });
+
+  it("operador e fornecedor não geram link para ninguém", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 12, email: "vendas@fornecedor.com", role: "supplier", accessStatus: "approved" });
+    for (const papel of ["operator", "supplier", "planejador", "portaria"] as const) {
+      await expect(appRouter.createCaller(contextoDoPortal(papel)).staff.linkDeRedefinicao({ userId: 12 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    expect(mocks.createPasswordResetToken).not.toHaveBeenCalled();
+  });
+
+  it("conta que não existe não gera link", async () => {
+    mocks.getUserById.mockResolvedValue(undefined);
+    await expect(appRouter.createCaller(contextoDoPortal("admin")).staff.linkDeRedefinicao({ userId: 404 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mocks.createPasswordResetToken).not.toHaveBeenCalled();
   });
 });

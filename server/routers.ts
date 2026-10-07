@@ -68,6 +68,7 @@ import {
   createPasswordResetToken,
   getPasswordResetToken,
   getUserById,
+  registrarAvisoDoSistema,
   marcarUrgencia,
   definirPedidoDaNota,
   registrarNoHistorico,
@@ -2024,6 +2025,56 @@ export const appRouter = router({
     list: adminProcedure.query(async () => listStaffUsers()),
     /** As contas de fornecedor, listadas à parte da equipe interna. */
     fornecedores: adminProcedure.query(async () => listSupplierAccounts()),
+    /**
+     * O link de redefinição de senha, na mão do administrador.
+     *
+     * O caminho normal é o próprio usuário pedir e receber por e-mail. Ele
+     * falha de três jeitos que acontecem toda semana: o e-mail cai no spam da
+     * empresa, o endereço cadastrado tem um erro de digitação, ou o fornecedor
+     * trocou de pessoa e a caixa de quem saiu ninguém abre mais. Em qualquer um
+     * deles a conta fica trancada para sempre, porque não havia por onde
+     * ajudar de dentro.
+     *
+     * É o mesmo link do e-mail, com a mesma validade de uma hora e o mesmo uso
+     * único — não é uma senha nova nem uma porta paralela. O administrador
+     * copia e manda pelo canal em que já fala com o fornecedor.
+     *
+     * Não serve para a conta de outro administrador: quem administra já pode
+     * aprovar e bloquear contas, mas tomar a conta de outro administrador sem
+     * ele saber é outra coisa.
+     */
+    linkDeRedefinicao: adminProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const alvo = await getUserById(input.userId);
+        if (!alvo) throw new TRPCError({ code: "NOT_FOUND", message: "Conta não encontrada." });
+        if (alvo.role === "admin" && alvo.id !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "A conta de outro administrador não se redefine por aqui." });
+        }
+
+        const baseUrl = enderecoDoPortal({
+          appUrl: ENV.appUrl,
+          proto: ctx.req.headers["x-forwarded-proto"] as string | undefined,
+          host: (ctx.req.headers["x-forwarded-host"] as string | undefined) ?? ctx.req.headers.host,
+        });
+        if (!baseUrl) throw new TRPCError({ code: "BAD_REQUEST", message: "Não consegui montar o endereço do portal para o link." });
+
+        const { token, tokenHash } = createResetToken();
+        const expiraEm = resetTokenExpiry();
+        await createPasswordResetToken({ userId: alvo.id, tokenHash, expiresAt: expiraEm });
+        // O link não entra no registro: ele é a credencial. O que fica é quem
+        // pediu, para quem, e quando.
+        await registrarAvisoDoSistema("link-de-redefinicao", `conta ${alvo.id} (${alvo.email ?? "sem e-mail"}) · gerado pelo usuário ${ctx.user.id}`);
+
+        return {
+          url: buildResetUrl(baseUrl, token),
+          expiraEm,
+          email: alvo.email,
+          // Senha nova não adianta para quem ainda não foi aprovado: a tela
+          // precisa dizer isso antes de o administrador mandar o link.
+          precisaAprovar: alvo.accessStatus !== "approved",
+        };
+      }),
     /**
      * Cria uma conta já liberada, pelo administrador.
      *

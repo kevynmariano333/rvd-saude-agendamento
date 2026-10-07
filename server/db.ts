@@ -1703,6 +1703,19 @@ export async function listSupplierAccounts() {
     .orderBy(desc(users.lastSignedIn));
 }
 
+/**
+ * Uma linha no registro do sistema.
+ *
+ * O mesmo lugar onde já ficam o backup que falhou e a nota repetida apagada:
+ * acontecimentos raros que ninguém vê acontecer e que alguém vai precisar
+ * reconstituir depois.
+ */
+export async function registrarAvisoDoSistema(kind: string, detail: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(systemAlerts).values({ kind, sentAt: new Date(), detail: detail.slice(0, 500) });
+}
+
 export async function setUserRole(input: { userId: number; role: UserRole }) {
   const db = await getDb();
   if (!db) return;

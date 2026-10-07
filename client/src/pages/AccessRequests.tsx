@@ -2,7 +2,7 @@ import { EmptyState, Panel, PanelBody, PanelHeader } from "@/components/PortalKi
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { formatCnpj, roleLabel, type PortalRole, homePathFor } from "@/lib/portal";
-import { Ban, Building2, CheckCircle2, Search, ShieldCheck, UserCheck, UsersRound, X } from "lucide-react";
+import { Ban, Building2, CheckCircle2, KeyRound, Search, ShieldCheck, UserCheck, UsersRound, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatarCnpj } from "@shared/recipients";
 import { useEffect, useMemo, useState } from "react";
@@ -14,6 +14,7 @@ import NotasRepetidasCard from "../components/NotasRepetidasCard";
 import CartazDaPortariaCard from "../components/CartazDaPortariaCard";
 import EstadoDoSistemaCard from "../components/EstadoDoSistemaCard";
 import SegurancaCard from "../components/SegurancaCard";
+import LinkDeSenhaDialog, { type LinkDeSenha } from "../components/LinkDeSenhaDialog";
 
 type PendingRequest = {
   id: number;
@@ -49,6 +50,19 @@ export default function AccessRequests() {
   const staff = trpc.staff.list.useQuery(undefined, { enabled: isAdmin });
   const fornecedores = trpc.staff.fornecedores.useQuery(undefined, { enabled: isAdmin });
   const [buscaDeFornecedor, setBuscaDeFornecedor] = useState("");
+  const [linkDeSenha, setLinkDeSenha] = useState<LinkDeSenha | null>(null);
+
+  /**
+   * O link de redefinição na mão de quem administra.
+   *
+   * Sem isto, a conta de quem não recebe o e-mail — spam da empresa, endereço
+   * digitado errado, pessoa que saiu — ficava trancada para sempre: não havia
+   * por onde ajudar de dentro.
+   */
+  const gerarLinkDeSenha = trpc.staff.linkDeRedefinicao.useMutation({
+    onSuccess: dados => setLinkDeSenha(dados),
+    onError: erro => toast.error(erro.message),
+  });
 
   const decide = trpc.accessRequests.decide.useMutation({
     onSuccess: (result, variables) => {
@@ -246,6 +260,15 @@ export default function AccessRequests() {
                         );
                       })}
                     </div>
+                    <Button
+                      onClick={() => gerarLinkDeSenha.mutate({ userId: member.id })}
+                      disabled={gerarLinkDeSenha.isPending}
+                      variant="outline"
+                      className="h-9 rounded-xl border-line px-3.5 text-xs font-bold text-rvd-plum hover:bg-rvd-plum-pale"
+                    >
+                      <KeyRound className="size-4" />
+                      Link de senha
+                    </Button>
                     {blocked ? (
                       <Button
                         onClick={() => setAccess.mutate({ userId: member.id, allowed: true })}
@@ -317,7 +340,18 @@ export default function AccessRequests() {
                       )}
                     </div>
                     {/* Fornecedor não muda de perfil: ele é fornecedor. O que se
-                        decide aqui é se a conta entra ou não. */}
+                        decide aqui é se a conta entra ou não — e, quando o
+                        e-mail de redefinição não chega, dar a ele o link. */}
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                    <Button
+                      onClick={() => gerarLinkDeSenha.mutate({ userId: conta.id })}
+                      disabled={gerarLinkDeSenha.isPending}
+                      variant="outline"
+                      className="h-9 shrink-0 rounded-xl border-line px-3.5 text-xs font-bold text-rvd-plum hover:bg-rvd-plum-pale"
+                    >
+                      <KeyRound className="size-4" />
+                      Link de senha
+                    </Button>
                     <Button
                       onClick={() => setAccess.mutate({ userId: conta.id, allowed: bloqueado })}
                       disabled={setAccess.isPending}
@@ -326,6 +360,7 @@ export default function AccessRequests() {
                     >
                       {bloqueado ? <><ShieldCheck className="size-4" />Liberar</> : <><Ban className="size-4" />Bloquear</>}
                     </Button>
+                    </div>
                   </li>
                 );
               })}
@@ -375,6 +410,7 @@ export default function AccessRequests() {
       <CartazDaPortariaCard />
       <NotasRepetidasCard />
       <BackupCard />
+      <LinkDeSenhaDialog link={linkDeSenha} onFechar={() => setLinkDeSenha(null)} />
       </div>
     </PortalLayout>
   );
