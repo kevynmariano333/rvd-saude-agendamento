@@ -17,6 +17,8 @@ import CartazDaPortariaCard from "../components/CartazDaPortariaCard";
 import EstadoDoSistemaCard from "../components/EstadoDoSistemaCard";
 import SegurancaCard from "../components/SegurancaCard";
 import LinkDeSenhaDialog, { type LinkDeSenha } from "../components/LinkDeSenhaDialog";
+import LogoDaConta from "../components/LogoDaConta";
+import CaixaDeEntradaDeSugestoes from "../components/CaixaDeEntradaDeSugestoes";
 
 type PendingRequest = {
   id: number;
@@ -332,7 +334,13 @@ export default function AccessRequests() {
                 const blocked = member.accessStatus === "rejected";
                 return (
                 <li key={member.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 items-start gap-3">
+                    {/* De qual casa é a conta: a RVD opera o recebimento, a
+                        Amil planeja. Antes as duas eram a mesma linha de
+                        texto, e descobrir quem era de qual lado exigia ler o
+                        e-mail letra por letra. */}
+                    <LogoDaConta email={member.email} className="mt-0.5 size-8" />
+                    <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-ink">
                       {member.name || "Conta sem nome"}
                       {member.id === auth.data?.id && <span className="ml-2 text-xs font-bold text-ink-faint">(você)</span>}
@@ -344,6 +352,7 @@ export default function AccessRequests() {
                         {member.accessStatus === "pending" ? "Aguardando aprovação" : "Bloqueado — não entra no sistema"}
                       </span>
                     )}
+                    </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <div className="flex flex-wrap gap-1 rounded-xl bg-canvas p-1">
@@ -514,6 +523,7 @@ export default function AccessRequests() {
 
         <EstadoDoSistemaCard />
         <SegurancaCard />
+      <CaixaDeEntradaDeSugestoes />
       <CartazDaPortariaCard />
       <NotasRepetidasCard />
       <BackupCard />

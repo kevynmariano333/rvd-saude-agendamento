@@ -557,3 +557,32 @@ export type Attendance = typeof attendances.$inferSelect;
 export type InsertAttendance = typeof attendances.$inferInsert;
 export type AttendanceEvent = typeof attendanceEvents.$inferSelect;
 export type InsertAttendanceEvent = typeof attendanceEvents.$inferInsert;
+
+/**
+ * O que quem usa o portal tem a dizer sobre ele.
+ *
+ * O fornecedor é quem mais esbarra nas arestas do sistema e é quem menos tem
+ * por onde falar: ele não está no grupo do WhatsApp da operação nem senta ao
+ * lado de ninguém daqui. O que ele faz hoje é ligar para a doca para reclamar
+ * de uma tela — e a doca, que não desenvolve nada, anota num papel.
+ *
+ * A tela onde a pessoa estava vai junto porque "o botão não funciona" sem a
+ * tela é impossível de investigar, e perguntar depois custa dois dias e um
+ * e-mail.
+ */
+export const feedbacks = mysqlTable(
+  "feedbacks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    /** Quem escreveu. Fica nulo se a conta for apagada: o recado continua valendo. */
+    userId: int("userId").references(() => users.id, { onDelete: "set null" }),
+    mensagem: varchar("mensagem", { length: 1000 }).notNull(),
+    /** O endereço da tela em que a pessoa estava quando escreveu. */
+    pagina: varchar("pagina", { length: 255 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    /** Quando alguém da administração deu o recado por lido. */
+    lidoEm: timestamp("lidoEm"),
+    lidoPor: int("lidoPor").references(() => users.id, { onDelete: "set null" }),
+  },
+  table => [index("feedbacks_recentes_idx").on(table.createdAt), index("feedbacks_nao_lidos_idx").on(table.lidoEm, table.createdAt)]
+);

@@ -388,6 +388,8 @@ export default function Login() {
               <div className="flex items-center justify-center gap-4">
                 <img src="/RVD-Saude.png" alt="RVD Saúde" className="h-8 w-auto object-contain" />
                 <span aria-hidden className="h-7 w-px bg-line" />
+                <img src="/Amil.png" alt="Amil" className="h-5 w-auto object-contain dark:rounded-md dark:bg-white dark:px-1.5 dark:py-1" />
+                <span aria-hidden className="h-7 w-px bg-line" />
                 <img src="/LLT.png" alt="LLT Consultoria" className="h-8 w-auto object-contain" />
               </div>
               <p className="mt-3 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-ink-faint">

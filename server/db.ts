@@ -3,6 +3,7 @@ import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
 import { customAlphabet, nanoid } from "nanoid";
 import {
+  feedbacks,
   appointments,
   appointmentMessages,
   appointmentStatusHistory,
@@ -3195,4 +3196,83 @@ export async function marcarUrgencia(input: { appointmentId: number; status: App
     });
   });
   return getAppointmentById(input.appointmentId);
+}
+
+/**
+ * O limite de recados por pessoa numa hora.
+ *
+ * Não é desconfiança de quem escreve: é que a caixa precisa continuar legível
+ * para quem lê. Cinco recados numa hora já é muito para uma pessoa só; o que
+ * passa disso costuma ser o mesmo assunto repetido ou um teste de teclado.
+ */
+export const LIMITE_DE_FEEDBACK_POR_HORA = 5;
+
+export async function registrarFeedback(input: { userId: number; mensagem: string; pagina?: string | null }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+
+  const umaHoraAtras = new Date(Date.now() - 60 * 60 * 1000);
+  const [recentes] = await db
+    .select({ total: count() })
+    .from(feedbacks)
+    .where(and(eq(feedbacks.userId, input.userId), gte(feedbacks.createdAt, umaHoraAtras)));
+  if ((recentes?.total ?? 0) >= LIMITE_DE_FEEDBACK_POR_HORA) {
+    throw new Error("Você já mandou vários recados na última hora. Aguarde um pouco para mandar outro.");
+  }
+
+  await db.insert(feedbacks).values({
+    userId: input.userId,
+    mensagem: input.mensagem.slice(0, 1000),
+    pagina: input.pagina?.slice(0, 255) || null,
+  });
+}
+
+/**
+ * Os recados, do mais novo para o mais velho, com quem escreveu.
+ *
+ * O nome da empresa importa mais do que o da pessoa: "a transportadora tal não
+ * consegue anexar o XML" é um problema, "o João não consegue" é um chamado.
+ */
+export async function listarFeedbacks(limite = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: feedbacks.id,
+      mensagem: feedbacks.mensagem,
+      pagina: feedbacks.pagina,
+      createdAt: feedbacks.createdAt,
+      lidoEm: feedbacks.lidoEm,
+      autorNome: users.name,
+      autorEmail: users.email,
+      autorEmpresa: users.companyName,
+      autorPerfil: users.role,
+    })
+    .from(feedbacks)
+    .leftJoin(users, eq(users.id, feedbacks.userId))
+    .orderBy(desc(feedbacks.createdAt))
+    .limit(limite);
+}
+
+/** Quantos recados ainda não foram lidos — é o número do aviso na tela. */
+export async function contarFeedbacksNaoLidos() {
+  const db = await getDb();
+  if (!db) return 0;
+  const [linha] = await db.select({ total: count() }).from(feedbacks).where(isNull(feedbacks.lidoEm));
+  return linha?.total ?? 0;
+}
+
+/**
+ * Dar um recado por lido.
+ *
+ * Fica quem leu e quando: a caixa é compartilhada entre quem administra, e sem
+ * isso dois leriam o mesmo recado sem saber que o outro já tinha visto.
+ */
+export async function marcarFeedbackLido(input: { feedbackId: number; adminId: number; lido: boolean }) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(feedbacks)
+    .set(input.lido ? { lidoEm: new Date(), lidoPor: input.adminId } : { lidoEm: null, lidoPor: null })
+    .where(eq(feedbacks.id, input.feedbackId));
 }

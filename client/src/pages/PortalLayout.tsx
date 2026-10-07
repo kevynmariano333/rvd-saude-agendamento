@@ -4,6 +4,9 @@ import { serviceTypeCopy } from "@/lib/attendance";
 import { rotuloDoMotivo } from "@shared/backlogReasons";
 import { ehSituacao, ROTULO_DA_SITUACAO, SITUACAO_PADRAO, SITUACOES } from "@shared/presenca";
 import { CORES_DA_SITUACAO } from "@/lib/presenca";
+import { marcaDoEmail } from "@shared/marcaDaConta";
+import LogoDaConta from "../components/LogoDaConta";
+import CaixaDeSugestao from "../components/CaixaDeSugestao";
 import { unidadePorCnpj } from "@shared/recipients";
 import { trpc } from "@/lib/trpc";
 import {
@@ -92,6 +95,9 @@ export default function PortalLayout({
   // O recado que evita o "oi, tá aí?" — e que só vale enquanto a pessoa
   // estiver de fato no sistema, para não envelhecer na tela dos outros.
   const situacao = ehSituacao(user.situacao) ? user.situacao : SITUACAO_PADRAO;
+  // De qual casa é esta conta: a RVD opera o recebimento, a Amil planeja. Quem
+  // não é de nenhuma das duas — o fornecedor — continua com o boneco.
+  const temMarca = Boolean(marcaDoEmail(user.email));
   const definirSituacao = trpc.auth.definirSituacao.useMutation({
     onSuccess: ({ situacao: escolhida }) => {
       void utils.auth.me.invalidate();
@@ -408,11 +414,19 @@ export default function PortalLayout({
               }}
               className="flex items-center gap-2 rounded-lg p-1.5 text-left hover:bg-canvas"
             >
-              {/* A bolinha mostra a você mesmo como a equipe está te vendo —
-                  sem isso, quem marcou "ocupado" de manhã não tem como
-                  lembrar disso à tarde sem abrir o menu. */}
-              <span className="relative flex size-8 items-center justify-center rounded-lg bg-rvd-plum-pale/60 text-rvd-plum">
-                <UserRound className="size-4" />
+              {/* O logo diz de qual casa é a conta — a RVD opera o
+                  recebimento, a Amil planeja —, e a bolinha mostra a você
+                  mesmo como a equipe está te vendo: sem ela, quem marcou
+                  "ocupado" de manhã não lembra disso à tarde sem abrir o
+                  menu. */}
+              <span className="relative flex shrink-0">
+                {temMarca ? (
+                  <LogoDaConta email={user.email} />
+                ) : (
+                  <span className="flex size-8 items-center justify-center rounded-lg bg-rvd-plum-pale/60 text-rvd-plum">
+                    <UserRound className="size-4" />
+                  </span>
+                )}
                 <span
                   title={`${ROTULO_DA_SITUACAO[situacao].rotulo} — ${ROTULO_DA_SITUACAO[situacao].explica}`}
                   className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-surface ${CORES_DA_SITUACAO[situacao]}`}
@@ -645,8 +659,13 @@ export default function PortalLayout({
 
         {profileOpen && (
           <div className="absolute right-5 top-[4.25rem] w-[19rem] max-w-[calc(100vw-2.5rem)] rounded-2xl border border-line bg-surface p-4 shadow-lg sm:right-8">
-            <p className="truncate font-display text-sm font-extrabold text-ink">{user.name || "Acesso RVD"}</p>
-            <p className="mt-1 truncate text-xs text-ink-soft">{user.email}</p>
+            <div className="flex items-start gap-3">
+              <LogoDaConta email={user.email} className="size-10" />
+              <div className="min-w-0">
+                <p className="truncate font-display text-sm font-extrabold text-ink">{user.name || "Acesso RVD"}</p>
+                <p className="mt-1 truncate text-xs text-ink-soft">{user.email}</p>
+              </div>
+            </div>
             <p className="mt-3 inline-flex rounded-full bg-rvd-plum-pale/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">
               {roleLabel[role]}
             </p>
@@ -775,6 +794,11 @@ export default function PortalLayout({
           <div className="flex items-center gap-4">
             <img src="/RVD-Saude.png" alt="RVD Saúde" className="h-10 w-auto object-contain" />
             <span aria-hidden className="h-8 w-px bg-line" />
+            {/* O azul da Amil quase some no rodapé escuro; a plaquinha branca
+                só aparece nesse tema, para no claro o logo ficar igual aos
+                outros dois. */}
+            <img src="/Amil.png" alt="Amil" className="h-6 w-auto object-contain dark:rounded-md dark:bg-white dark:px-2 dark:py-1" />
+            <span aria-hidden className="h-8 w-px bg-line" />
             <img src="/LLT.png" alt="LLT Consultoria" className="h-10 w-auto object-contain" />
           </div>
           <div className="text-center sm:text-right">
@@ -787,6 +811,9 @@ export default function PortalLayout({
       </footer>
       <ChangeNameDialog open={nameOpen} onOpenChange={setNameOpen} currentName={user.name ?? ""} />
       <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
+      {/* No canto, e pequena: um pedido de opinião no meio da tela atrapalha
+          quem veio agendar uma carga. */}
+      <CaixaDeSugestao />
     </div>
   );
 }

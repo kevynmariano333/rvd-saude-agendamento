@@ -50,7 +50,11 @@ import {
   returnAppointmentForRescheduling,
   rescueAppointment,
   scheduleAppointment,
+  contarFeedbacksNaoLidos,
+  listarFeedbacks,
+  marcarFeedbackLido,
   marcarSaidaDoUsuario,
+  registrarFeedback,
   touchUserSignIn,
   treatBacklogAppointment,
   updateAppointmentStatus,
@@ -2128,6 +2132,36 @@ export const appRouter = router({
         }
         await agruparCnpj(input.cnpj, input.empresaId);
         return { ok: true as const };
+      }),
+  }),
+  /**
+   * A caixa de sugestões do portal.
+   *
+   * Quem mais esbarra nas arestas do sistema é o fornecedor, e é quem menos
+   * tem por onde falar: não está no grupo da operação nem senta ao lado de
+   * ninguém daqui. Hoje ele liga para a doca para reclamar de uma tela — e a
+   * doca, que não desenvolve nada, anota num papel.
+   */
+  feedback: router({
+    enviar: protectedProcedure
+      .input(z.object({ mensagem: z.string().trim().min(5, "Escreva um pouco mais para dar para entender.").max(1000), pagina: z.string().max(255).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          await registrarFeedback({ userId: ctx.user.id, mensagem: input.mensagem, pagina: input.pagina });
+        } catch (erro) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "Não consegui registrar seu recado." });
+        }
+        return { recebido: true } as const;
+      }),
+    lista: adminProcedure.query(async () => ({
+      recados: await listarFeedbacks(50),
+      naoLidos: await contarFeedbacksNaoLidos(),
+    })),
+    marcarLido: adminProcedure
+      .input(z.object({ feedbackId: z.number().int().positive(), lido: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        await marcarFeedbackLido({ feedbackId: input.feedbackId, adminId: ctx.user.id, lido: input.lido });
+        return { ok: true } as const;
       }),
   }),
   staff: router({

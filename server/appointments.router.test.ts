@@ -49,6 +49,10 @@ const mocks = vi.hoisted(() => ({
   createPasswordResetToken: vi.fn(),
   gravarSinalDePresenca: vi.fn().mockResolvedValue(undefined),
   marcarSaidaDoUsuario: vi.fn().mockResolvedValue(undefined),
+  registrarFeedback: vi.fn().mockResolvedValue(undefined),
+  listarFeedbacks: vi.fn().mockResolvedValue([]),
+  contarFeedbacksNaoLidos: vi.fn().mockResolvedValue(0),
+  marcarFeedbackLido: vi.fn().mockResolvedValue(undefined),
   definirSituacaoDoUsuario: vi.fn(),
   registrarAvisoDoSistema: vi.fn(),
   updateUserName: vi.fn(),
@@ -1406,5 +1410,46 @@ describe("sair do sistema", () => {
     const semUsuario = { user: null, req: { protocol: "https", headers: {} }, res: { clearCookie: vi.fn(), cookie: vi.fn() } } as unknown as TrpcContext;
     await expect(appRouter.createCaller(semUsuario).auth.logout()).resolves.toEqual({ success: true });
     expect(mocks.marcarSaidaDoUsuario).not.toHaveBeenCalled();
+  });
+});
+
+describe("a caixa de sugestões", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("qualquer conta logada manda o recado, com a tela em que estava", async () => {
+    // "O botão não funciona" sem a tela é impossível de investigar, e
+    // perguntar depois custa dois dias e um e-mail.
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.feedback.enviar({ mensagem: "Não dá para corrigir o pedido depois de enviar.", pagina: "/fornecedor" });
+    expect(mocks.registrarFeedback).toHaveBeenCalledWith({ userId: 12, mensagem: "Não dá para corrigir o pedido depois de enviar.", pagina: "/fornecedor" });
+  });
+
+  it("recado curto demais não vira linha na caixa", async () => {
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.feedback.enviar({ mensagem: "ok" })).rejects.toBeTruthy();
+    expect(mocks.registrarFeedback).not.toHaveBeenCalled();
+  });
+
+  it("o fornecedor escreve, mas não lê a caixa dos outros", async () => {
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.feedback.lista()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.feedback.marcarLido({ feedbackId: 1, lido: true })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("o administrador lê e dá por lido, deixando quem leu", async () => {
+    // A caixa é compartilhada: sem isso, dois leem o mesmo recado sem saber
+    // que o outro já viu.
+    mocks.listarFeedbacks.mockResolvedValue([]);
+    mocks.contarFeedbacksNaoLidos.mockResolvedValue(0);
+    const caller = appRouter.createCaller(context("admin"));
+    await caller.feedback.lista();
+    await caller.feedback.marcarLido({ feedbackId: 7, lido: true });
+    expect(mocks.marcarFeedbackLido).toHaveBeenCalledWith({ feedbackId: 7, adminId: 24, lido: true });
+  });
+
+  it("o limite por hora chega na tela como frase, e não como erro cru", async () => {
+    mocks.registrarFeedback.mockRejectedValueOnce(new Error("Você já mandou vários recados na última hora. Aguarde um pouco para mandar outro."));
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.feedback.enviar({ mensagem: "mais uma ideia para o portal" })).rejects.toMatchObject({ message: expect.stringContaining("Aguarde") });
   });
 });
