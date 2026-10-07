@@ -140,6 +140,15 @@ export const users = mysqlTable(
      * Este é gravado enquanto a pessoa usa, de dois em dois minutos.
      */
     vistoEm: timestamp("vistoEm"),
+    /**
+     * Quando esta conta encerrou a sessão pela última vez.
+     *
+     * Sem isto, quem clica em "Encerrar sessão" continuaria contando como
+     * presente pelos cinco minutos da janela — e a tela diria que dá para
+     * chamar alguém que já fechou o navegador. Mais recente que `vistoEm`
+     * quer dizer: saiu.
+     */
+    saiuEm: timestamp("saiuEm"),
   },
   table => [uniqueIndex("users_email_unique").on(table.email), index("users_company_cnpj_idx").on(table.companyCnpj), index("users_company_id_idx").on(table.companyId)]
 );

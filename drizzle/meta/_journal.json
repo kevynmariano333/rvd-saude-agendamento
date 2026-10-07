@@ -302,6 +302,13 @@
       "when": 1791404044721,
       "tag": "0042_situacao_e_presenca",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "5",
+      "when": 1791406091743,
+      "tag": "0043_saida_da_sessao",
+      "breakpoints": true
     }
   ]
 }

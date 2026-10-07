@@ -80,3 +80,26 @@ describe("as situações que a tela oferece", () => {
     expect(ehSituacao("invisivel")).toBe(false);
   });
 });
+
+describe("quem encerrou a sessão", () => {
+  it("sai da lista na hora, e não ao fim da janela", () => {
+    // Senão a tela diria que dá para chamar alguém que já fechou o navegador.
+    const saiuAgora = presencaDe({ situacao: "disponivel", vistoEm: hoje(1), saiuEm: hoje(0) }, agora);
+    expect(saiuAgora.presente).toBe(false);
+    expect(saiuAgora.estado).toBe("desconectado");
+  });
+
+  it("mas continua dizendo quando foi visto", () => {
+    // "Visto às 17:40" é mais útil do que não dizer nada.
+    expect(presencaDe({ situacao: "disponivel", vistoEm: hoje(12), saiuEm: hoje(11) }, agora).detalhe).toBe("visto há 12 min");
+  });
+
+  it("voltar a usar o sistema vale mais que a saída de antes", () => {
+    // O sinal novo é posterior à saída: a pessoa entrou de novo.
+    expect(presencaDe({ situacao: "ocupado", vistoEm: hoje(1), saiuEm: hoje(30) }, agora).presente).toBe(true);
+  });
+
+  it("quem nunca saiu continua como estava", () => {
+    expect(presencaDe({ situacao: "disponivel", vistoEm: hoje(1), saiuEm: null }, agora).presente).toBe(true);
+  });
+});

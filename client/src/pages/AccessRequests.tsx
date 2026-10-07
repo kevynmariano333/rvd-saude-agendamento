@@ -51,7 +51,7 @@ function avisoDeLiberacao(avisado: boolean) {
  * vai sozinha: o rótulo escrito está sempre do lado, para quem não distingue
  * verde de âmbar não ficar sem a informação.
  */
-function SeloDePresenca({ situacao, vistoEm }: { situacao?: string | null; vistoEm?: Date | string | null }) {
+function SeloDePresenca({ situacao, vistoEm, saiuEm }: { situacao?: string | null; vistoEm?: Date | string | null; saiuEm?: Date | string | null }) {
   // De minuto em minuto: "visto há 3 min" precisa virar "há 4 min" sozinho,
   // senão a tela aberta desde cedo mostra um horário que já passou.
   const [agora, setAgora] = useState(() => new Date());
@@ -60,7 +60,7 @@ function SeloDePresenca({ situacao, vistoEm }: { situacao?: string | null; visto
     return () => clearInterval(relogio);
   }, []);
 
-  const presenca = presencaDe({ situacao, vistoEm }, agora);
+  const presenca = presencaDe({ situacao, vistoEm, saiuEm }, agora);
   return (
     <span className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-faint">
       <span className={`size-2 shrink-0 rounded-full ${CORES_DA_SITUACAO[presenca.estado]}`} />
@@ -70,16 +70,78 @@ function SeloDePresenca({ situacao, vistoEm }: { situacao?: string | null; visto
   );
 }
 
+type FiltroDePresenca = "todos" | "presentes" | "fora";
+
+/**
+ * Filtrar a lista por quem está no sistema agora.
+ *
+ * Com trinta contas, "quem está aí?" é ler trinta linhas. O filtro responde de
+ * uma vez — e leva a contagem no próprio botão, porque metade das vezes a
+ * pergunta acaba aí: quantos estão online.
+ */
+function FiltroDePresencaChips({
+  valor,
+  onEscolher,
+  presentes,
+  total,
+}: {
+  valor: FiltroDePresenca;
+  onEscolher: (valor: FiltroDePresenca) => void;
+  presentes: number;
+  total: number;
+}) {
+  const opcoes: { chave: FiltroDePresenca; rotulo: string; conta: number }[] = [
+    { chave: "todos", rotulo: "Todos", conta: total },
+    { chave: "presentes", rotulo: "No sistema agora", conta: presentes },
+    { chave: "fora", rotulo: "Fora do sistema", conta: total - presentes },
+  ];
+  return (
+    <div className="flex flex-wrap gap-1 rounded-xl bg-canvas p-1">
+      {opcoes.map(opcao => {
+        const ativo = valor === opcao.chave;
+        return (
+          <button
+            key={opcao.chave}
+            onClick={() => onEscolher(opcao.chave)}
+            aria-pressed={ativo}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${ativo ? "bg-surface text-rvd-plum shadow-sm" : "text-ink-soft hover:text-ink"}`}
+          >
+            {opcao.rotulo}
+            <span className={`ml-1.5 ${ativo ? "text-rvd-plum" : "text-ink-faint"}`}>{opcao.conta}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A conta passa no filtro escolhido? */
+function passaNoFiltro(conta: { situacao?: string | null; vistoEm?: Date | string | null; saiuEm?: Date | string | null }, filtro: FiltroDePresenca, agora: Date) {
+  if (filtro === "todos") return true;
+  const presente = presencaDe(conta, agora).presente;
+  return filtro === "presentes" ? presente : !presente;
+}
+
 export default function AccessRequests() {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
   const utils = trpc.useUtils();
   const isAdmin = auth.data?.role === "admin";
   const pending = trpc.accessRequests.listPending.useQuery(undefined, { enabled: isAdmin });
-  const staff = trpc.staff.list.useQuery(undefined, { enabled: isAdmin });
-  const fornecedores = trpc.staff.fornecedores.useQuery(undefined, { enabled: isAdmin });
+  const staff = trpc.staff.list.useQuery(undefined, { enabled: isAdmin, refetchInterval: 60_000 });
+  const fornecedores = trpc.staff.fornecedores.useQuery(undefined, { enabled: isAdmin, refetchInterval: 60_000 });
   const [buscaDeFornecedor, setBuscaDeFornecedor] = useState("");
   const [linkDeSenha, setLinkDeSenha] = useState<LinkDeSenha | null>(null);
+  const [filtroDaEquipe, setFiltroDaEquipe] = useState<FiltroDePresenca>("todos");
+  const [filtroDeFornecedores, setFiltroDeFornecedores] = useState<FiltroDePresenca>("todos");
+
+  // O relógio da tela: quem estava online há cinco minutos deixa de estar sem
+  // ninguém recarregar a página, e o filtro tem que acompanhar isso.
+  const [agora, setAgora] = useState(() => new Date());
+  useEffect(() => {
+    const relogio = setInterval(() => setAgora(new Date()), 60_000);
+    return () => clearInterval(relogio);
+  }, []);
 
   /**
    * O link de redefinição na mão de quem administra.
@@ -126,13 +188,13 @@ export default function AccessRequests() {
    * linha. A ordem é a da hierarquia de acesso — de quem vê tudo a quem vê uma
    * tela — e perfil sem ninguém não vira cabeçalho vazio.
    */
+  const equipeAtiva = useMemo(() => (staff.data ?? []).filter(conta => conta.accessStatus !== "rejected"), [staff.data]);
   const equipePorPerfil = useMemo(() => {
     const ordem: PortalRole[] = ["admin", "operator", "planejador", "portaria", "operacao"];
-    const contas = staff.data ?? [];
     return ordem
-      .map(perfil => ({ perfil, contas: contas.filter(conta => conta.role === perfil && conta.accessStatus !== "rejected") }))
+      .map(perfil => ({ perfil, contas: equipeAtiva.filter(conta => conta.role === perfil && passaNoFiltro(conta, filtroDaEquipe, agora)) }))
       .filter(grupo => grupo.contas.length > 0);
-  }, [staff.data]);
+  }, [agora, equipeAtiva, filtroDaEquipe]);
   /**
    * As contas bloqueadas, num lugar só.
    *
@@ -144,7 +206,9 @@ export default function AccessRequests() {
     ...(staff.data ?? []).filter(conta => conta.accessStatus === "rejected").map(conta => ({ id: conta.id, nome: conta.name, email: conta.email, detalhe: roleLabel[conta.role as PortalRole] })),
     ...(fornecedores.data ?? []).filter(conta => conta.accessStatus === "rejected").map(conta => ({ id: conta.id, nome: conta.companyName || conta.name, email: conta.email, detalhe: conta.companyCnpj ? `Fornecedor · ${formatarCnpj(conta.companyCnpj)}` : "Fornecedor" })),
   ], [fornecedores.data, staff.data]);
-  const fornecedoresFiltrados = useMemo(() => {
+  // A busca primeiro, a presença depois: assim a contagem dos botões fala do
+  // que a busca deixou na tela, e não da lista inteira.
+  const fornecedoresDaBusca = useMemo(() => {
     const texto = buscaDeFornecedor.trim().toLowerCase();
     const digitos = texto.replace(/\D/g, "");
     return (fornecedores.data ?? []).filter(conta => conta.accessStatus !== "rejected").filter(conta => {
@@ -153,6 +217,12 @@ export default function AccessRequests() {
       return alvo.includes(texto) || (digitos.length > 0 && (conta.companyCnpj ?? "").includes(digitos));
     });
   }, [buscaDeFornecedor, fornecedores.data]);
+  const fornecedoresFiltrados = useMemo(
+    () => fornecedoresDaBusca.filter(conta => passaNoFiltro(conta, filtroDeFornecedores, agora)),
+    [agora, filtroDeFornecedores, fornecedoresDaBusca],
+  );
+  const contar = (contas: { situacao?: string | null; vistoEm?: Date | string | null; saiuEm?: Date | string | null }[]) =>
+    contas.filter(conta => presencaDe(conta, agora).presente).length;
 
   useEffect(() => {
     if (auth.data && auth.data.role !== "admin") {
@@ -245,6 +315,9 @@ export default function AccessRequests() {
             description="Defina o perfil de cada conta e bloqueie quem não deve mais entrar. Uma conta bloqueada continua no histórico, mas não acessa o sistema."
             icon={UsersRound}
           />
+          <div className="border-b border-line px-5 py-3 sm:px-6">
+            <FiltroDePresencaChips valor={filtroDaEquipe} onEscolher={setFiltroDaEquipe} presentes={contar(equipeAtiva)} total={equipeAtiva.length} />
+          </div>
           {staff.isLoading ? (
             <PanelBody>
               <p className="text-sm text-ink-soft">Carregando equipe...</p>
@@ -265,7 +338,7 @@ export default function AccessRequests() {
                       {member.id === auth.data?.id && <span className="ml-2 text-xs font-bold text-ink-faint">(você)</span>}
                     </p>
                     <p className="mt-0.5 truncate text-sm text-ink-soft">{member.email || "E-mail não informado"}</p>
-                    <SeloDePresenca situacao={member.situacao} vistoEm={member.vistoEm} />
+                    <SeloDePresenca situacao={member.situacao} vistoEm={member.vistoEm} saiuEm={member.saiuEm} />
                     {member.accessStatus !== "approved" && (
                       <span className={`mt-1.5 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${blocked ? "bg-state-stop-bg text-state-stop" : "bg-state-wait-bg text-state-wait"}`}>
                         {member.accessStatus === "pending" ? "Aguardando aprovação" : "Bloqueado — não entra no sistema"}
@@ -329,8 +402,8 @@ export default function AccessRequests() {
           ) : (
             <EmptyState
               icon={UsersRound}
-              title="Nenhuma conta interna"
-              description="Operadores, portaria e operação aparecem aqui depois do primeiro cadastro."
+              title={filtroDaEquipe === "presentes" ? "Ninguém da equipe no sistema agora" : filtroDaEquipe === "fora" ? "Toda a equipe está no sistema" : "Nenhuma conta interna"}
+              description={filtroDaEquipe === "todos" ? "Operadores, portaria e operação aparecem aqui depois do primeiro cadastro." : "Troque o filtro para ver as outras contas."}
             />
           )}
         </Panel>
@@ -347,6 +420,9 @@ export default function AccessRequests() {
               <Search className="absolute left-3 top-3 size-4 text-rvd-plum" />
               <Input value={buscaDeFornecedor} onChange={evento => setBuscaDeFornecedor(evento.target.value)} placeholder="Buscar por nome, e-mail ou CNPJ..." className="h-10 border-line bg-surface pl-9 text-sm text-rvd-plum" />
             </div>
+            <div className="mt-3">
+              <FiltroDePresencaChips valor={filtroDeFornecedores} onEscolher={setFiltroDeFornecedores} presentes={contar(fornecedoresDaBusca)} total={fornecedoresDaBusca.length} />
+            </div>
           </div>
           {fornecedores.isLoading ? (
             <PanelBody><p className="text-sm text-ink-soft">Carregando fornecedores...</p></PanelBody>
@@ -359,7 +435,7 @@ export default function AccessRequests() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-ink">{conta.companyName || conta.name || "Conta sem nome"}</p>
                       <p className="mt-0.5 truncate text-[13px] text-ink-soft">{conta.email || "E-mail não informado"}</p>
-                      <SeloDePresenca situacao={conta.situacao} vistoEm={conta.vistoEm} />
+                      <SeloDePresenca situacao={conta.situacao} vistoEm={conta.vistoEm} saiuEm={conta.saiuEm} />
                       <p className="mt-0.5 text-[11px] text-ink-faint">
                         {conta.companyCnpj ? formatarCnpj(conta.companyCnpj) : "Sem CNPJ — não enxerga nota nenhuma"}
                         {conta.lastSignedIn ? ` · último acesso em ${new Date(conta.lastSignedIn).toLocaleDateString("pt-BR")}` : ""}
@@ -399,8 +475,8 @@ export default function AccessRequests() {
           ) : (
             <EmptyState
               icon={Building2}
-              title={buscaDeFornecedor ? "Nenhum fornecedor encontrado" : "Nenhum fornecedor cadastrado"}
-              description={buscaDeFornecedor ? "Tente outro nome, e-mail ou CNPJ." : "As contas aparecem aqui assim que o primeiro fornecedor se cadastrar."}
+              title={filtroDeFornecedores === "presentes" ? "Nenhum fornecedor no sistema agora" : buscaDeFornecedor ? "Nenhum fornecedor encontrado" : "Nenhum fornecedor cadastrado"}
+              description={filtroDeFornecedores !== "todos" ? "Troque o filtro para ver as outras contas." : buscaDeFornecedor ? "Tente outro nome, e-mail ou CNPJ." : "As contas aparecem aqui assim que o primeiro fornecedor se cadastrar."}
             />
           )}
         </Panel>

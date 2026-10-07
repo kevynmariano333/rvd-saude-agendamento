@@ -408,8 +408,15 @@ export default function PortalLayout({
               }}
               className="flex items-center gap-2 rounded-lg p-1.5 text-left hover:bg-canvas"
             >
-              <span className="flex size-8 items-center justify-center rounded-lg bg-rvd-plum-pale/60 text-rvd-plum">
+              {/* A bolinha mostra a você mesmo como a equipe está te vendo —
+                  sem isso, quem marcou "ocupado" de manhã não tem como
+                  lembrar disso à tarde sem abrir o menu. */}
+              <span className="relative flex size-8 items-center justify-center rounded-lg bg-rvd-plum-pale/60 text-rvd-plum">
                 <UserRound className="size-4" />
+                <span
+                  title={`${ROTULO_DA_SITUACAO[situacao].rotulo} — ${ROTULO_DA_SITUACAO[situacao].explica}`}
+                  className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-surface ${CORES_DA_SITUACAO[situacao]}`}
+                />
               </span>
               <span className="hidden max-w-24 sm:block 2xl:max-w-36">
                 <span className="block truncate text-sm font-bold text-ink">{user.name || "Acesso RVD"}</span>

@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => ({
   setUserAccessStatus: vi.fn(),
   createPasswordResetToken: vi.fn(),
   gravarSinalDePresenca: vi.fn().mockResolvedValue(undefined),
+  marcarSaidaDoUsuario: vi.fn().mockResolvedValue(undefined),
   definirSituacaoDoUsuario: vi.fn(),
   registrarAvisoDoSistema: vi.fn(),
   updateUserName: vi.fn(),
@@ -1388,5 +1389,22 @@ describe("o aviso de recusa para o fornecedor", () => {
     await appRouter.createCaller(context("operator")).appointments.updateStatus({ appointmentId: 9, status: "received" });
     await new Promise(resolve => setImmediate(resolve));
     expect(sendMail).not.toHaveBeenCalled();
+  });
+});
+
+describe("sair do sistema", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("marca a saída, para a pessoa não ficar online mais cinco minutos", async () => {
+    // Sem isto, a tela diria que dá para chamar alguém que já fechou o
+    // navegador — e a situação escolhida sobreviveria para a sessão seguinte.
+    await appRouter.createCaller(context("operator")).auth.logout();
+    expect(mocks.marcarSaidaDoUsuario).toHaveBeenCalledWith(24);
+  });
+
+  it("quem não estava logado ainda consegue sair", async () => {
+    const semUsuario = { user: null, req: { protocol: "https", headers: {} }, res: { clearCookie: vi.fn(), cookie: vi.fn() } } as unknown as TrpcContext;
+    await expect(appRouter.createCaller(semUsuario).auth.logout()).resolves.toEqual({ success: true });
+    expect(mocks.marcarSaidaDoUsuario).not.toHaveBeenCalled();
   });
 });

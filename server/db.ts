@@ -225,10 +225,32 @@ export async function definirSituacaoDoUsuario(input: { userId: number; situacao
   await db.update(users).set({ situacao: input.situacao, vistoEm: new Date() }).where(eq(users.id, input.userId));
 }
 
+/**
+ * Entrar já é estar online, e começa do zero.
+ *
+ * A situação escolhida vale para a sessão, e não para sempre: quem marcou
+ * "ocupado" ontem à tarde e entra hoje de manhã não está ocupado — está
+ * começando o dia. Zerar na entrada é o que impede o rótulo de envelhecer.
+ */
 export async function touchUserSignIn(id: number) {
   const db = await getDb();
   if (!db) return;
-  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, id));
+  const agora = new Date();
+  await db.update(users).set({ lastSignedIn: agora, vistoEm: agora, saiuEm: null, situacao: "disponivel" }).where(eq(users.id, id));
+}
+
+/**
+ * Saiu: para de contar como presente na mesma hora.
+ *
+ * Sem esta marca, quem encerra a sessão continuaria "no sistema" pelos cinco
+ * minutos da janela de presença — e a tela diria que dá para chamar alguém que
+ * já fechou o navegador. O horário do último sinal fica: "visto às 17:40" é
+ * mais útil do que não dizer nada.
+ */
+export async function marcarSaidaDoUsuario(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ saiuEm: new Date(), situacao: "disponivel" }).where(eq(users.id, id));
 }
 
 export type AppointmentFilters = {
@@ -1665,6 +1687,7 @@ export async function listStaffUsers() {
       lastSignedIn: users.lastSignedIn,
       situacao: users.situacao,
       vistoEm: users.vistoEm,
+      saiuEm: users.saiuEm,
     })
     .from(users)
     .where(ne(users.role, "supplier"))
@@ -1724,6 +1747,7 @@ export async function listSupplierAccounts() {
       createdAt: users.createdAt,
       situacao: users.situacao,
       vistoEm: users.vistoEm,
+      saiuEm: users.saiuEm,
     })
     .from(users)
     .where(eq(users.role, "supplier"))

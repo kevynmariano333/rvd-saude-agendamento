@@ -90,11 +90,15 @@ export function quandoFoiVisto(vistoEm: Date | string | null | undefined, agora:
  * aí ninguém mais acredita em nenhum dos rótulos.
  */
 export function presencaDe(
-  entrada: { situacao?: string | null; vistoEm?: Date | string | null },
+  entrada: { situacao?: string | null; vistoEm?: Date | string | null; saiuEm?: Date | string | null },
   agora: Date = new Date(),
 ): Presenca {
   const visto = paraData(entrada.vistoEm);
-  const presente = Boolean(visto && agora.getTime() - visto.getTime() <= JANELA_DE_PRESENCA_MS);
+  const saiu = paraData(entrada.saiuEm);
+  // Quem encerrou a sessão sai da lista na hora, e não ao fim da janela: a
+  // tela não pode dizer que dá para chamar alguém que já fechou o navegador.
+  const jaSaiu = Boolean(saiu && visto && saiu.getTime() >= visto.getTime());
+  const presente = Boolean(visto && !jaSaiu && agora.getTime() - visto.getTime() <= JANELA_DE_PRESENCA_MS);
 
   if (!presente) {
     return { estado: "desconectado", rotulo: "Desconectado", detalhe: quandoFoiVisto(visto, agora), presente: false };

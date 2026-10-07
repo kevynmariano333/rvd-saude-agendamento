@@ -50,6 +50,7 @@ import {
   returnAppointmentForRescheduling,
   rescueAppointment,
   scheduleAppointment,
+  marcarSaidaDoUsuario,
   touchUserSignIn,
   treatBacklogAppointment,
   updateAppointmentStatus,
@@ -764,7 +765,12 @@ export const appRouter = router({
         await updateUserPassword({ userId: ctx.user.id, passwordHash: hashPassword(input.newPassword) });
         return { success: true } as const;
       }),
-    logout: publicProcedure.mutation(({ ctx }) => {
+    logout: publicProcedure.mutation(async ({ ctx }) => {
+      // Sair da lista de quem está no sistema é parte de sair: sem isto, quem
+      // encerra a sessão continuaria "online" pelos cinco minutos da janela.
+      // A situação volta para "disponível" porque ela vale para a sessão —
+      // quem marcou "ocupado" ontem não está ocupado ao entrar amanhã.
+      if (ctx.user?.id) await marcarSaidaDoUsuario(ctx.user.id).catch(erro => console.warn("[Presença] não consegui marcar a saída:", erro));
       clearRvdSession(ctx.res);
       ctx.res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(ctx.req), maxAge: -1 });
       return { success: true } as const;
