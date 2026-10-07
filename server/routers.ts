@@ -1388,9 +1388,29 @@ export const appRouter = router({
     definirPedido: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), purchaseOrders: z.array(z.string().trim()).min(1, "Informe ao menos um pedido.").max(10) }))
       .mutation(async ({ ctx, input }) => {
-        assertSchedulingDesk(ctx.user.role);
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+
+        /*
+         * O fornecedor também corrige — enquanto a nota ainda está pendente.
+         *
+         * Digitar o pedido errado no envio é o erro mais comum do portal, e
+         * até aqui ele só tinha um conserto: ligar para a doca e pedir para
+         * alguém de dentro arrumar. A nota fica parada no meio disso.
+         *
+         * Depois que o operador agenda, não: a partir daí o pedido é o que a
+         * doca vai conferir contra a carga, e mudá-lo sem a mesa saber
+         * trocaria a conferência debaixo de quem recebe. Dali em diante o
+         * caminho é a conversa da nota.
+         */
+        if (!isSchedulingDesk(ctx.user.role)) {
+          if (!isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Esta nota não é da sua empresa." });
+          }
+          if (appointment.status !== "pending") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "A nota já foi agendada. Para corrigir o pedido agora, fale pela conversa da nota." });
+          }
+        }
         const pedidos = input.purchaseOrders.map(pedido => pedido.replace(/\D/g, "")).filter(Boolean);
         if (!pedidos.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe ao menos um pedido de compra." });
         const invalido = pedidos.find(pedido => pedido.length !== 10);

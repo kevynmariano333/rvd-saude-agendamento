@@ -52,6 +52,7 @@ const mocks = vi.hoisted(() => ({
   registrarFeedback: vi.fn().mockResolvedValue(undefined),
   listarFeedbacks: vi.fn().mockResolvedValue([]),
   notasDoPortal: vi.fn().mockResolvedValue([]),
+  definirPedidoDaNota: vi.fn(),
   contarFeedbacksNaoLidos: vi.fn().mockResolvedValue(0),
   marcarFeedbackLido: vi.fn().mockResolvedValue(undefined),
   definirSituacaoDoUsuario: vi.fn(),
@@ -1488,5 +1489,50 @@ describe("a nota dada ao portal", () => {
 
   it("o fornecedor não vê a média de ninguém", async () => {
     await expect(appRouter.createCaller(context("supplier")).feedback.nota()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("o fornecedor corrigindo o pedido de compra", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listApprovedCompanyUserIds.mockResolvedValue([12]);
+    mocks.definirPedidoDaNota.mockResolvedValue({ id: 3, purchaseOrder: "4504748409" });
+  });
+
+  it("corrige enquanto a nota ainda não foi agendada", async () => {
+    // Digitar o pedido errado no envio é o erro mais comum do portal, e até
+    // aqui só tinha conserto por telefone, com a nota parada no meio.
+    mocks.getAppointmentById.mockResolvedValue({ id: 3, supplierId: 12, status: "pending", purchaseOrder: "4504748400" });
+    const caller = appRouter.createCaller(context("supplier", "06.033.403/0001-13"));
+    await caller.appointments.definirPedido({ appointmentId: 3, purchaseOrders: ["4504748409"] });
+    expect(mocks.definirPedidoDaNota).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 3, purchaseOrder: "4504748409", anterior: "4504748400", handledBy: 12 }));
+  });
+
+  it("depois de agendada, não: a doca confere a carga contra esse número", async () => {
+    for (const status of ["scheduled", "received", "completed"]) {
+      mocks.getAppointmentById.mockResolvedValue({ id: 3, supplierId: 12, status, purchaseOrder: "4504748400" });
+      const caller = appRouter.createCaller(context("supplier", "06.033.403/0001-13"));
+      await expect(caller.appointments.definirPedido({ appointmentId: 3, purchaseOrders: ["4504748409"] })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    expect(mocks.definirPedidoDaNota).not.toHaveBeenCalled();
+  });
+
+  it("não mexe na nota de outra empresa", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 3, supplierId: 77, status: "pending", purchaseOrder: null });
+    const caller = appRouter.createCaller(context("supplier", "06.033.403/0001-13"));
+    await expect(caller.appointments.definirPedido({ appointmentId: 3, purchaseOrders: ["4504748409"] })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.definirPedidoDaNota).not.toHaveBeenCalled();
+  });
+
+  it("pedido curto continua recusado, venha de quem vier", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 3, supplierId: 12, status: "pending", purchaseOrder: null });
+    const caller = appRouter.createCaller(context("supplier", "06.033.403/0001-13"));
+    await expect(caller.appointments.definirPedido({ appointmentId: 3, purchaseOrders: ["45047"] })).rejects.toMatchObject({ message: expect.stringContaining("10 dígitos") });
+  });
+
+  it("a mesa continua corrigindo em qualquer status", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 3, supplierId: 12, status: "received", purchaseOrder: null });
+    await appRouter.createCaller(context("operator")).appointments.definirPedido({ appointmentId: 3, purchaseOrders: ["4504748409"] });
+    expect(mocks.definirPedidoDaNota).toHaveBeenCalled();
   });
 });
