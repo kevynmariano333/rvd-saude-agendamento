@@ -104,6 +104,29 @@ export async function storageLerTexto(relKey: string, limiteBytes = 2 * 1024 * 1
   }
 }
 
+/**
+ * O arquivo inteiro em bytes, para quem precisa abri-lo aqui dentro.
+ *
+ * O `storageLerTexto` serve para XML de nota; o backup é gzip de dezenas de
+ * megabytes e precisa chegar como bytes para ser descomprimido. O limite é
+ * grande porque o arquivo é grande por natureza — e existe mesmo assim, para
+ * uma chave errada não derrubar o processo por falta de memória.
+ */
+export async function storageLerBytes(relKey: string, limiteBytes = 200 * 1024 * 1024): Promise<Buffer> {
+  const key = normalizeKey(relKey);
+  const client = getS3Client();
+  try {
+    const resposta = await client.send(new GetObjectCommand({ Bucket: ENV.s3Bucket, Key: key }));
+    const bytes = await resposta.Body?.transformToByteArray();
+    if (!bytes) throw new Error("Arquivo vazio.");
+    if (bytes.length > limiteBytes) throw new Error("O arquivo é grande demais para ser lido aqui dentro.");
+    return Buffer.from(bytes);
+  } catch (err) {
+    console.error("[Storage] leitura falhou:", err);
+    throw describeStorageError(err);
+  }
+}
+
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
   const key = normalizeKey(relKey);
   const client = getS3Client();

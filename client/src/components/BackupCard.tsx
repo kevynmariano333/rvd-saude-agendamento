@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
+import { statusCopy, type PortalStatus } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
-import { AlertTriangle, Clock, DatabaseBackup, Download, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Clock, DatabaseBackup, Download, RotateCcw, Search, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -52,6 +53,134 @@ function SituacaoDoBackup({ ultimo, falha }: { ultimo: { finishedAt: Date | stri
         {atrasado ? " — passou de dois dias, vale conferir." : ""}
       </span>
     </p>
+  );
+}
+
+
+const contar = (quantos: number, singular: string, plural: string) => `${quantos} ${quantos === 1 ? singular : plural}`;
+
+type CopiaGuardada = { id: number; finishedAt: Date | string | null; origin: string; storageKey: string | null };
+
+/**
+ * Trazer de volta uma nota que alguém apagou sem querer.
+ *
+ * Apagar uma nota é definitivo: o banco leva junto, em cascata, o histórico, a
+ * conversa com o fornecedor, as notas internas e as sugestões. Não há lixeira.
+ * O que há é a cópia da madrugada — que até aqui só servia para baixar o
+ * arquivo, o que não devolve nada para dentro do sistema.
+ *
+ * Procurar vem antes de restaurar, e separado: o número da nota sozinho não
+ * distingue a que foi apagada da homônima de outro fornecedor, e recolocar a
+ * errada é mais um estrago, não menos.
+ */
+function RestaurarNotaApagada({ copias }: { copias: CopiaGuardada[] }) {
+  const [chave, setChave] = useState("");
+  const [numeroDaNota, setNumeroDaNota] = useState("");
+  const utils = trpc.useUtils();
+
+  const comArquivo = copias.filter(copia => copia.storageKey);
+  const escolhida = chave || comArquivo[0]?.storageKey || "";
+
+  const procurar = trpc.manutencao.procurarNotaNoBackup.useMutation({
+    onError: erro => toast.error(erro.message),
+  });
+
+  const restaurar = trpc.manutencao.restaurarNotaDoBackup.useMutation({
+    onSuccess: dados => {
+      toast.success(`Nota de volta no sistema, com a conversa e o histórico (${dados.linhas.reduce((soma, linha) => soma + linha.linhas, 0)} registros).`);
+      void utils.appointments.invalidate();
+      if (escolhida && numeroDaNota.trim()) procurar.mutate({ chave: escolhida, numeroDaNota: numeroDaNota.trim() });
+    },
+    onError: erro => toast.error(erro.message),
+  });
+
+  const achadas = procurar.data?.notas ?? [];
+
+  if (!comArquivo.length) return null;
+
+  return (
+    <div className="mt-6 rounded-2xl border border-line bg-canvas p-5">
+      <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-faint">Restaurar uma nota apagada</p>
+      <p className="mt-2 max-w-2xl text-[13px] leading-5 text-ink-soft">
+        Apagar uma nota leva junto o histórico, a conversa com o fornecedor e as notas internas —
+        não existe lixeira. O que existe é a cópia da madrugada: procure a nota dentro dela e ela
+        volta para o sistema com o mesmo número, a conversa e o histórico. O que mudou na nota
+        depois da cópia não volta.
+      </p>
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <label className="min-w-[14rem] flex-1">
+          <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-ink-faint">De qual cópia</span>
+          <select
+            value={escolhida}
+            onChange={evento => setChave(evento.target.value)}
+            className="mt-1.5 h-11 w-full rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink outline-none focus:border-rvd-plum"
+          >
+            {comArquivo.map(copia => (
+              <option key={copia.id} value={copia.storageKey!}>
+                {copia.finishedAt ? quando(copia.finishedAt) : "sem data"} ({copia.origin === "manual" ? "manual" : "automático"})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="min-w-[10rem] flex-1">
+          <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-ink-faint">Número da nota</span>
+          <input
+            value={numeroDaNota}
+            onChange={evento => setNumeroDaNota(evento.target.value)}
+            onKeyDown={evento => {
+              if (evento.key === "Enter" && escolhida && numeroDaNota.trim()) procurar.mutate({ chave: escolhida, numeroDaNota: numeroDaNota.trim() });
+            }}
+            placeholder="8507"
+            maxLength={100}
+            className="mt-1.5 h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-rvd-plum"
+          />
+        </label>
+        <Button
+          onClick={() => procurar.mutate({ chave: escolhida, numeroDaNota: numeroDaNota.trim() })}
+          disabled={procurar.isPending || !escolhida || !numeroDaNota.trim()}
+          variant="outline"
+          className="h-11 rounded-xl border-line bg-surface px-5 font-bold text-rvd-plum hover:bg-rvd-plum-pale"
+        >
+          <Search className="size-4" />
+          {procurar.isPending ? "Procurando..." : "Procurar na cópia"}
+        </Button>
+      </div>
+
+      {procurar.isSuccess && !achadas.length && (
+        <p className="mt-4 text-[13px] font-bold text-state-stop">
+          Nenhuma nota com esse número nesta cópia. Tente uma cópia mais antiga — ou confira o número.
+        </p>
+      )}
+
+      {achadas.length > 0 && (
+        <ul className="mt-4 divide-y divide-line">
+          {achadas.map(nota => (
+            <li key={nota.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0">
+              <span className="min-w-0">
+                <span className="block text-[13px] font-bold text-ink">
+                  NF {nota.numeroDaNota} · {nota.fornecedor}
+                </span>
+                <span className="mt-0.5 block text-[11px] text-ink-soft">
+                  estava como {statusCopy[nota.status as PortalStatus] ?? nota.status} · {contar(nota.mensagens, "mensagem", "mensagens")} · {contar(nota.historico, "linha de histórico", "linhas de histórico")}
+                </span>
+              </span>
+              {nota.jaExiste ? (
+                <span className="shrink-0 text-[12px] font-bold text-ink-faint">Já está no sistema</span>
+              ) : (
+                <Button
+                  onClick={() => restaurar.mutate({ chave: escolhida, appointmentId: nota.id })}
+                  disabled={restaurar.isPending}
+                  className="h-9 shrink-0 rounded-xl bg-brand px-3.5 text-xs font-bold text-white hover:bg-brand"
+                >
+                  <RotateCcw className="size-3.5" />
+                  {restaurar.isPending ? "Restaurando..." : "Restaurar"}
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -206,6 +335,8 @@ export default function BackupCard() {
           </ul>
         </div>
       )}
+
+      <RestaurarNotaApagada copias={disponiveis} />
     </section>
   );
 }

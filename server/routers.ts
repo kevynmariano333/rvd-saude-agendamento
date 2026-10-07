@@ -119,10 +119,10 @@ import { isS3Configured } from "./_core/s3Client";
 import { conteudoDoAgendamento } from "./emailDeAgendamento";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 import { contarAgendamentos } from "./db";
-import { backupConhecido, backupsDisponiveis, excluirNotaRepetida, limparAvisos, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
+import { apagarNotaRegistrando, backupConhecido, backupsDisponiveis, excluirNotaRepetida, limparAvisos, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
 import { chaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 import { countAppointments, countAppointmentsByStatus, createServiceNoteAppointment, listReportRows, listSupplierOptions } from "./db";
-import { executarBackup } from "./backup";
+import { executarBackup, procurarNotaEmBackup, restaurarNotaDoBackup } from "./backup";
 import { storageGetSignedUrl } from "./storage";
 import { decodificarCsv, importarAcervo } from "./agilizaImport";
 import { lerPedidosDoSap } from "./pedidosSap";
@@ -938,7 +938,10 @@ export const appRouter = router({
         assertAdmin(ctx.user.role);
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
-        await deleteAppointmentById(appointment.id);
+        // Com registro: a exclusão é em cascata e definitiva, e dias depois
+        // alguém vai perguntar o que havia naquela nota. O resumo é o que
+        // sobra para responder — e para achá-la no backup, se for o caso.
+        await apagarNotaRegistrando(appointment.id, ctx.user.id);
         return { success: true } as const;
       }),
     /**
@@ -1509,6 +1512,50 @@ export const appRouter = router({
       }),
     /** As cópias já gravadas, da mais nova para a mais velha, para baixar. */
     backupsParaBaixar: adminProcedure.query(async () => backupsDisponiveis(20)),
+    /**
+     * Procurar, dentro de uma cópia, uma nota que foi apagada.
+     *
+     * Apagar uma nota é definitivo: o banco leva junto, em cascata, o
+     * histórico, a conversa com o fornecedor e as notas internas. Não existe
+     * lixeira. O que existe é a cópia da madrugada — e até aqui ela só servia
+     * para baixar o arquivo, o que não ajuda quem precisa da nota de volta
+     * dentro do sistema.
+     *
+     * É mutation, e não query, porque cada busca baixa e abre o arquivo
+     * inteiro: isso acontece quando alguém pede, e não sozinho a cada vez que a
+     * tela recarrega.
+     */
+    procurarNotaNoBackup: adminProcedure
+      .input(z.object({ chave: z.string().min(1).max(512), numeroDaNota: z.string().trim().min(1).max(100) }))
+      .mutation(async ({ input }) => {
+        // Mesma conferência do download: a chave tem que ser de um backup que
+        // este sistema gerou, senão a rota vira um jeito de ler qualquer
+        // arquivo do bucket.
+        if (!(await backupConhecido(input.chave))) throw new TRPCError({ code: "NOT_FOUND", message: "Este backup não está na lista de cópias geradas pelo sistema." });
+        try {
+          return await procurarNotaEmBackup(input);
+        } catch (erro) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "Não consegui abrir este backup." });
+        }
+      }),
+    /**
+     * Recolocar no banco a nota apagada, com a conversa e o histórico dela.
+     *
+     * Volta com o mesmo id: é esse número que a conversa e o histórico citam.
+     * O que mudou na nota entre a cópia e a exclusão não volta — a tela mostra
+     * de quando é a cópia justamente para quem restaura saber o que está
+     * recebendo de volta.
+     */
+    restaurarNotaDoBackup: adminProcedure
+      .input(z.object({ chave: z.string().min(1).max(512), appointmentId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!(await backupConhecido(input.chave))) throw new TRPCError({ code: "NOT_FOUND", message: "Este backup não está na lista de cópias geradas pelo sistema." });
+        try {
+          return await restaurarNotaDoBackup({ chave: input.chave, appointmentId: input.appointmentId, adminId: ctx.user.id });
+        } catch (erro) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "Não consegui restaurar esta nota." });
+        }
+      }),
     /** O que a tela mostra para provar que a cópia da madrugada está saindo. */
     situacaoDoBackup: adminProcedure.query(async () => ({
       ultimo: await ultimoBackupConcluido(),

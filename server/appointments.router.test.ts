@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   createAppointmentInternalNote: vi.fn(),
   createLocalUser: vi.fn(),
   deleteAppointmentById: vi.fn(),
+  apagarNotaRegistrando: vi.fn(),
   scheduleAppointment: vi.fn(),
   createUnscheduledReceipt: vi.fn(),
   marcarUrgencia: vi.fn(),
@@ -122,7 +123,9 @@ describe("procedures de agendamento", () => {
 
     const adminCaller = appRouter.createCaller(context("admin"));
     await adminCaller.appointments.delete({ appointmentId: 71 });
-    expect(mocks.deleteAppointmentById).toHaveBeenCalledWith(71);
+    // Com registro de quem apagou: a exclusão é em cascata e definitiva, e o
+    // resumo é o que sobra para achar a nota no backup depois.
+    expect(mocks.apagarNotaRegistrando).toHaveBeenCalledWith(71, 24);
   });
 
   it("permite somente ao Administrador retornar nota recebida para novo agendamento", async () => {

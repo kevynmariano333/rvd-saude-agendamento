@@ -542,6 +542,19 @@ export async function deleteAppointmentById(id: number) {
   await db.delete(appointments).where(eq(appointments.id, id));
 }
 
+/**
+ * Apagar uma nota deixando escrito o que foi embora com ela.
+ *
+ * A exclusão é em cascata: vai a nota, o histórico, a conversa com o
+ * fornecedor, as notas internas e as sugestões. Depois dela não há como
+ * responder nem o que existia ali — e a pergunta aparece dias depois, quando
+ * alguém procura a nota e não acha. O resumo é gravado antes, e é o que
+ * permite achar a nota certa no backup para trazê-la de volta.
+ */
+export async function apagarNotaRegistrando(appointmentId: number, adminId: number) {
+  return apagarCopiaDaNota(appointmentId, adminId, "nota-excluida");
+}
+
 export async function listAppointmentHistory(appointmentId: number) {
   const db = await getDb();
   if (!db) return [];
@@ -2833,7 +2846,7 @@ export async function excluirNotaRepetida(input: { appointmentId: number; adminI
  * resumo é gravado antes da exclusão porque depois dela não há mais o que
  * contar: é ele que responde, meses depois, o que existia naquele registro.
  */
-async function apagarCopiaDaNota(appointmentId: number, adminId: number) {
+async function apagarCopiaDaNota(appointmentId: number, adminId: number, motivo: "nota-repetida-excluida" | "nota-excluida" = "nota-repetida-excluida") {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
   const alvo = (
@@ -2874,8 +2887,8 @@ async function apagarCopiaDaNota(appointmentId: number, adminId: number) {
     .join(" · ");
 
   await db.delete(appointments).where(eq(appointments.id, alvo.id));
-  await db.insert(systemAlerts).values({ kind: "nota-repetida-excluida", sentAt: new Date(), detail: resumo.slice(0, 500) });
-  console.warn(`[Notas repetidas] ${resumo}`);
+  await db.insert(systemAlerts).values({ kind: motivo, sentAt: new Date(), detail: resumo.slice(0, 500) });
+  console.warn(`[Nota apagada] ${resumo}`);
   return { apagada: alvo.id, resumo };
 }
 
