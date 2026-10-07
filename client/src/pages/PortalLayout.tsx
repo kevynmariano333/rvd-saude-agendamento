@@ -2,6 +2,8 @@ import { Button } from "@/components/ui/button";
 import { canSeeGateHistory, canTreatBacklogPortal, isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalSchedulingDesk, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
 import { serviceTypeCopy } from "@/lib/attendance";
 import { rotuloDoMotivo } from "@shared/backlogReasons";
+import { ehSituacao, ROTULO_DA_SITUACAO, SITUACAO_PADRAO, SITUACOES } from "@shared/presenca";
+import { CORES_DA_SITUACAO } from "@/lib/presenca";
 import { unidadePorCnpj } from "@shared/recipients";
 import { trpc } from "@/lib/trpc";
 import {
@@ -45,7 +47,7 @@ const themeOptions: { value: ThemeChoice; label: string; icon: LucideIcon }[] = 
   { value: "sistema", label: "Sistema", icon: MonitorSmartphone },
 ];
 
-type PortalUser = { id: number; name: string | null; email: string | null; role: string };
+type PortalUser = { id: number; name: string | null; email: string | null; role: string; situacao?: string | null };
 
 /** Item da barra de navegação. O badge é a contagem que pede atenção agora. */
 type NavItem = {
@@ -86,6 +88,17 @@ export default function PortalLayout({
   const notifications = trpc.messages.notifications.useQuery(undefined, { refetchInterval: 15_000 });
   const utils = trpc.useUtils();
   const logoutMutation = trpc.auth.logout.useMutation();
+
+  // O recado que evita o "oi, tá aí?" — e que só vale enquanto a pessoa
+  // estiver de fato no sistema, para não envelhecer na tela dos outros.
+  const situacao = ehSituacao(user.situacao) ? user.situacao : SITUACAO_PADRAO;
+  const definirSituacao = trpc.auth.definirSituacao.useMutation({
+    onSuccess: ({ situacao: escolhida }) => {
+      void utils.auth.me.invalidate();
+      toast.success(`Agora você aparece como ${ROTULO_DA_SITUACAO[escolhida].rotulo.toLowerCase()} para a equipe.`);
+    },
+    onError: erro => toast.error(erro.message),
+  });
   // Qual versão o servidor está servindo agora. De dez em dez minutos: deploy
   // não acontece a cada minuto, e perguntar de minuto em minuto era uma
   // consulta por pessoa por minuto o dia inteiro para responder um número que
@@ -624,7 +637,7 @@ export default function PortalLayout({
         )}
 
         {profileOpen && (
-          <div className="absolute right-5 top-[4.25rem] w-72 rounded-2xl border border-line bg-surface p-4 shadow-lg sm:right-8">
+          <div className="absolute right-5 top-[4.25rem] w-[19rem] max-w-[calc(100vw-2.5rem)] rounded-2xl border border-line bg-surface p-4 shadow-lg sm:right-8">
             <p className="truncate font-display text-sm font-extrabold text-ink">{user.name || "Acesso RVD"}</p>
             <p className="mt-1 truncate text-xs text-ink-soft">{user.email}</p>
             <p className="mt-3 inline-flex rounded-full bg-rvd-plum-pale/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">
@@ -649,6 +662,32 @@ export default function PortalLayout({
                 })}
               </div>
             )}
+            <div className="mt-4 border-t border-line pt-3">
+              <p className="eyebrow">Minha situação</p>
+              <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-canvas p-1">
+                {SITUACOES.map(opcao => {
+                  const escolhida = situacao === opcao;
+                  return (
+                    <button
+                      key={opcao}
+                      onClick={() => definirSituacao.mutate({ situacao: opcao })}
+                      disabled={definirSituacao.isPending}
+                      aria-pressed={escolhida}
+                      title={ROTULO_DA_SITUACAO[opcao].explica}
+                      className={`flex items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-[11px] font-bold transition ${
+                        escolhida ? "bg-surface text-rvd-plum shadow-sm" : "text-ink-soft hover:text-ink"
+                      }`}
+                    >
+                      <span className={`size-2 shrink-0 rounded-full ${CORES_DA_SITUACAO[opcao]}`} />
+                      {ROTULO_DA_SITUACAO[opcao].rotulo}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] leading-4 text-ink-faint">
+                Aparece para a equipe na tela de Acessos, e só enquanto você estiver usando o sistema.
+              </p>
+            </div>
             <div className="mt-4 border-t border-line pt-3">
               <p className="eyebrow">Tema</p>
               <div className="mt-2 flex gap-1 rounded-xl bg-canvas p-1">

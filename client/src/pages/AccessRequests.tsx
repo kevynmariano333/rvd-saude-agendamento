@@ -5,6 +5,8 @@ import { formatCnpj, roleLabel, type PortalRole, homePathFor } from "@/lib/porta
 import { Ban, Building2, CheckCircle2, KeyRound, Search, ShieldCheck, UserCheck, UsersRound, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatarCnpj } from "@shared/recipients";
+import { presencaDe } from "@shared/presenca";
+import { CORES_DA_SITUACAO } from "@/lib/presenca";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -39,6 +41,33 @@ function avisoDeLiberacao(avisado: boolean) {
   return avisado
     ? "Acesso liberado. Avisamos por e-mail que o login está ativo."
     : "Acesso liberado. O aviso por e-mail não saiu — avise a pessoa de que o login já funciona.";
+}
+
+/**
+ * Em que pé está uma conta, na linha dela.
+ *
+ * A pergunta aparece o dia inteiro — dá para pedir ao planejamento agora, ou a
+ * pessoa não está? Até aqui o WhatsApp respondia isso, e mal. A bolinha nunca
+ * vai sozinha: o rótulo escrito está sempre do lado, para quem não distingue
+ * verde de âmbar não ficar sem a informação.
+ */
+function SeloDePresenca({ situacao, vistoEm }: { situacao?: string | null; vistoEm?: Date | string | null }) {
+  // De minuto em minuto: "visto há 3 min" precisa virar "há 4 min" sozinho,
+  // senão a tela aberta desde cedo mostra um horário que já passou.
+  const [agora, setAgora] = useState(() => new Date());
+  useEffect(() => {
+    const relogio = setInterval(() => setAgora(new Date()), 60_000);
+    return () => clearInterval(relogio);
+  }, []);
+
+  const presenca = presencaDe({ situacao, vistoEm }, agora);
+  return (
+    <span className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-faint">
+      <span className={`size-2 shrink-0 rounded-full ${CORES_DA_SITUACAO[presenca.estado]}`} />
+      <span className={presenca.presente ? "font-bold text-ink-soft" : ""}>{presenca.rotulo}</span>
+      <span className="truncate">· {presenca.detalhe}</span>
+    </span>
+  );
 }
 
 export default function AccessRequests() {
@@ -236,6 +265,7 @@ export default function AccessRequests() {
                       {member.id === auth.data?.id && <span className="ml-2 text-xs font-bold text-ink-faint">(você)</span>}
                     </p>
                     <p className="mt-0.5 truncate text-sm text-ink-soft">{member.email || "E-mail não informado"}</p>
+                    <SeloDePresenca situacao={member.situacao} vistoEm={member.vistoEm} />
                     {member.accessStatus !== "approved" && (
                       <span className={`mt-1.5 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${blocked ? "bg-state-stop-bg text-state-stop" : "bg-state-wait-bg text-state-wait"}`}>
                         {member.accessStatus === "pending" ? "Aguardando aprovação" : "Bloqueado — não entra no sistema"}
@@ -329,6 +359,7 @@ export default function AccessRequests() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-ink">{conta.companyName || conta.name || "Conta sem nome"}</p>
                       <p className="mt-0.5 truncate text-[13px] text-ink-soft">{conta.email || "E-mail não informado"}</p>
+                      <SeloDePresenca situacao={conta.situacao} vistoEm={conta.vistoEm} />
                       <p className="mt-0.5 text-[11px] text-ink-faint">
                         {conta.companyCnpj ? formatarCnpj(conta.companyCnpj) : "Sem CNPJ — não enxerga nota nenhuma"}
                         {conta.lastSignedIn ? ` · último acesso em ${new Date(conta.lastSignedIn).toLocaleDateString("pt-BR")}` : ""}

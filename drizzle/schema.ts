@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   varchar,
 } from "drizzle-orm/mysql-core";
+import { SITUACOES } from "../shared/presenca";
 
 // "planejador" cuida da agenda sem confirmá-la: enxerga o painel, a lista de
 // notas, o calendário e os relatórios, propõe datas ao Operador e acompanha o
@@ -123,6 +124,22 @@ export const users = mysqlTable(
      * por alguém — limpar o meu sino não pode limpar o do colega.
      */
     avisosDoBacklogVistosEm: timestamp("avisosDoBacklogVistosEm"),
+    /**
+     * O que a pessoa escolheu dizer de si: disponível, ocupado, ausente.
+     *
+     * Só vale enquanto ela estiver de fato no sistema — quem marca "ocupado"
+     * na terça esquece de voltar, e sem a conferência de `vistoEm` o rótulo
+     * mentiria na sexta.
+     */
+    situacao: mysqlEnum("situacao", SITUACOES).default("disponivel").notNull(),
+    /**
+     * Quando esta conta deu sinal pela última vez.
+     *
+     * Diferente de `lastSignedIn`, que é a hora do login: quem entrou às sete
+     * e fechou o navegador às oito continuaria "no sistema" o dia inteiro.
+     * Este é gravado enquanto a pessoa usa, de dois em dois minutos.
+     */
+    vistoEm: timestamp("vistoEm"),
   },
   table => [uniqueIndex("users_email_unique").on(table.email), index("users_company_cnpj_idx").on(table.companyCnpj), index("users_company_id_idx").on(table.companyId)]
 );

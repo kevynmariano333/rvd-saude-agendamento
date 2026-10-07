@@ -47,6 +47,8 @@ const mocks = vi.hoisted(() => ({
   listPendingAccessRequests: vi.fn(),
   setUserAccessStatus: vi.fn(),
   createPasswordResetToken: vi.fn(),
+  gravarSinalDePresenca: vi.fn().mockResolvedValue(undefined),
+  definirSituacaoDoUsuario: vi.fn(),
   registrarAvisoDoSistema: vi.fn(),
   updateUserName: vi.fn(),
   createAttendance: vi.fn(),

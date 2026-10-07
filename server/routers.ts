@@ -68,6 +68,7 @@ import {
   createPasswordResetToken,
   getPasswordResetToken,
   getUserById,
+  definirSituacaoDoUsuario,
   registrarAvisoDoSistema,
   marcarUrgencia,
   definirPedidoDaNota,
@@ -97,6 +98,7 @@ import { validarTratativa, resumoDaTratativa } from "../shared/tratativa";
 import { ehMotivoConhecido, rotuloDoMotivo } from "../shared/backlogReasons";
 import { codigoDoAgilizaNoHistorico } from "../shared/motivoDoAgiliza";
 import { BASES_DA_DATA } from "../shared/baseDaData";
+import { ehSituacao, SITUACAO_PADRAO, SITUACOES } from "../shared/presenca";
 import { codigoDeOrigem, MOTIVOS_DO_AGILIZA } from "./agilizaImport";
 import { clearRvdSession, createRvdSession } from "./session";
 import { systemRouter } from "./_core/systemRouter";
@@ -205,8 +207,11 @@ function passwordMatches(password: string, storedHash: string) {
   return timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(candidate, "hex"));
 }
 
-function publicUser(user: { id: number; name: string | null; email: string | null; role: string }) {
-  return { id: user.id, name: user.name, email: user.email, role: user.role };
+function publicUser(user: { id: number; name: string | null; email: string | null; role: string; situacao?: string | null }) {
+  // A situação vem junto porque é o menu da própria conta que a mostra e a
+  // troca: sem ela, abrir o portal exibiria sempre "Disponível" até alguém
+  // clicar, mesmo para quem tinha deixado "Ocupado" marcado.
+  return { id: user.id, name: user.name, email: user.email, role: user.role, situacao: ehSituacao(user.situacao) ? user.situacao : SITUACAO_PADRAO };
 }
 
 function assertOperator(role: UserRole) {
@@ -651,6 +656,20 @@ export const appRouter = router({
       }),
     // O nome é o que aparece no topo da tela e assina cada evento do histórico,
     // então quem usa a conta precisa poder corrigi-lo sem depender do admin.
+    /**
+     * O que a pessoa escolhe dizer de si enquanto está no sistema.
+     *
+     * Não é uma permissão nem um horário de trabalho: é o recado que evita o
+     * "oi, tá aí?" seguido de vinte minutos de silêncio. Vale só enquanto ela
+     * estiver de fato usando o portal — quem marca "ocupado" e vai embora
+     * aparece como desconectado, e não ocupado para sempre.
+     */
+    definirSituacao: protectedProcedure
+      .input(z.object({ situacao: z.enum(SITUACOES) }))
+      .mutation(async ({ ctx, input }) => {
+        await definirSituacaoDoUsuario({ userId: ctx.user.id, situacao: input.situacao });
+        return { situacao: input.situacao } as const;
+      }),
     updateName: protectedProcedure
       .input(z.object({ name: z.string().trim().min(2, "Informe o nome.").max(255) }))
       .mutation(async ({ ctx, input }) => {

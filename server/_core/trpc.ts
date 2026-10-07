@@ -2,6 +2,8 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '../../shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
+import { precisaGravarSinal } from "../../shared/presenca";
+import { gravarSinalDePresenca } from "../db";
 import type { TrpcContext } from "./context";
 
 /**
@@ -30,6 +32,38 @@ const t = initTRPC.context<TrpcContext>().create({
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
+/**
+ * Quando cada conta deu o último sinal de que ainda está aqui.
+ *
+ * Fica na memória do processo, e não no banco, porque é só para evitar a
+ * escrita: a resposta que a tela mostra vem do banco. Reiniciar o servidor
+ * zera isto e o pior que acontece é uma gravação a mais por pessoa.
+ */
+const ultimoSinal = new Map<number, Date>();
+
+/**
+ * Marcar presença sem cobrar nada de quem está esperando a tela.
+ *
+ * É uma escrita no banco por requisição se for feita ingenuamente — e
+ * requisição tem muitas. Com o freio de dois minutos, viram algumas dezenas
+ * por dia. E não se espera por ela: ninguém deve ver a lista de notas demorar
+ * porque o portal estava anotando que ele está online.
+ */
+function marcarPresenca(userId: number) {
+  const agora = new Date();
+  if (!precisaGravarSinal(ultimoSinal.get(userId), agora)) return;
+  ultimoSinal.set(userId, agora);
+  // Nada aqui pode derrubar a requisição: isto roda antes de toda tela do
+  // sistema, e saber quem está online não vale uma página de erro.
+  try {
+    void Promise.resolve(gravarSinalDePresenca(userId, agora)).catch(erro => {
+      console.warn("[Presença] não consegui gravar o sinal:", erro);
+    });
+  } catch (erro) {
+    console.warn("[Presença] não consegui gravar o sinal:", erro);
+  }
+}
+
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
 
@@ -49,6 +83,8 @@ const requireUser = t.middleware(async opts => {
           : "Seu acesso a esta empresa não foi autorizado. Fale com o Operador.",
     });
   }
+
+  marcarPresenca(ctx.user.id);
 
   return next({
     ctx: {

@@ -40,6 +40,7 @@ import type { ChaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 import { copiaQueFica, copiasQueSaem } from "../shared/copiaQueFica";
 import { notasDoCalendario, propostasNoPeriodo } from "../shared/dataDoCalendario";
 import { ehDoPlanejamento, sugestaoPrioritaria } from "../shared/prioridadeDaSugestao";
+import type { Situacao } from "../shared/presenca";
 
 /**
  * Como o portal segura a conexão com o banco o dia inteiro.
@@ -200,6 +201,28 @@ export async function createLocalUser(input: {
   };
   const result = await db.insert(users).values(values);
   return (await getUserById(Number(result[0].insertId)))!;
+}
+
+/**
+ * O sinal de que a conta ainda está em uso.
+ *
+ * Separado do login: quem entrou às sete e fechou o navegador às oito
+ * continuaria "no sistema" o dia inteiro se a tela olhasse para `lastSignedIn`.
+ * Quem chama é que decide a frequência — aqui só se grava.
+ */
+export async function gravarSinalDePresenca(id: number, agora: Date = new Date()) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ vistoEm: agora }).where(eq(users.id, id));
+}
+
+/** O que a pessoa escolheu dizer de si: disponível, ocupado, ausente. */
+export async function definirSituacaoDoUsuario(input: { userId: number; situacao: Situacao }) {
+  const db = await getDb();
+  if (!db) return;
+  // O sinal vai junto: quem acabou de escolher a situação está ali agora, e
+  // sem isto a escolha nasceria "desconectada" até o próximo sinal.
+  await db.update(users).set({ situacao: input.situacao, vistoEm: new Date() }).where(eq(users.id, input.userId));
 }
 
 export async function touchUserSignIn(id: number) {
@@ -1640,6 +1663,8 @@ export async function listStaffUsers() {
       role: users.role,
       accessStatus: users.accessStatus,
       lastSignedIn: users.lastSignedIn,
+      situacao: users.situacao,
+      vistoEm: users.vistoEm,
     })
     .from(users)
     .where(ne(users.role, "supplier"))
@@ -1697,6 +1722,8 @@ export async function listSupplierAccounts() {
       accessStatus: users.accessStatus,
       lastSignedIn: users.lastSignedIn,
       createdAt: users.createdAt,
+      situacao: users.situacao,
+      vistoEm: users.vistoEm,
     })
     .from(users)
     .where(eq(users.role, "supplier"))
