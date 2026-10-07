@@ -52,6 +52,7 @@ import {
   scheduleAppointment,
   contarFeedbacksNaoLidos,
   listarFeedbacks,
+  notasDoPortal,
   marcarFeedbackLido,
   marcarSaidaDoUsuario,
   registrarFeedback,
@@ -104,6 +105,7 @@ import { ehMotivoConhecido, rotuloDoMotivo } from "../shared/backlogReasons";
 import { codigoDoAgilizaNoHistorico } from "../shared/motivoDoAgiliza";
 import { BASES_DA_DATA } from "../shared/baseDaData";
 import { ehSituacao, SITUACAO_PADRAO, SITUACOES } from "../shared/presenca";
+import { NOTA_MAXIMA, NOTA_MINIMA, resumoDasNotas, temConteudo } from "../shared/notaDoPortal";
 import { codigoDeOrigem, MOTIVOS_DO_AGILIZA } from "./agilizaImport";
 import { clearRvdSession, createRvdSession } from "./session";
 import { systemRouter } from "./_core/systemRouter";
@@ -2144,10 +2146,19 @@ export const appRouter = router({
    */
   feedback: router({
     enviar: protectedProcedure
-      .input(z.object({ mensagem: z.string().trim().min(5, "Escreva um pouco mais para dar para entender.").max(1000), pagina: z.string().max(255).optional() }))
+      .input(z.object({
+        mensagem: z.string().trim().max(1000).optional(),
+        nota: z.number().int().min(NOTA_MINIMA).max(NOTA_MAXIMA).optional(),
+        pagina: z.string().max(255).optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
+        // A nota sozinha já é um recado — é o clique de quem não ia escrever
+        // nada. O que não entra é o vazio: sem nota e sem texto, não há o que ler.
+        if (!temConteudo(input)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Dê a nota ou escreva um pouco mais para dar para entender." });
+        }
         try {
-          await registrarFeedback({ userId: ctx.user.id, mensagem: input.mensagem, pagina: input.pagina });
+          await registrarFeedback({ userId: ctx.user.id, mensagem: input.mensagem, nota: input.nota, pagina: input.pagina });
         } catch (erro) {
           throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "Não consegui registrar seu recado." });
         }
@@ -2156,7 +2167,21 @@ export const appRouter = router({
     lista: adminProcedure.query(async () => ({
       recados: await listarFeedbacks(50),
       naoLidos: await contarFeedbacksNaoLidos(),
+      // O resumo sai de todas as notas, e não das cinquenta da lista: a média
+      // dos últimos cinquenta recados não é a média do portal.
+      notas: resumoDasNotas(await notasDoPortal()),
     })),
+    /**
+     * A nota do portal, para o painel.
+     *
+     * Só o número e a distribuição — sem os recados, que são de quem
+     * administra. Quem cuida da operação precisa ver se o portal está
+     * agradando; ler reclamação nominal é outra conversa.
+     */
+    nota: protectedProcedure.query(async ({ ctx }) => {
+      assertSchedulingDesk(ctx.user.role);
+      return resumoDasNotas(await notasDoPortal());
+    }),
     marcarLido: adminProcedure
       .input(z.object({ feedbackId: z.number().int().positive(), lido: z.boolean() }))
       .mutation(async ({ ctx, input }) => {

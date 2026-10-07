@@ -25,6 +25,7 @@ import {
   LogOut,
   Menu,
   MessageCircle,
+  MessageSquarePlus,
   MonitorSmartphone,
   Moon,
   PackageCheck,
@@ -84,6 +85,7 @@ export default function PortalLayout({
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [nameOpen, setNameOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [sugestaoAberta, setSugestaoAberta] = useState(false);
   const [location, setLocation] = useLocation();
   const role = user.role as PortalRole;
   const isOperator = isPortalOperator(role);
@@ -760,6 +762,21 @@ export default function PortalLayout({
                 <KeyRound className="size-4" />
                 Alterar senha
               </Button>
+              {/* Para quem é de dentro, a caixa de sugestões mora aqui: um
+                  botão flutuante na tela de trabalho atrapalha quem passa o
+                  dia nela. O fornecedor, que entra de vez em quando, continua
+                  com o botão no canto. */}
+              <Button
+                onClick={() => {
+                  setProfileOpen(false);
+                  setSugestaoAberta(true);
+                }}
+                variant="ghost"
+                className="mt-1 w-full justify-start text-ink-soft hover:bg-canvas hover:text-ink"
+              >
+                <MessageSquarePlus className="size-4" />
+                Sugestão sobre o portal
+              </Button>
               <Button
                 onClick={finishLogout}
                 disabled={logoutMutation.isPending}
@@ -811,9 +828,22 @@ export default function PortalLayout({
       </footer>
       <ChangeNameDialog open={nameOpen} onOpenChange={setNameOpen} currentName={user.name ?? ""} />
       <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
-      {/* No canto, e pequena: um pedido de opinião no meio da tela atrapalha
-          quem veio agendar uma carga. */}
-      <CaixaDeSugestao />
+      {/* O fornecedor entra de vez em quando e não conhece os cantos do
+          portal: para ele o botão fica à vista, pequeno e no canto. Quem é de
+          dentro passa o dia nesta tela e acha a mesma caixa pelo menu da
+          conta, sem nada flutuando por cima do trabalho. */}
+      {role === "supplier" && (
+        <button
+          type="button"
+          onClick={() => setSugestaoAberta(true)}
+          title="Mandar uma sugestão sobre o portal"
+          className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-line bg-surface/95 px-3.5 py-2.5 text-xs font-bold text-ink-soft shadow-lg backdrop-blur transition hover:border-rvd-plum hover:text-rvd-plum sm:bottom-6 sm:right-6"
+        >
+          <MessageSquarePlus className="size-4" />
+          <span className="hidden sm:inline">Sugestão</span>
+        </button>
+      )}
+      <CaixaDeSugestao aberta={sugestaoAberta} onOpenChange={setSugestaoAberta} />
     </div>
   );
 }

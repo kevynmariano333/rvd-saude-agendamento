@@ -51,6 +51,7 @@ const mocks = vi.hoisted(() => ({
   marcarSaidaDoUsuario: vi.fn().mockResolvedValue(undefined),
   registrarFeedback: vi.fn().mockResolvedValue(undefined),
   listarFeedbacks: vi.fn().mockResolvedValue([]),
+  notasDoPortal: vi.fn().mockResolvedValue([]),
   contarFeedbacksNaoLidos: vi.fn().mockResolvedValue(0),
   marcarFeedbackLido: vi.fn().mockResolvedValue(undefined),
   definirSituacaoDoUsuario: vi.fn(),
@@ -1451,5 +1452,41 @@ describe("a caixa de sugestões", () => {
     mocks.registrarFeedback.mockRejectedValueOnce(new Error("Você já mandou vários recados na última hora. Aguarde um pouco para mandar outro."));
     const caller = appRouter.createCaller(context("supplier"));
     await expect(caller.feedback.enviar({ mensagem: "mais uma ideia para o portal" })).rejects.toMatchObject({ message: expect.stringContaining("Aguarde") });
+  });
+});
+
+describe("a nota dada ao portal", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("a nota sozinha já é um recado", async () => {
+    // É o clique de quem não ia escrever nada.
+    await appRouter.createCaller(context("supplier")).feedback.enviar({ nota: 5 });
+    expect(mocks.registrarFeedback).toHaveBeenCalledWith(expect.objectContaining({ nota: 5, mensagem: undefined }));
+  });
+
+  it("sem nota e sem texto não entra", async () => {
+    await expect(appRouter.createCaller(context("supplier")).feedback.enviar({})).rejects.toBeTruthy();
+    await expect(appRouter.createCaller(context("supplier")).feedback.enviar({ mensagem: "oi" })).rejects.toBeTruthy();
+    expect(mocks.registrarFeedback).not.toHaveBeenCalled();
+  });
+
+  it("nota fora da faixa é recusada antes de chegar ao banco", async () => {
+    for (const nota of [0, 6, 50]) {
+      await expect(appRouter.createCaller(context("supplier")).feedback.enviar({ nota })).rejects.toBeTruthy();
+    }
+    expect(mocks.registrarFeedback).not.toHaveBeenCalled();
+  });
+
+  it("a mesa de agendamento vê a média, mas não os recados nominais", async () => {
+    // Quem cuida da operação precisa saber se o portal está agradando; ler
+    // reclamação com nome é outra conversa.
+    mocks.notasDoPortal.mockResolvedValue([5, 4, 4]);
+    const planejador = appRouter.createCaller(context("planejador"));
+    await expect(planejador.feedback.nota()).resolves.toMatchObject({ media: 4.3, total: 3 });
+    await expect(planejador.feedback.lista()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("o fornecedor não vê a média de ninguém", async () => {
+    await expect(appRouter.createCaller(context("supplier")).feedback.nota()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

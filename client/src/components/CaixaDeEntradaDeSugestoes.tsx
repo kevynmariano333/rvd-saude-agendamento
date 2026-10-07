@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { roleLabel, type PortalRole } from "@/lib/portal";
-import { Check, Inbox, Undo2 } from "lucide-react";
+import { NOTA_MAXIMA, rotuloDaNota } from "@shared/notaDoPortal";
+import { Check, Inbox, Star, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 const quando = (valor: Date | string) =>
@@ -77,6 +78,14 @@ export default function CaixaDeEntradaDeSugestoes() {
                       {recado.autorEmail || "sem e-mail"} · {quando(recado.createdAt)}
                       {recado.pagina ? ` · na tela ${recado.pagina}` : ""}
                     </p>
+                    {recado.nota && (
+                      <p className="mt-1.5 flex items-center gap-1 text-[11px] font-bold text-ink-soft">
+                        {Array.from({ length: NOTA_MAXIMA }, (_, indice) => (
+                          <Star key={indice} className={`size-3.5 ${indice < recado.nota! ? "fill-rvd-plum text-rvd-plum" : "text-ink-faint"}`} />
+                        ))}
+                        <span className="ml-1">{recado.nota} de {NOTA_MAXIMA} · {rotuloDaNota(recado.nota)}</span>
+                      </p>
+                    )}
                   </div>
                   <Button
                     onClick={() => marcar.mutate({ feedbackId: recado.id, lido: !lido })}
@@ -87,7 +96,7 @@ export default function CaixaDeEntradaDeSugestoes() {
                     {lido ? <><Undo2 className="size-3.5" />Marcar como novo</> : <><Check className="size-3.5" />Dar por lido</>}
                   </Button>
                 </div>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink">{recado.mensagem}</p>
+                {recado.mensagem ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink">{recado.mensagem}</p> : <p className="mt-3 text-sm italic text-ink-faint">Só a nota, sem recado escrito.</p>}
               </li>
             );
           })}

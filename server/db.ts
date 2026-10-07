@@ -42,6 +42,7 @@ import { copiaQueFica, copiasQueSaem } from "../shared/copiaQueFica";
 import { notasDoCalendario, propostasNoPeriodo } from "../shared/dataDoCalendario";
 import { ehDoPlanejamento, sugestaoPrioritaria } from "../shared/prioridadeDaSugestao";
 import type { Situacao } from "../shared/presenca";
+import { ehNotaValida } from "../shared/notaDoPortal";
 
 /**
  * Como o portal segura a conexão com o banco o dia inteiro.
@@ -3207,7 +3208,7 @@ export async function marcarUrgencia(input: { appointmentId: number; status: App
  */
 export const LIMITE_DE_FEEDBACK_POR_HORA = 5;
 
-export async function registrarFeedback(input: { userId: number; mensagem: string; pagina?: string | null }) {
+export async function registrarFeedback(input: { userId: number; mensagem?: string | null; nota?: number | null; pagina?: string | null }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
 
@@ -3222,7 +3223,8 @@ export async function registrarFeedback(input: { userId: number; mensagem: strin
 
   await db.insert(feedbacks).values({
     userId: input.userId,
-    mensagem: input.mensagem.slice(0, 1000),
+    nota: ehNotaValida(input.nota) ? input.nota : null,
+    mensagem: input.mensagem?.trim().slice(0, 1000) || null,
     pagina: input.pagina?.slice(0, 255) || null,
   });
 }
@@ -3239,6 +3241,7 @@ export async function listarFeedbacks(limite = 50) {
   return db
     .select({
       id: feedbacks.id,
+      nota: feedbacks.nota,
       mensagem: feedbacks.mensagem,
       pagina: feedbacks.pagina,
       createdAt: feedbacks.createdAt,
@@ -3252,6 +3255,22 @@ export async function listarFeedbacks(limite = 50) {
     .leftJoin(users, eq(users.id, feedbacks.userId))
     .orderBy(desc(feedbacks.createdAt))
     .limit(limite);
+}
+
+/**
+ * As notas dadas ao portal, para a média e a distribuição.
+ *
+ * Lidas à parte da lista de recados: a lista mostra os cinquenta últimos, e a
+ * média de cinquenta recados não é a média do portal.
+ */
+export async function notasDoPortal(desde?: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  const linhas = await db
+    .select({ nota: feedbacks.nota })
+    .from(feedbacks)
+    .where(desde ? and(isNotNull(feedbacks.nota), gte(feedbacks.createdAt, desde)) : isNotNull(feedbacks.nota));
+  return linhas.map(linha => linha.nota);
 }
 
 /** Quantos recados ainda não foram lidos — é o número do aviso na tela. */

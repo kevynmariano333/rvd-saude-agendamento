@@ -10,6 +10,7 @@ import {
   timestamp,
   uniqueIndex,
   varchar,
+  tinyint,
 } from "drizzle-orm/mysql-core";
 import { SITUACOES } from "../shared/presenca";
 
@@ -576,7 +577,15 @@ export const feedbacks = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     /** Quem escreveu. Fica nulo se a conta for apagada: o recado continua valendo. */
     userId: int("userId").references(() => users.id, { onDelete: "set null" }),
-    mensagem: varchar("mensagem", { length: 1000 }).notNull(),
+    /**
+     * De 1 a 5, quando a pessoa quis dar.
+     *
+     * Texto só chega de quem está incomodado o bastante para escrever, e isso
+     * dá uma lista de problemas sem noção do conjunto. A nota custa um clique
+     * e responde a outra metade: se, no geral, melhorou.
+     */
+    nota: tinyint("nota"),
+    mensagem: varchar("mensagem", { length: 1000 }),
     /** O endereço da tela em que a pessoa estava quando escreveu. */
     pagina: varchar("pagina", { length: 255 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
