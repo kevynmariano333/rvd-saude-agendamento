@@ -349,7 +349,7 @@ export default function AccessRequests() {
                         Amil planeja. Antes as duas eram a mesma linha de
                         texto, e descobrir quem era de qual lado exigia ler o
                         e-mail letra por letra. */}
-                    <AvatarDaConta email={member.email} nome={member.name} className="mt-0.5 size-8 text-sm" />
+                    <AvatarDaConta email={member.email} nome={member.name} className="mt-0.5 size-9" />
                     <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-ink">
                       {member.name || "Conta sem nome"}
@@ -452,7 +452,7 @@ export default function AccessRequests() {
                 return (
                   <li key={conta.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                     <div className="flex min-w-0 items-start gap-3">
-                      <AvatarDaConta email={conta.email} nome={conta.companyName || conta.name} className="mt-0.5 size-8 text-sm" />
+                      <AvatarDaConta email={conta.email} nome={conta.companyName || conta.name} className="mt-0.5 size-9" />
                       <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-ink">{conta.companyName || conta.name || "Conta sem nome"}</p>
                       <p className="mt-0.5 truncate text-[13px] text-ink-soft">{conta.email || "E-mail não informado"}</p>

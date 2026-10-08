@@ -414,7 +414,7 @@ export default function PortalLayout({
                   "ocupado" de manhã não lembra disso à tarde sem abrir o
                   menu. */}
               <span className="relative flex shrink-0">
-                <AvatarDaConta email={user.email} nome={user.name} className="size-8 text-sm" />
+                <AvatarDaConta email={user.email} nome={user.name} className="size-9" />
                 <span
                   title={`${ROTULO_DA_SITUACAO[situacao].rotulo} — ${ROTULO_DA_SITUACAO[situacao].explica}`}
                   className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-surface ${CORES_DA_SITUACAO[situacao]}`}
@@ -648,7 +648,7 @@ export default function PortalLayout({
         {profileOpen && (
           <div className="absolute right-5 top-[4.25rem] w-[19rem] max-w-[calc(100vw-2.5rem)] rounded-2xl border border-line bg-surface p-4 shadow-lg sm:right-8">
             <div className="flex items-start gap-3">
-              <AvatarDaConta email={user.email} nome={user.name} className="size-10 text-base" />
+              <AvatarDaConta email={user.email} nome={user.name} className="size-10" />
               <div className="min-w-0">
                 <p className="truncate font-display text-sm font-extrabold text-ink">{user.name || "Acesso RVD"}</p>
                 <p className="mt-1 truncate text-xs text-ink-soft">{user.email}</p>

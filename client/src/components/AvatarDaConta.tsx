@@ -1,15 +1,23 @@
-import { corDaConta, inicialDaConta, marcaDoEmail, MARCAS_DA_CONTA } from "@shared/marcaDaConta";
+import { inicialDaConta, marcaDoEmail, MARCAS_DA_CONTA } from "@shared/marcaDaConta";
+import { useId } from "react";
+
+/** O azul do logo, que corta as letras na diagonal. */
+const AZUL_DA_MARCA = "#8FBED1";
 
 /**
  * O que aparece no lugar do retrato de cada conta.
  *
- * A letra de quem usa, e não o logo da RVD. O logo em toda linha não distingue
- * ninguém — todo mundo de dentro é da RVD —, enquanto a inicial é o que o olho
- * procura numa lista de contas: o K do Kevyn, o B da Brenna.
+ * A inicial de quem usa, desenhada como as letras do logo: cheia, pesada, e
+ * cortada na diagonal pelo azul da marca — é o que o R e o D do RVD fazem. Uma
+ * letra qualquer dentro de um quadradinho colorido seria o avatar de qualquer
+ * sistema; esta pertence a este.
  *
- * A exceção é a Amil, que fica com o logo dela. Aí a marca carrega a
- * informação que de fato muda de linha para linha: essa conta é de fora da
- * casa, é de quem planeja. Trocá-la por um "L" perderia isso.
+ * O logo da RVD em toda linha não distinguia ninguém, porque todo mundo de
+ * dentro é da RVD. A inicial distingue: o K do Kevyn, o B da Brenna.
+ *
+ * A exceção é a Amil, que fica com o logo dela. Ali a marca carrega a
+ * informação que de fato muda de linha para linha — essa conta é de fora da
+ * casa, é de quem planeja —, e trocá-la por um "L" perderia isso.
  */
 export default function AvatarDaConta({
   email,
@@ -21,9 +29,11 @@ export default function AvatarDaConta({
   nome?: string | null;
   className?: string;
 }) {
-  const marca = marcaDoEmail(email);
+  // Um corte por instância: dois avatares na mesma tela não podem dividir o
+  // mesmo recorte, ou o segundo herda o do primeiro.
+  const corte = useId().replace(/:/g, "");
 
-  if (marca === "amil") {
+  if (marcaDoEmail(email) === "amil") {
     const dados = MARCAS_DA_CONTA.amil;
     return (
       <span title={dados.nome} className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white ${className}`}>
@@ -32,16 +42,40 @@ export default function AvatarDaConta({
     );
   }
 
-  // As duas cores do logo, sorteadas pelo que identifica a conta: a mesma
-  // pessoa fica sempre com a mesma, em qualquer tela.
-  const cor = corDaConta(email || nome);
+  const letra = inicialDaConta(nome, email);
   return (
-    <span
-      aria-hidden
-      style={{ backgroundColor: cor.fundo, color: cor.letra }}
-      className={`flex shrink-0 items-center justify-center rounded-lg font-display font-extrabold leading-none ${className}`}
-    >
-      {inicialDaConta(nome, email)}
-    </span>
+    <svg viewBox="0 0 40 40" role="img" aria-label={letra} className={`shrink-0 text-rvd-plum ${className}`}>
+      <defs>
+        {/* A diagonal que sobe da base, como a que corta o R do logo. */}
+        <clipPath id={corte}>
+          <polygon points="0,40 40,40 0,9" />
+        </clipPath>
+      </defs>
+      <text
+        x="20"
+        y="33"
+        textAnchor="middle"
+        fill="currentColor"
+        className="font-display"
+        fontSize="38"
+        fontWeight="800"
+        letterSpacing="-1"
+      >
+        {letra}
+      </text>
+      <text
+        x="20"
+        y="33"
+        textAnchor="middle"
+        fill={AZUL_DA_MARCA}
+        clipPath={`url(#${corte})`}
+        className="font-display"
+        fontSize="38"
+        fontWeight="800"
+        letterSpacing="-1"
+      >
+        {letra}
+      </text>
+    </svg>
   );
 }
