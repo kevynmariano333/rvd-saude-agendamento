@@ -3,7 +3,8 @@ import { trpc } from "@/lib/trpc";
 import { homePathFor, isPortalSchedulingDesk, type PortalRole, type PortalStatus, statusCopy } from "@/lib/portal";
 import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
 import { UNIDADES, unidadePorCnpj } from "@shared/recipients";
-import { CalendarDays, ChevronLeft, ChevronRight, FileText, Package, X } from "lucide-react";
+import { volumesDasNotas } from "@shared/dataDoCalendario";
+import { Boxes, CalendarDays, ChevronLeft, ChevronRight, FileText, Package, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import AppointmentDetailsDialog, { type AppointmentDetail } from "../components/AppointmentDetailsDialog";
@@ -96,6 +97,9 @@ export default function CalendarPage() {
     return mapa;
   }, [notas]);
 
+  // A soma do mês acompanha o filtro de unidade: trocar para HSH e continuar
+  // vendo o total das duas faria o número mentir.
+  const volumesDoMes = useMemo(() => volumesDasNotas(notas), [notas]);
   const celulas = useMemo(() => celulasDoMes(mes), [mes]);
   const hoje = chaveDoDia(new Date());
   const doDiaAberto = diaAberto ? (porDia.get(diaAberto) ?? []) : [];
@@ -123,7 +127,14 @@ export default function CalendarPage() {
           {UNIDADES.map(item => <ChipDeUnidade key={item.cnpj} ativo={unidade === item.cnpj} cor={corDaUnidade(item.cnpj)} onClick={() => setUnidade(item.cnpj)}>{item.sigla}</ChipDeUnidade>)}
         </div>
         <div className="flex flex-wrap items-center gap-4 text-xs text-ink-soft">
-          <span><strong className="font-extrabold text-ink">{notas.length}</strong> nota(s) a chegar em <span className="capitalize">{mes.toLocaleDateString("pt-BR", { month: "long" })}</span></span>
+          <span>
+            <strong className="font-extrabold text-ink">{notas.length}</strong> nota(s) e{" "}
+            <strong className="font-extrabold text-ink">{volumesDoMes.total.toLocaleString("pt-BR")}</strong> volume(s) a chegar em{" "}
+            <span className="capitalize">{mes.toLocaleDateString("pt-BR", { month: "long" })}</span>
+            {volumesDoMes.semContagem > 0 && (
+              <span title={`${volumesDoMes.semContagem} nota(s) sem a quantidade de volumes informada — a soma está incompleta.`}> · +{volumesDoMes.semContagem} sem contagem</span>
+            )}
+          </span>
           <span className="inline-flex items-center gap-1.5 font-bold uppercase tracking-wide text-state-stop"><span className="size-2 rounded-full bg-state-stop" />Contém urgente</span>
         </div>
       </div>
@@ -141,13 +152,17 @@ export default function CalendarPage() {
               const urgente = doDia.some(nota => pedidosDaNota(nota.purchaseOrder).some(pedidoEhUrgente));
               const porUnidade = UNIDADES.map(item => ({ ...item, total: doDia.filter(nota => nota.recipientCnpj === item.cnpj).length })).filter(item => item.total > 0);
               const outras = doDia.length - porUnidade.reduce((soma, item) => soma + item.total, 0);
+              // O número de notas não diz o tamanho do dia: cinco notas de uma
+              // caixa cada ocupam vinte minutos da doca, e uma de trezentos
+              // volumes toma a manhã inteira.
+              const volumes = volumesDasNotas(doDia);
               return (
                 <button
                   key={chave}
                   type="button"
                   disabled={!doDia.length}
                   onClick={() => setDiaAberto(atual => (atual === chave ? null : chave))}
-                  title={doDia.length ? `${doDia.length} nota(s) em ${dia.toLocaleDateString("pt-BR")}` : undefined}
+                  title={doDia.length ? `${doDia.length} nota(s) e ${volumes.total.toLocaleString("pt-BR")} volume(s) em ${dia.toLocaleDateString("pt-BR")}${volumes.semContagem ? ` · ${volumes.semContagem} nota(s) sem a quantidade informada` : ""}` : undefined}
                   className={`relative min-h-24 border-b border-l border-line p-2.5 text-left transition first:border-l-0 ${doDia.length ? "cursor-pointer hover:bg-rvd-plum-pale/50" : "cursor-default"} ${doMes ? "" : "bg-sunken/60"} ${diaAberto === chave ? "ring-2 ring-inset ring-rvd-plum" : ""}`}
                 >
                   <span className={`inline-flex size-6 items-center justify-center rounded-full text-xs font-bold ${chave === hoje ? "bg-brand text-white" : doMes ? "text-ink-soft" : "text-ink-faint"}`}>{dia.getDate()}</span>
@@ -158,6 +173,11 @@ export default function CalendarPage() {
                       {porUnidade.map(item => <span key={item.cnpj} className="inline-flex items-center gap-1 text-[10px] font-bold text-ink-soft"><span className={`size-1.5 rounded-full ${corDaUnidade(item.cnpj)}`} />{item.sigla} {item.total}</span>)}
                       {outras > 0 && <span className="inline-flex items-center gap-1 text-[10px] font-bold text-ink-soft"><span className="size-1.5 rounded-full bg-ink-faint" />Outros {outras}</span>}
                     </div>
+                    <p className="mt-1 flex items-center gap-1 text-[10px] text-ink-faint">
+                      <Boxes className="size-3 shrink-0" />
+                      {volumes.total.toLocaleString("pt-BR")} volume(s)
+                      {volumes.semContagem > 0 && <span title={`${volumes.semContagem} nota(s) sem a quantidade informada`}>+{volumes.semContagem}?</span>}
+                    </p>
                   </>}
                 </button>
               );
@@ -202,6 +222,7 @@ function DiaAberto({ dia, notas, onFechar, onAbrirNota }: { dia: string; notas: 
   // fora do campo de visão e parece que nada aconteceu.
   const quadro = useRef<HTMLElement>(null);
   useEffect(() => { quadro.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [dia]);
+  const volumesDoDia = volumesDasNotas(notas);
   const porHora = new Map<string, NotaDoCalendario[]>();
   for (const nota of notas) {
     const hora = `${String(new Date(nota.dataDoCalendario).getHours()).padStart(2, "0")}:00`;
@@ -213,7 +234,7 @@ function DiaAberto({ dia, notas, onFechar, onAbrirNota }: { dia: string; notas: 
   return (
     <section ref={quadro} className="mt-6 panel overflow-hidden scroll-mt-4">
       <header className="flex items-center justify-between gap-3 border-b border-line bg-sunken px-5 py-3.5">
-        <p className="inline-flex items-center gap-2 text-sm font-extrabold capitalize text-ink"><CalendarDays className="size-4 text-rvd-plum" />{titulo}<span className="rounded-full bg-rvd-plum-pale px-2 py-0.5 text-[11px] font-extrabold uppercase text-rvd-plum">{notas.length}</span></p>
+        <p className="inline-flex items-center gap-2 text-sm font-extrabold capitalize text-ink"><CalendarDays className="size-4 text-rvd-plum" />{titulo}<span className="rounded-full bg-rvd-plum-pale px-2 py-0.5 text-[11px] font-extrabold uppercase text-rvd-plum">{notas.length}</span><span className="inline-flex items-center gap-1 text-[11px] font-bold normal-case text-ink-soft"><Boxes className="size-3.5" />{volumesDoDia.total.toLocaleString("pt-BR")} volume(s){volumesDoDia.semContagem > 0 && <span title={`${volumesDoDia.semContagem} nota(s) sem a quantidade informada`}> · +{volumesDoDia.semContagem} sem contagem</span>}</span></p>
         <button type="button" onClick={onFechar} title="Fechar o dia" className="rounded-lg p-1.5 text-ink-faint hover:bg-rvd-plum-pale hover:text-rvd-plum"><X className="size-4" /></button>
       </header>
       <div className="divide-y divide-line">

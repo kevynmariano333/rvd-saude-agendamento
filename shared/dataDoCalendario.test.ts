@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dataQueValeNoCalendario, notasDoCalendario, propostasNoPeriodo } from "./dataDoCalendario";
+import { dataQueValeNoCalendario, notasDoCalendario, propostasNoPeriodo , volumesDasNotas } from "./dataDoCalendario";
 
 const setembro = { inicio: new Date("2026-09-01T00:00:00Z"), fim: new Date("2026-09-30T23:59:59Z") };
 const outubro = { inicio: new Date("2026-10-01T00:00:00Z"), fim: new Date("2026-10-31T23:59:59Z") };
@@ -56,5 +56,26 @@ describe("as propostas do período", () => {
   it("devolve só as notas propostas para dentro dele", () => {
     expect(propostasNoPeriodo([proposta], outubro.inicio, outubro.fim)).toEqual([1]);
     expect(propostasNoPeriodo([proposta], setembro.inicio, setembro.fim)).toEqual([]);
+  });
+});
+
+describe("os volumes do dia", () => {
+  it("soma o que as notas trazem", () => {
+    // Cinco notas de uma caixa ocupam a doca por vinte minutos; uma nota de
+    // trezentos volumes toma a manhã inteira. O número de notas não diz isso.
+    expect(volumesDasNotas([{ invoiceVolumeCount: 12 }, { invoiceVolumeCount: 300 }])).toEqual({ total: 312, semContagem: 0 });
+  });
+
+  it("nota sem contagem não vira zero: volta contada à parte", () => {
+    // Zero diria que a carga é vazia; o que houve é que ninguém informou.
+    expect(volumesDasNotas([{ invoiceVolumeCount: 10 }, { invoiceVolumeCount: null }, {}])).toEqual({ total: 10, semContagem: 2 });
+  });
+
+  it("valor estragado no banco não contamina a soma", () => {
+    expect(volumesDasNotas([{ invoiceVolumeCount: -5 }, { invoiceVolumeCount: 0 }, { invoiceVolumeCount: 7.8 }])).toEqual({ total: 7, semContagem: 2 });
+  });
+
+  it("dia sem nota nenhuma soma zero", () => {
+    expect(volumesDasNotas([])).toEqual({ total: 0, semContagem: 0 });
   });
 });

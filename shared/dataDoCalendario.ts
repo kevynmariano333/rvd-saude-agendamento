@@ -49,3 +49,29 @@ export function propostasNoPeriodo(propostas: PropostaEmAberto[], inicio: Date, 
     })
     .map(linha => linha.appointmentId);
 }
+
+/** O que basta saber de uma nota para somar o que ela traz na carroceria. */
+export type NotaComVolume = { invoiceVolumeCount?: number | null };
+
+/**
+ * Quantos volumes o dia espera.
+ *
+ * O número de notas não diz o tamanho do dia: cinco notas de uma caixa cada
+ * ocupam a doca por vinte minutos, e uma nota de trezentos volumes toma a
+ * manhã inteira. Quem monta a agenda precisa dos dois números para decidir
+ * quantos agendamentos cabem numa data.
+ *
+ * As notas sem contagem voltam separadas, e não como zero: zero diria que a
+ * carga é vazia, quando o que houve é que ninguém informou. A tela precisa
+ * poder avisar que a soma está incompleta.
+ */
+export function volumesDasNotas(notas: NotaComVolume[]): { total: number; semContagem: number } {
+  let total = 0;
+  let semContagem = 0;
+  for (const nota of notas) {
+    const volumes = Number(nota.invoiceVolumeCount);
+    if (!Number.isFinite(volumes) || volumes <= 0) semContagem += 1;
+    else total += Math.floor(volumes);
+  }
+  return { total, semContagem };
+}
