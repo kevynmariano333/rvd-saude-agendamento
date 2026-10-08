@@ -263,6 +263,28 @@ const corDaFaixa: Record<string, string> = {
  * O "de 10" conta datas combinadas, e não notas: a entrega remarcada duas
  * vezes queimou três datas da doca, e é assim que ela aparece aqui.
  */
+/**
+ * A linha de baixo de cada fornecedor: o que forma a nota, em palavras.
+ *
+ * O não comparecimento vem nomeado, e não só subentendido no "5 de 7". É o
+ * número que a operação leva para a reunião com o fornecedor, e ele precisa
+ * estar escrito do jeito que se fala dele.
+ */
+function resumoDoFornecedor(linha: NotaDoFornecedor) {
+  const plural = (quantidade: number, singular: string, plural: string) => `${quantidade} ${quantidade > 1 ? plural : singular}`;
+  const partes = [
+    linha.comDataCombinada > 0
+      ? `Chegou no dia em ${linha.noPrazo} de ${plural(linha.comDataCombinada, "data combinada", "datas combinadas")}`
+      : "Sem data combinada para cobrar",
+  ];
+  if (linha.datasFuradas > 0) partes.push(plural(linha.datasFuradas, "não comparecimento", "não comparecimentos"));
+  if (linha.recusadas > 0) partes.push(plural(linha.recusadas, "recusa", "recusas"));
+  // "0 entregas" era o jeito mais confuso de dizer que o fornecedor só deixou
+  // datas passarem: parece um erro de conta, e não a notícia que é.
+  partes.push(linha.entregas > 0 ? plural(linha.entregas, "entrega", "entregas") : "nenhuma entrega concluída");
+  return partes.join(" · ");
+}
+
 function RankingDeQualificacao({ linhas, periodo }: { linhas: NotaDoFornecedor[]; periodo: string }) {
   if (!linhas.length) {
     return (
@@ -286,11 +308,7 @@ function RankingDeQualificacao({ linhas, periodo }: { linhas: NotaDoFornecedor[]
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-bold text-rvd-plum" title={linha.nome}>{linha.nome}</span>
                 <span className="mt-0.5 block text-[11px] text-ink-soft">
-                  {linha.comDataCombinada > 0
-                    ? `Chegou no dia em ${linha.noPrazo} de ${linha.comDataCombinada} data${linha.comDataCombinada > 1 ? "s" : ""} combinada${linha.comDataCombinada > 1 ? "s" : ""}`
-                    : "Sem data combinada para cobrar"}
-                  {linha.recusadas > 0 ? ` · ${linha.recusadas} recusa${linha.recusadas > 1 ? "s" : ""}` : ""}
-                  {` · ${linha.entregas} entrega${linha.entregas > 1 ? "s" : ""}`}
+                  {resumoDoFornecedor(linha)}
                 </span>
               </span>
               <span className="shrink-0 text-right">
@@ -312,8 +330,9 @@ function RankingDeQualificacao({ linhas, periodo }: { linhas: NotaDoFornecedor[]
       <p className="mt-4 border-t border-line pt-3 text-[11px] leading-5 text-ink-faint">
         A nota junta pontualidade (chegou no dia combinado) e aceitação (não foi recusada), com o mesmo peso.
         A pontualidade conta datas, não notas: remarcar não apaga o dia perdido, e cada data confirmada que
-        passa em branco entra como mais uma. Quem tem menos de {MINIMO_PARA_RANQUEAR} entregas no período
-        aparece sem nota: pouco volume vira ranking por acaso.
+        passa em branco entra como mais uma, sem esperar a carga chegar. Quem tem menos de{" "}
+        {MINIMO_PARA_RANQUEAR} entregas ou faltas no período aparece sem nota: pouco volume vira ranking por
+        acaso.
       </p>
     </>
   );

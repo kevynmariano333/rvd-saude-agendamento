@@ -1,4 +1,4 @@
-import { ranquearFornecedores } from "../shared/qualificacaoDoFornecedor";
+import { ranquearFornecedores, recortarRanking } from "../shared/qualificacaoDoFornecedor";
 import type { AppointmentStatus } from "../drizzle/schema";
 import { UNIDADES, unidadePorCnpj } from "../shared/recipients";
 
@@ -22,8 +22,8 @@ export type DashboardAppointment = {
   rejectionReasonCode?: string | null;
   /** Quando a nota mudou de estado pela última vez — é quando a recusa aconteceu. */
   updatedAt?: Date | null;
-  /** Datas confirmadas que passaram sem a carga chegar, vindas do histórico. */
-  datasFuradas?: number | null;
+  /** As datas confirmadas que passaram sem a carga chegar, vindas do histórico. */
+  datasFuradas?: Date[] | null;
 };
 
 /**
@@ -156,13 +156,20 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
     // recebido: a entrega recusada nunca é recebida, e é justamente ela que
     // precisa pesar na nota do fornecedor.
     //
-    // Cada nota entra com as datas que ela queimou no caminho: remarcar troca o
-    // combinado no cadastro, e sem isso a entrega que furou duas vezes e chegou
-    // na terceira ficava com pontualidade cheia.
-    qualificacao: ranquearFornecedores(
+    // A ausência também entra por conta própria. A nota remarcada volta para
+    // "agendada" e perde o desfecho, então o fornecedor que não apareceu
+    // nenhuma vez sumia do card inteiro — onze notas, onze faltas, e uma lista
+    // onde ele não existia. A falta é do dia que ficou vazio, e é no mês desse
+    // dia que ela aparece.
+    qualificacao: recortarRanking(
+      ranquearFornecedores(
       items
-        .filter(item => isWithinPeriod(item.receivedAt, start, end) || (item.status === "rejected" && isWithinPeriod(item.updatedAt ?? null, start, end)))
-        .map(item => ({
+        .map(item => ({ item, furadas: (item.datasFuradas ?? []).filter(dia => isWithinPeriod(dia, start, end)).length }))
+        .filter(
+          ({ item, furadas }) =>
+            furadas > 0 || isWithinPeriod(item.receivedAt, start, end) || (item.status === "rejected" && isWithinPeriod(item.updatedAt ?? null, start, end)),
+        )
+        .map(({ item, furadas }) => ({
           cnpj: item.invoiceSupplierCnpj,
           nome: item.invoiceSupplierName,
           status: item.status,
@@ -170,9 +177,10 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
           receivedAt: item.receivedAt,
           semAgendamento: item.semAgendamento,
           rejectionReasonCode: item.rejectionReasonCode,
-          datasFuradas: item.datasFuradas,
+          datasFuradas: furadas,
         })),
-    ).slice(0, 12),
+      ),
+    ),
     topSuppliers: Array.from(receivedBySupplier, ([name, notesReceived]) => ({ name, notesReceived }))
       .sort((a, b) => b.notesReceived - a.notesReceived || a.name.localeCompare(b.name, "pt-BR"))
       .slice(0, 5),

@@ -56,8 +56,14 @@ export type NotaDoFornecedor = {
   recusasPorMotivo: Record<string, number>;
   /** 0 a 100, ou null quando não há data combinada para medir. */
   pontualidade: number | null;
-  /** 0 a 100: a proporção de entregas que não acabaram recusadas. */
-  aceitacao: number;
+  /**
+   * 0 a 100: a proporção de entregas que não acabaram recusadas.
+   *
+   * Null quando nenhuma entrega chegou a um desfecho no período — é o caso do
+   * fornecedor que só deixou datas passarem em branco. Ele não tem aceitação
+   * boa nem ruim; tem ausência, e é a pontualidade que fala por ele.
+   */
+  aceitacao: number | null;
   /** A nota final, 0 a 100. Null quando não há base para calcular. */
   nota: number | null;
   /** Tem entregas suficientes para ser comparado com os outros? */
@@ -134,7 +140,11 @@ export function furouOCompromisso(troca: {
  */
 export function compromissosDaEntrega(entrega: EntregaAvaliada): { combinados: number; cumpridos: number } {
   const furadas = Math.max(0, entrega.datasFuradas ?? 0);
-  const chegou = chegouNoDia(entrega);
+  // A nota remarcada volta para "agendada" e deixa de ter desfecho. A falta
+  // que já aconteceu não espera por ele: o dia perdido é fato consumado, e
+  // esperar a carga chegar para contá-lo é o que fazia o fornecedor que não
+  // apareceu nenhuma vez sumir do ranking em vez de encabeçá-lo.
+  const chegou = temDesfecho(entrega) ? chegouNoDia(entrega) : null;
   return {
     combinados: furadas + (chegou === null ? 0 : 1),
     cumpridos: chegou === true ? 1 : 0,
@@ -154,9 +164,12 @@ export function temDesfecho(entrega: EntregaAvaliada): boolean {
  * com a carga avariada ocupa a doca e não entrega nada.
  *
  * Fornecedor sem nenhuma entrega com data combinada não tem pontualidade para
- * medir — a nota dele é só a aceitação, e não um zero que ele não mereceu.
+ * medir — a nota dele é só a aceitação, e não um zero que ele não mereceu. E
+ * quem só deixou datas passarem em branco não tem aceitação para medir: a nota
+ * dele é a pontualidade, que é o que ele de fato produziu.
  */
-export function notaFinal(pontualidade: number | null, aceitacao: number): number {
+export function notaFinal(pontualidade: number | null, aceitacao: number | null): number {
+  if (aceitacao === null) return Math.round(pontualidade ?? 0);
   if (pontualidade === null) return Math.round(aceitacao);
   return Math.round(pontualidade * 0.5 + aceitacao * 0.5);
 }
@@ -185,7 +198,11 @@ export function faixaDaNota(nota: number | null): "sem base" | "ótimo" | "bom" 
 export function ranquearFornecedores(entregas: EntregaAvaliada[]): NotaDoFornecedor[] {
   const porCnpj = new Map<string, EntregaAvaliada[]>();
   for (const entrega of entregas) {
-    if (!temDesfecho(entrega)) continue;
+    // Entra quem tem o que mostrar: uma entrega que acabou, ou uma data que
+    // ficou pelo caminho. A nota ainda aberta que já queimou um dia conta pelo
+    // dia queimado — era isso que fazia o fornecedor de onze faltas e nenhuma
+    // entrega desaparecer da lista, que é exatamente onde ele precisa estar.
+    if (!temDesfecho(entrega) && !(entrega.datasFuradas ?? 0)) continue;
     const cnpj = apenasDigitos(entrega.cnpj ?? "");
     if (!cnpj) continue;
     const lista = porCnpj.get(cnpj);
@@ -199,28 +216,34 @@ export function ranquearFornecedores(entregas: EntregaAvaliada[]): NotaDoFornece
     const comDataCombinada = compromissos.reduce((total, item) => total + item.combinados, 0);
     const noPrazo = compromissos.reduce((total, item) => total + item.cumpridos, 0);
     const datasFuradas = comDataCombinada - noPrazo;
-    const recusadas = lista.filter(entrega => entrega.status === "rejected");
+    // Aceitação é sobre carga que foi conferida: a nota que nunca chegou não
+    // foi aceita nem recusada, e somá-la aqui diluiria a recusa de verdade.
+    const concluidas = lista.filter(temDesfecho);
+    const recusadas = concluidas.filter(entrega => entrega.status === "rejected");
     const recusasPorMotivo: Record<string, number> = {};
     for (const recusada of recusadas) {
       const motivo = recusada.rejectionReasonCode?.trim() || "SEM_CODIGO";
       recusasPorMotivo[motivo] = (recusasPorMotivo[motivo] ?? 0) + 1;
     }
     const pontualidade = comDataCombinada ? (noPrazo / comDataCombinada) * 100 : null;
-    const aceitacao = ((lista.length - recusadas.length) / lista.length) * 100;
-    const temBase = lista.length >= MINIMO_PARA_RANQUEAR;
+    const aceitacao = concluidas.length ? ((concluidas.length - recusadas.length) / concluidas.length) * 100 : null;
+    // A falta conta como acontecimento observado, igual à entrega: onze datas
+    // perdidas são um padrão, não um dia ruim, e mandá-las para o rodapé de
+    // "sem base" seria esconder justamente quem precisa ser cobrado.
+    const temBase = concluidas.length + datasFuradas >= MINIMO_PARA_RANQUEAR;
     linhas.push({
       cnpj,
       // O nome mais recente que apareceu nas notas daquele CNPJ.
       nome: lista.map(entrega => entrega.nome?.trim()).filter(Boolean).pop() || "Fornecedor não identificado",
-      entregas: lista.length,
+      entregas: concluidas.length,
       comDataCombinada,
       noPrazo,
       datasFuradas,
       recusadas: recusadas.length,
       recusasPorMotivo,
       pontualidade: pontualidade === null ? null : Math.round(pontualidade),
-      aceitacao: Math.round(aceitacao),
-      nota: temBase ? notaFinal(pontualidade === null ? null : Math.round(pontualidade), Math.round(aceitacao)) : null,
+      aceitacao: aceitacao === null ? null : Math.round(aceitacao),
+      nota: temBase ? notaFinal(pontualidade === null ? null : Math.round(pontualidade), aceitacao === null ? null : Math.round(aceitacao)) : null,
       temBase,
     });
   }
@@ -232,4 +255,33 @@ export function ranquearFornecedores(entregas: EntregaAvaliada[]): NotaDoFornece
     if (a.temBase && b.temBase) return (b.nota ?? 0) - (a.nota ?? 0) || b.entregas - a.entregas;
     return b.entregas - a.entregas;
   });
+}
+
+/** Quantos fornecedores cabem no card sem ele virar uma tabela. */
+export const CABEM_NO_RANKING = 12;
+
+/**
+ * Quem fica quando não cabem todos.
+ *
+ * Cortar os doze primeiros guarda os melhores e joga fora os piores — o
+ * contrário do que o card serve para fazer. O fornecedor que não apareceu
+ * nenhuma vez fica no fim da ordem, que é exatamente onde a tesoura caía: ele
+ * passaria a existir no cálculo e continuaria invisível na tela.
+ *
+ * Então quem furou data nunca é cortado, e o corte come a ponta de cima, onde
+ * o décimo primeiro fornecedor nota 100 não diz nada que o primeiro já não
+ * tenha dito. A ordem de exibição continua a mesma: do melhor para o pior.
+ */
+export function recortarRanking(linhas: NotaDoFornecedor[], cabem = CABEM_NO_RANKING): NotaDoFornecedor[] {
+  if (linhas.length <= cabem) return linhas;
+  const faltaram = linhas
+    .filter(linha => linha.datasFuradas > 0)
+    .sort((a, b) => b.datasFuradas - a.datasFuradas)
+    .slice(0, cabem);
+  const ficam = new Set(faltaram);
+  for (const linha of linhas) {
+    if (ficam.size >= cabem) break;
+    ficam.add(linha);
+  }
+  return linhas.filter(linha => ficam.has(linha));
 }

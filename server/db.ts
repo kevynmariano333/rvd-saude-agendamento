@@ -625,20 +625,23 @@ export async function listAppointmentHistory(appointmentId: number) {
 }
 
 /**
- * Quantas datas confirmadas cada nota deixou passar em branco.
+ * Quais datas confirmadas cada nota deixou passar em branco.
  *
  * O cadastro guarda só a data que vale agora: remarcar escreve por cima, e a
  * terça perdida deixa de existir para quem olha a nota. O histórico guarda as
  * duas pontas de cada troca, e é dali que a qualificação tira o que o
  * fornecedor combinou e não cumpriu.
  *
+ * Devolve as datas, e não a contagem, porque o painel é por período: a falta
+ * pertence ao mês do dia que ficou vazio, e não ao mês em que alguém remarcou.
+ *
  * Traz todas as trocas de uma vez, e não uma consulta por nota: o painel
  * qualifica o mês inteiro, e seriam centenas de idas ao banco para montar um
  * card.
  */
-export async function contarDatasFuradas(): Promise<Map<number, number>> {
+export async function datasFuradasPorNota(): Promise<Map<number, Date[]>> {
   const db = await getDb();
-  const furadas = new Map<number, number>();
+  const furadas = new Map<number, Date[]>();
   if (!db) return furadas;
   const trocas = await db
     .select({
@@ -651,8 +654,10 @@ export async function contarDatasFuradas(): Promise<Map<number, number>> {
     .from(appointmentStatusHistory)
     .where(and(eq(appointmentStatusHistory.previousStatus, "scheduled"), isNotNull(appointmentStatusHistory.previousScheduledFor), isNotNull(appointmentStatusHistory.nextScheduledFor)));
   for (const troca of trocas) {
-    if (!furouOCompromisso(troca)) continue;
-    furadas.set(troca.appointmentId, (furadas.get(troca.appointmentId) ?? 0) + 1);
+    if (!furouOCompromisso(troca) || !troca.dataAnterior) continue;
+    const jaTem = furadas.get(troca.appointmentId);
+    if (jaTem) jaTem.push(troca.dataAnterior);
+    else furadas.set(troca.appointmentId, [troca.dataAnterior]);
   }
   return furadas;
 }

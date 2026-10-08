@@ -7,8 +7,10 @@ import {
   MINIMO_PARA_RANQUEAR,
   notaFinal,
   ranquearFornecedores,
+  recortarRanking,
   temDesfecho,
   type EntregaAvaliada,
+  type NotaDoFornecedor,
 } from "./qualificacaoDoFornecedor";
 
 const entrega = (dados: Partial<EntregaAvaliada> = {}): EntregaAvaliada => ({
@@ -101,6 +103,13 @@ describe("quantos compromissos cada entrega gerou", () => {
     expect(compromissosDaEntrega(entrega({ datasFuradas: 1, receivedAt: null, status: "rejected" }))).toEqual({ combinados: 1, cumpridos: 0 });
   });
 
+  it("a nota ainda aberta vale pelas datas que já queimou", () => {
+    // Remarcar devolve a nota para "agendada": ela perde o desfecho, e
+    // esperar a carga chegar para contar a falta é o que fazia o fornecedor
+    // que nunca apareceu sumir do ranking.
+    expect(compromissosDaEntrega(entrega({ status: "scheduled", receivedAt: null, datasFuradas: 2 }))).toEqual({ combinados: 2, cumpridos: 0 });
+  });
+
   it("entrega sem data combinada e sem falta não é cobrada", () => {
     expect(compromissosDaEntrega(entrega({ semAgendamento: true }))).toEqual({ combinados: 0, cumpridos: 0 });
   });
@@ -191,6 +200,39 @@ describe("o ranking", () => {
     expect(duas.pontualidade!).toBeLessThan(uma.pontualidade!);
   });
 
+  it("o fornecedor que só faltou aparece, e no topo da cobrança", () => {
+    // O caso que motivou a mudança: onze notas, onze ausências, nenhuma
+    // entrega — e uma lista de qualificação onde ele simplesmente não existia.
+    const faltas = Array.from({ length: 11 }, () => entrega({ status: "scheduled", receivedAt: null, datasFuradas: 1 }));
+    const [linha] = ranquearFornecedores(faltas);
+    expect(linha!.entregas).toBe(0);
+    expect(linha!.comDataCombinada).toBe(11);
+    expect(linha!.datasFuradas).toBe(11);
+    expect(linha!.pontualidade).toBe(0);
+    // Nenhuma carga foi conferida: não há aceitação boa nem ruim para somar.
+    expect(linha!.aceitacao).toBeNull();
+    expect(linha!.temBase).toBe(true);
+    expect(linha!.nota).toBe(0);
+  });
+
+  it("a falta acumula entrega a entrega", () => {
+    const faltas = (quantas: number) => ranquearFornecedores(Array.from({ length: quantas }, () => entrega({ status: "scheduled", receivedAt: null, datasFuradas: 1 })))[0]!;
+    expect(faltas(5).comDataCombinada).toBe(5);
+    expect(faltas(11).comDataCombinada).toBe(11);
+  });
+
+  it("a nota aberta não dilui a recusa de quem entregou", () => {
+    // Aceitação é sobre carga conferida. A nota que nunca chegou não foi
+    // aceita nem recusada, e contá-la ali faria a recusa parecer menor.
+    const [linha] = ranquearFornecedores([
+      ...varias(4),
+      entrega({ status: "rejected", receivedAt: null, rejectionReasonCode: "CARGA_AVARIADA" }),
+      entrega({ status: "scheduled", receivedAt: null, datasFuradas: 1 }),
+    ]);
+    expect(linha!.entregas).toBe(5);
+    expect(linha!.aceitacao).toBe(80);
+  });
+
   it("a recusa derruba a aceitação e aparece separada por motivo", () => {
     const [linha] = ranquearFornecedores([
       ...varias(8),
@@ -239,5 +281,60 @@ describe("o ranking", () => {
   it("o que está em aberto não entra na conta de ninguém", () => {
     const linhas = ranquearFornecedores(varias(5, { status: "scheduled" }));
     expect(linhas).toEqual([]);
+  });
+});
+
+describe("o que cabe no card", () => {
+  const linha = (dados: Partial<NotaDoFornecedor>): NotaDoFornecedor => ({
+    cnpj: "1",
+    nome: "Fornecedor",
+    entregas: 10,
+    comDataCombinada: 10,
+    noPrazo: 10,
+    datasFuradas: 0,
+    recusadas: 0,
+    recusasPorMotivo: {},
+    pontualidade: 100,
+    aceitacao: 100,
+    nota: 100,
+    temBase: true,
+    ...dados,
+  });
+
+  it("não corta ninguém quando todos cabem", () => {
+    const poucos = [linha({ cnpj: "a" }), linha({ cnpj: "b" })];
+    expect(recortarRanking(poucos, 12)).toEqual(poucos);
+  });
+
+  it("quem furou data nunca é cortado, por pior que seja a nota", () => {
+    // É o fim da ordem que a tesoura pegava — e é lá que fica o fornecedor
+    // que não apareceu nenhuma vez.
+    const otimos = Array.from({ length: 12 }, (_, i) => linha({ cnpj: `otimo-${i}` }));
+    const faltoso = linha({ cnpj: "faltoso", nota: 0, datasFuradas: 11, noPrazo: 0, entregas: 0 });
+    const mostradas = recortarRanking([...otimos, faltoso], 12);
+    expect(mostradas).toHaveLength(12);
+    expect(mostradas.map(l => l.cnpj)).toContain("faltoso");
+  });
+
+  it("o corte come a ponta de cima, onde a informação se repete", () => {
+    const otimos = Array.from({ length: 12 }, (_, i) => linha({ cnpj: `otimo-${i}` }));
+    const faltoso = linha({ cnpj: "faltoso", nota: 0, datasFuradas: 3, entregas: 0 });
+    const mostradas = recortarRanking([...otimos, faltoso], 12);
+    // Sai o último dos ótimos, não o que precisa ser cobrado.
+    expect(mostradas.map(l => l.cnpj)).not.toContain("otimo-11");
+    expect(mostradas[mostradas.length - 1]!.cnpj).toBe("faltoso");
+  });
+
+  it("com faltosos demais, ficam os que mais furaram", () => {
+    const faltosos = Array.from({ length: 15 }, (_, i) => linha({ cnpj: `faltoso-${i}`, datasFuradas: i + 1, nota: 10 }));
+    const mostradas = recortarRanking(faltosos, 12);
+    expect(mostradas).toHaveLength(12);
+    expect(mostradas.map(l => l.cnpj)).toContain("faltoso-14");
+    expect(mostradas.map(l => l.cnpj)).not.toContain("faltoso-0");
+  });
+
+  it("a ordem de exibição continua a do ranking", () => {
+    const linhas = [linha({ cnpj: "a" }), linha({ cnpj: "b", datasFuradas: 2, nota: 40 }), linha({ cnpj: "c" })];
+    expect(recortarRanking(linhas, 2).map(l => l.cnpj)).toEqual(["a", "b"]);
   });
 });
