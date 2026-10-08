@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import MarcaDoPortal from "../components/MarcaDoPortal";
 import { fieldClass } from "@/components/PortalKit";
 import {
   accessProfileLabel,
@@ -186,8 +187,7 @@ export default function Login() {
             </div>
           </div>
           <div className="relative z-10">
-            <p className="font-display text-lg font-extrabold">{MARCA.nome}</p>
-            <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-on-brand-soft">{MARCA.descricao}</p>
+            <MarcaDoPortal altura="h-6" tom="branco" comDescricao />
           </div>
           <div className="relative z-10 mt-20 max-w-md lg:mt-0">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-on-brand-soft">

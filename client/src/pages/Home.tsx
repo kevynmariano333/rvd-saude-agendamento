@@ -1,4 +1,5 @@
 import { accessProfilePath, accessProfiles } from "@/lib/accessProfiles";
+import MarcaDoPortal from "../components/MarcaDoPortal";
 import { homePathFor, type PortalRole } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
 import { ArrowRight, Check, ShieldCheck } from "lucide-react";
@@ -27,15 +28,7 @@ export default function Home() {
         <div className="absolute bottom-[-12rem] left-[-8rem] size-96 rounded-full bg-white/10" />
         <div className="relative z-10 mx-auto max-w-6xl px-6 py-10 sm:px-10 lg:px-12 lg:py-14">
           <div className="flex items-center gap-3">
-            <span className="flex size-11 items-center justify-center rounded-2xl bg-white/95 p-1.5">
-              <img src="/RVD-Saude.png" alt="RVD Saúde" className="size-full object-contain" />
-            </span>
-            <div>
-              <p className="font-display text-lg font-extrabold leading-tight">{MARCA.nome}</p>
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-brand-soft">
-                {MARCA.descricao}
-              </p>
-            </div>
+            <MarcaDoPortal altura="h-7" tom="branco" comDescricao />
           </div>
 
           <div className="mt-12 max-w-2xl lg:mt-16">

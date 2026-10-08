@@ -7,6 +7,7 @@ import { CORES_DA_SITUACAO } from "@/lib/presenca";
 import { marcaDoEmail } from "@shared/marcaDaConta";
 import LogoDaConta from "../components/LogoDaConta";
 import CaixaDeSugestao from "../components/CaixaDeSugestao";
+import MarcaDoPortal from "../components/MarcaDoPortal";
 import { unidadePorCnpj } from "@shared/recipients";
 import { trpc } from "@/lib/trpc";
 import {
@@ -306,13 +307,9 @@ export default function PortalLayout({
       <header className="sticky top-0 z-50 border-b border-line bg-surface/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-4 px-5 sm:px-8">
           <button onClick={() => go(homePath)} className="flex shrink-0 items-center gap-2.5 text-left">
-            <img src="/RVD-Saude.png" alt="RVD Saúde" className="size-9 rounded-xl object-cover" />
-            <span className="hidden min-w-0 sm:block">
-              <span className="block font-display text-sm font-extrabold leading-none text-rvd-plum">{MARCA.nome}</span>
-              <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">
-                {MARCA.descricao}
-              </span>
-            </span>
+            {/* As letras do RVD e o nome do sistema são a mesma marca, e não
+                duas coisas soltas lado a lado. */}
+            <MarcaDoPortal altura="h-5" comDescricao className="min-w-0" />
           </button>
 
           <nav className="hidden min-w-0 flex-1 items-center justify-center xl:flex">
