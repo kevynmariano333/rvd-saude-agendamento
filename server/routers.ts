@@ -1609,7 +1609,7 @@ export const appRouter = router({
         databaseUrl: ENV.databaseUrl,
         segredoDaSessao: ENV.cookieSecret,
         appUrl: ENV.appUrl,
-        contasDeTesteLigadas: politicaDasContasDeTeste().ligadas,
+        contasDeTeste: politicaDasContasDeTeste(),
         emailConfigurado: isMailerConfigured(),
         backupConfigurado: isS3Configured(),
       }),

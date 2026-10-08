@@ -10,6 +10,8 @@
  * painel de segurança que imprime a senha do banco é o próprio problema.
  */
 
+import { MINIMO_DA_SENHA_DE_TESTE, type EstadoDasContasDeTeste } from "./contasDeTeste";
+
 export type ItemDeSeguranca = {
   chave: string;
   titulo: string;
@@ -51,7 +53,14 @@ export function montarEstadoDeSeguranca(entrada: {
   databaseUrl: string;
   segredoDaSessao: string;
   appUrl: string;
-  contasDeTesteLigadas: boolean;
+  /**
+   * Por que as contas de teste estão como estão.
+   *
+   * Não basta dizer "desligadas": quem acabou de definir a senha na Railway e
+   * continua sem entrar precisa saber que ela foi recusada por ser curta — foi
+   * exatamente isso que aconteceu da primeira vez.
+   */
+  contasDeTeste: EstadoDasContasDeTeste;
   emailConfigurado: boolean;
   backupConfigurado: boolean;
 }): ItemDeSeguranca[] {
@@ -86,13 +95,17 @@ export function montarEstadoDeSeguranca(entrada: {
     {
       chave: "contasDeTeste",
       titulo: "Contas de teste",
-      ok: !entrada.contasDeTesteLigadas,
-      situacao: entrada.contasDeTesteLigadas
+      ok: !entrada.contasDeTeste.ligadas,
+      situacao: entrada.contasDeTeste.ligadas
         ? "Ligadas: o login de teste entra no sistema com a senha configurada."
-        : "Desligadas.",
-      comoResolver: entrada.contasDeTesteLigadas
+        : entrada.contasDeTeste.motivo === "senha configurada é curta demais"
+          ? `Desligadas: há uma senha em SENHA_CONTAS_TESTE, mas com menos de ${MINIMO_DA_SENHA_DE_TESTE} caracteres.`
+          : "Desligadas: nenhuma senha configurada.",
+      comoResolver: entrada.contasDeTeste.ligadas
         ? "Quando não precisar mais delas, apague a variável SENHA_CONTAS_TESTE na Railway."
-        : "",
+        : entrada.contasDeTeste.motivo === "senha configurada é curta demais"
+          ? `Para ligar, troque SENHA_CONTAS_TESTE na Railway por uma senha de ${MINIMO_DA_SENHA_DE_TESTE} caracteres ou mais. Enquanto for mais curta, o login de teste continua recusado.`
+          : `Para ligar durante um teste, defina SENHA_CONTAS_TESTE na Railway com ${MINIMO_DA_SENHA_DE_TESTE} caracteres ou mais — e apague a variável quando terminar.`,
     },
     {
       chave: "endereco",
