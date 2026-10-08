@@ -6,7 +6,7 @@ import { CheckCircle2, KeyRound, TriangleAlert } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { MARCA } from "@shared/marca";
+import MarcaDoPortal from "@/components/MarcaDoPortal";
 
 export default function PasswordReset() {
   const [, setLocation] = useLocation();
@@ -33,15 +33,7 @@ export default function PasswordReset() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-rvd-plum-pale px-4 py-10">
       <section className="w-full max-w-md rounded-3xl bg-surface p-7 shadow-xl sm:p-9">
-        <div className="flex items-center gap-3">
-          <img src="/RVD-Saude.png" alt="RVD Saúde" className="size-12 rounded-2xl object-contain" />
-          <div>
-            <p className="font-display text-lg font-extrabold text-ink">{MARCA.nome}</p>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-ink-faint">
-              Sistema de Agendamento
-            </p>
-          </div>
-        </div>
+        <MarcaDoPortal altura="h-8" comDescricao />
 
         {!token ? (
           <div className="mt-8 text-center">

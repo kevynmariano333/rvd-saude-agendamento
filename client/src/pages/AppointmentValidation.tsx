@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { CalendarClock, CheckCircle2, CircleX, FileText, Loader2, ShieldCheck } from "lucide-react";
+import MarcaDoPortal from "@/components/MarcaDoPortal";
 import { MARCA } from "@shared/marca";
 
 function formatDateTime(value: Date | string) {
@@ -16,9 +17,12 @@ export default function AppointmentValidation() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-rvd-plum-pale via-white to-rvd-blue-pale px-4 py-10 text-rvd-plum">
       <section className="mx-auto w-full max-w-xl">
-        <div className="mb-6 flex items-center gap-3 px-2">
-          <img src="/RVD-Saude.png" alt="RVD Saúde" className="size-14 rounded-2xl bg-surface object-contain p-1 shadow-sm" />
-          <div><p className="text-lg font-extrabold">{MARCA.nome}</p><p className="text-sm font-medium text-ink-soft">Validação de agendamento</p></div>
+        {/* A marca inteira, e não o logo da empresa com o nome do sistema
+            escrito ao lado: é a tela em que o motorista cai ao ler o QR do
+            comprovante, e ela precisa ser reconhecível como o mesmo portal. */}
+        <div className="mb-6 px-2">
+          <MarcaDoPortal altura="h-8" />
+          <p className="mt-1.5 text-sm font-medium text-ink-soft">Validação de agendamento</p>
         </div>
         <Card className="overflow-hidden border-line bg-surface shadow-xl shadow-rvd-plum/10">
           <div className={`h-2 ${isValid ? "bg-emerald-500" : "bg-brand"}`} />

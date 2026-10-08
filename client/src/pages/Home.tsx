@@ -1,4 +1,6 @@
 import { accessProfilePath, accessProfiles } from "@/lib/accessProfiles";
+import CaminhaoDaMarca from "../components/CaminhaoDaMarca";
+import FundoDaCapa from "../components/FundoDaCapa";
 import MarcaDoPortal from "../components/MarcaDoPortal";
 import { homePathFor, type PortalRole } from "@/lib/portal";
 import { trpc } from "@/lib/trpc";
@@ -24,24 +26,27 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-canvas">
       <section className="relative overflow-hidden bg-brand text-white">
-        <div className="absolute right-[-8rem] top-[-7rem] size-80 rounded-full bg-on-brand/40" />
-        <div className="absolute bottom-[-12rem] left-[-8rem] size-96 rounded-full bg-white/10" />
+        <FundoDaCapa corte="altoQuandoLarga" />
         <div className="relative z-10 mx-auto max-w-6xl px-6 py-10 sm:px-10 lg:px-12 lg:py-14">
-          <div className="flex items-center gap-3">
-            <MarcaDoPortal altura="h-7" tom="branco" comDescricao />
-          </div>
+          <MarcaDoPortal altura="h-9 sm:h-11" tom="branco" comDescricao />
 
-          <div className="mt-12 max-w-2xl lg:mt-16">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-on-brand-soft">
-              Organização que cuida do seu tempo
-            </p>
-            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.08] sm:text-5xl">
-              Do agendamento da nota à liberação do caminhão.
-            </h1>
-            <p className="mt-6 max-w-xl text-base leading-7 text-white/85">
-              Agendamento, portaria e pátio no mesmo portal. Escolha abaixo o acesso que é o seu e entre com a sua
-              conta.
-            </p>
+          {/* A frase à esquerda e o caminhão à direita, os dois apoiados na
+              mesma base: a capa fala de uma carga que chega, e o desenho dela
+              estava só na tela de entrada. */}
+          <div className="mt-12 grid gap-10 lg:mt-16 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div className="max-w-2xl">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-on-brand-soft">
+                Organização que cuida do seu tempo
+              </p>
+              <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.08] sm:text-5xl">
+                Do agendamento da nota à liberação do caminhão.
+              </h1>
+              <p className="mt-6 max-w-xl text-base leading-7 text-white/85">
+                Agendamento, portaria e pátio no mesmo portal. Escolha abaixo o acesso que é o seu e entre com a sua
+                conta.
+              </p>
+            </div>
+            <CaminhaoDaMarca tom="branco" className="rvd-login-truck hidden h-24 w-auto shrink-0 drop-shadow-xl lg:block" />
           </div>
         </div>
       </section>

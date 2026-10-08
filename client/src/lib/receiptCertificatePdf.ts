@@ -34,26 +34,54 @@ export function receiptCertificateFileName(invoiceNumber: string | null) {
   return `comprovante-agendamento-rvd-nf-${invoiceNumber || "sem-numero"}.pdf`;
 }
 
-let logoDataUrlPromise: Promise<string> | undefined;
+/**
+ * A proporção da marca, para quem a desenha no papel.
+ *
+ * Quem posiciona a marca escolhe a largura e multiplica: altura escolhida à
+ * mão esbarra em esticar o logo, que é o jeito mais fácil de estragá-lo.
+ */
+export const PROPORCAO_DA_MARCA = 332 / 1220;
 
-export function getRvdLogoDataUrl() {
-  if (logoDataUrlPromise) return logoDataUrlPromise;
-  logoDataUrlPromise = fetch("/RVD-Saude.png")
+/** A altura da marca para uma largura, em milímetros. */
+export function alturaDaMarca(largura: number) {
+  return largura * PROPORCAO_DA_MARCA;
+}
+
+const ARQUIVO_DA_MARCA = { tinta: "/RVDlog-mais.png", branco: "/RVDlog-mais-branco.png" } as const;
+const marcasCarregadas: Partial<Record<keyof typeof ARQUIVO_DA_MARCA, Promise<string>>> = {};
+
+/**
+ * A marca do portal para o papel, no mesmo desenho que está na tela.
+ *
+ * É a mesma arte do cabeçalho — as letras da RVD com o "log+" continuando
+ * nelas —, e não o logo da empresa com o nome do sistema escrito ao lado em
+ * Helvetica. O comprovante que o motorista leva e o espelho que a doca
+ * imprime são os lugares onde a marca mais circula fora daqui; eram os únicos
+ * que ainda mostravam a marca antiga.
+ *
+ * Em "branco" para faixa escura: o roxo das letras some em cima do roxo do
+ * cabeçalho.
+ */
+export function getMarcaDataUrl(tom: keyof typeof ARQUIVO_DA_MARCA = "tinta") {
+  const jaPedida = marcasCarregadas[tom];
+  if (jaPedida) return jaPedida;
+  const pedido = fetch(ARQUIVO_DA_MARCA[tom])
     .then(async response => {
-      if (!response.ok) throw new Error("Não foi possível carregar o logo da RVD Saúde.");
+      if (!response.ok) throw new Error("Não foi possível carregar a marca do portal.");
       const blob = await response.blob();
       return await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error("Não foi possível preparar o logo da RVD Saúde."));
+        reader.onerror = () => reject(new Error("Não foi possível preparar a marca do portal."));
         reader.readAsDataURL(blob);
       });
     })
     .catch(error => {
-      logoDataUrlPromise = undefined;
+      delete marcasCarregadas[tom];
       throw error;
     });
-  return logoDataUrlPromise;
+  marcasCarregadas[tom] = pedido;
+  return pedido;
 }
 
 const ALTURA_DA_LINHA_DO_AVISO = 4;
@@ -82,10 +110,12 @@ export async function generateReceiptCertificatePdf(data: ReceiptCertificateData
   const plum: [number, number, number] = [120, 32, 120];
   const blue: [number, number, number] = [142, 193, 217];
   doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 46, "F");
-  doc.setFillColor(247, 242, 247); doc.roundedRect(11, 5, 40, 32, 5, 5, "F");
-  try { doc.addImage(await getRvdLogoDataUrl(), "PNG", 14, 6.5, 34, 29); } catch { doc.setFillColor(...blue); doc.roundedRect(20, 13, 14, 14, 4, 4, "F"); }
-  doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(19); doc.text(MARCA.nome, 57, 20); doc.setFontSize(10); doc.text("AGENDAMENTO · COMPROVANTE PARA ENTREGA", 57, 28);
-  doc.setFont("helvetica", "normal"); doc.setTextColor(100, 75, 100); doc.setFontSize(8); doc.text("Documento digital de confirmação", 57, 34);
+  // A marca inteira, e não o logo com o nome escrito ao lado: a plaquinha
+  // existia para emoldurar um logo quadrado, e a marca é larga.
+  const larguraDaMarca = 58;
+  try { doc.addImage(await getMarcaDataUrl(), "PNG", 16, 13, larguraDaMarca, alturaDaMarca(larguraDaMarca)); } catch { doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(19); doc.text(MARCA.nome, 16, 25); }
+  doc.setTextColor(...plum); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("AGENDAMENTO · COMPROVANTE PARA ENTREGA", 82, 20);
+  doc.setFont("helvetica", "normal"); doc.setTextColor(100, 75, 100); doc.setFontSize(8); doc.text("Documento digital de confirmação", 82, 26);
   doc.setFillColor(...plum); doc.rect(0, 42, 210, 4, "F");
   doc.setTextColor(...plum); doc.setFontSize(19); doc.text("Comprovante de agendamento", 16, 64);
   doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(70, 50, 70); doc.text("Documento para acompanhar a entrega da nota fiscal agendada.", 16, 72);

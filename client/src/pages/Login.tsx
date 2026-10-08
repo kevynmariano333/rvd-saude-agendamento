@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import CaminhaoDaMarca from "../components/CaminhaoDaMarca";
+import FundoDaCapa from "../components/FundoDaCapa";
 import MarcaDoPortal from "../components/MarcaDoPortal";
 import { fieldClass } from "@/components/PortalKit";
 import {
@@ -174,16 +175,14 @@ export default function Login() {
     <main className="min-h-screen bg-canvas p-4 sm:p-6 lg:p-8">
       <div className="panel mx-auto grid min-h-[calc(100vh-2rem)] max-w-7xl overflow-hidden rounded-3xl lg:grid-cols-[1.05fr_0.95fr]">
         <section className="relative overflow-hidden bg-brand px-7 py-10 text-white sm:px-12 lg:flex lg:flex-col lg:justify-between lg:px-14 lg:py-14">
-          <div className="absolute right-[-6rem] top-[-5rem] size-64 rounded-full bg-on-brand/45" />
-          <div className="absolute bottom-[-10rem] left-[-7rem] size-80 rounded-full bg-white/10" />
-          <div className="absolute left-14 top-32 z-10 hidden sm:block" aria-hidden="true">
-            {/* O chão tracejado faz parte do desenho do caminhão agora. */}
-            <CaminhaoDaMarca tom="branco" className="rvd-login-truck h-20 w-auto drop-shadow-lg" />
-          </div>
+          <FundoDaCapa />
+          {/* A marca mandando na capa. Ela vinha menor que o caminhão, que é
+              o desenho que a acompanha — quem entra via o veículo antes de ver
+              de quem ele é. */}
           <div className="relative z-10">
-            <MarcaDoPortal altura="h-6" tom="branco" comDescricao />
+            <MarcaDoPortal altura="h-9 sm:h-11" tom="branco" comDescricao />
           </div>
-          <div className="relative z-10 mt-20 max-w-md lg:mt-0">
+          <div className="relative z-10 mt-14 max-w-md lg:mt-0">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-on-brand-soft">
               Organização que cuida do seu tempo
             </p>
@@ -195,10 +194,16 @@ export default function Login() {
               atendimento com histórico completo.
             </p>
           </div>
-          <div className="relative z-10 mt-12 flex flex-wrap gap-2 text-xs font-bold lg:mt-0">
-            <span className="rounded-full bg-white/15 px-3.5 py-1.5">Agendamentos</span>
-            <span className="rounded-full bg-white/15 px-3.5 py-1.5">Portaria</span>
-            <span className="rounded-full bg-white/15 px-3.5 py-1.5">Pátio</span>
+          {/* O caminhão desceu para a base, sobre a diagonal: ali ele anda
+              na direção do que a capa promete, em vez de flutuar no meio do
+              texto. O chão tracejado faz parte do desenho dele. */}
+          <div className="relative z-10 mt-12 flex items-end justify-between gap-6 lg:mt-0">
+            <div className="flex flex-wrap gap-2 text-xs font-bold">
+              <span className="rounded-full border border-white/25 bg-white/10 px-3.5 py-1.5 backdrop-blur-sm">Agendamentos</span>
+              <span className="rounded-full border border-white/25 bg-white/10 px-3.5 py-1.5 backdrop-blur-sm">Portaria</span>
+              <span className="rounded-full border border-white/25 bg-white/10 px-3.5 py-1.5 backdrop-blur-sm">Pátio</span>
+            </div>
+            <CaminhaoDaMarca tom="branco" className="rvd-login-truck hidden h-16 w-auto shrink-0 drop-shadow-xl sm:block" />
           </div>
         </section>
 

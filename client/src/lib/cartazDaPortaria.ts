@@ -1,7 +1,7 @@
 import type { jsPDF } from "jspdf";
 import { MARCA } from "@shared/marca";
 import { OPERADOR_LOGISTICO } from "@shared/operadorLogistico";
-import { carregarFerramentasDoPdf, getRvdLogoDataUrl } from "./receiptCertificatePdf";
+import { alturaDaMarca, carregarFerramentasDoPdf, getMarcaDataUrl } from "./receiptCertificatePdf";
 
 /**
  * O cartaz que fica na portaria.
@@ -41,18 +41,16 @@ export async function gerarCartazDaPortaria(enderecoDoPortal: string): Promise<j
   // Faixa do topo com a marca.
   doc.setFillColor(...PLUM);
   doc.rect(0, 0, 210, 40, "F");
+  const larguraDaMarca = 62;
   try {
-    doc.addImage(await getRvdLogoDataUrl(), "PNG", 16, 9, 26, 22);
+    doc.addImage(await getMarcaDataUrl("branco"), "PNG", 16, 11.5, larguraDaMarca, alturaDaMarca(larguraDaMarca));
   } catch {
-    // Sem o logo o cartaz continua servindo: o que importa é o QR.
+    // Sem a marca o cartaz continua servindo: o que importa é o QR.
   }
   doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(24);
-  doc.text(MARCA.nome, 48, 21);
-  doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
-  doc.text(MARCA.descricao.toUpperCase(), 48, 29);
+  doc.setFontSize(11);
+  doc.text(MARCA.descricao.toUpperCase(), 86, 22);
 
   // A chamada, no tamanho de quem lê de longe.
   doc.setTextColor(...PLUM);

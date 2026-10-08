@@ -1,7 +1,7 @@
 import type { jsPDF } from "jspdf";
 import { MARCA } from "@shared/marca";
 import { formatarCnpj, rotuloDoDestinatario, unidadePorCnpj } from "@shared/recipients";
-import { carregarFerramentasDoPdf, getRvdLogoDataUrl } from "./receiptCertificatePdf";
+import { alturaDaMarca, carregarFerramentasDoPdf, getMarcaDataUrl } from "./receiptCertificatePdf";
 
 /**
  * A nota fiscal desenhada numa folha, a partir do XML que já está guardado.
@@ -126,18 +126,21 @@ export async function gerarEspelhoDaNota(dados: DadosDoEspelho): Promise<jsPDF> 
   // Cabeçalho
   doc.setFillColor(...PLUM);
   doc.rect(0, 0, 210, 26, "F");
+  // Em branco: o roxo das letras sumiria em cima do roxo da faixa.
+  const larguraDaMarca = 40;
   try {
-    doc.addImage(await getRvdLogoDataUrl(), "PNG", 12, 4.5, 20, 17);
+    doc.addImage(await getMarcaDataUrl("branco"), "PNG", 12, 7.5, larguraDaMarca, alturaDaMarca(larguraDaMarca));
   } catch {
-    // Sem logo o cabeçalho continua de pé: o que importa é o conteúdo abaixo.
+    // Sem a marca o cabeçalho continua de pé: o que importa é o conteúdo abaixo.
   }
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
-  doc.text("ESPELHO DA NOTA FISCAL", 36, 12);
+  doc.text("ESPELHO DA NOTA FISCAL", 58, 12);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text(`${MARCA.nome} · conferência interna · não substitui o DANFE`, 36, 18);
+  // O nome do sistema saiu daqui: ele agora está desenhado ao lado.
+  doc.text("conferência interna · não substitui o DANFE", 58, 18);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
   doc.text(dados.invoiceNumber ? `Nº ${dados.invoiceNumber}` : "SEM NÚMERO", 198, 15, { align: "right" });
