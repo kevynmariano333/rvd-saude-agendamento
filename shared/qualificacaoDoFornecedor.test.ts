@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   chegouNoDia,
+  compromissosDaEntrega,
   faixaDaNota,
+  furouOCompromisso,
   MINIMO_PARA_RANQUEAR,
   notaFinal,
   ranquearFornecedores,
@@ -38,6 +40,69 @@ describe("chegou no dia combinado", () => {
 
   it("entrega que ainda não chegou não é julgada", () => {
     expect(chegouNoDia(entrega({ receivedAt: null }))).toBeNull();
+  });
+});
+
+describe("a data que o reagendamento apagava", () => {
+  const troca = (dados: Partial<Parameters<typeof furouOCompromisso>[0]> = {}) => ({
+    statusAnterior: "scheduled",
+    dataAnterior: "2026-09-10T11:00:00.000Z",
+    dataNova: "2026-09-17T11:00:00.000Z",
+    trocadaEm: "2026-09-11T08:00:00.000Z",
+    ...dados,
+  });
+
+  it("remarcar depois do dia perdido deixa a falta registrada", () => {
+    // É o caso que motivou tudo: a doca separou a terça, o caminhão não veio,
+    // e o reagendamento reescrevia o combinado como se a nova data sempre
+    // tivesse sido a combinada.
+    expect(furouOCompromisso(troca())).toBe(true);
+  });
+
+  it("remarcar antes do dia não é falta de ninguém", () => {
+    expect(furouOCompromisso(troca({ trocadaEm: "2026-09-08T15:00:00.000Z" }))).toBe(false);
+  });
+
+  it("mudar a hora dentro do próprio dia combinado não fura nada", () => {
+    // O dia é o que está sob o controle do fornecedor; a hora é a fila da
+    // doca, igual ao que `chegouNoDia` já decidia.
+    expect(furouOCompromisso(troca({ trocadaEm: "2026-09-10T18:00:00.000Z", dataNova: "2026-09-10T16:00:00.000Z" }))).toBe(false);
+  });
+
+  it("data que a nota pedia enquanto estava pendente não era compromisso", () => {
+    // O fornecedor pede um dia ao mandar a nota; o balcão confirmar depois
+    // dele não quer dizer que alguém faltou.
+    expect(furouOCompromisso(troca({ statusAnterior: "pending" }))).toBe(false);
+  });
+
+  it("confirmar a mesma data de novo não conta falta", () => {
+    expect(furouOCompromisso(troca({ dataNova: "2026-09-10T11:00:00.000Z" }))).toBe(false);
+  });
+
+  it("troca sem as duas pontas gravadas não vira acusação", () => {
+    expect(furouOCompromisso(troca({ dataAnterior: null }))).toBe(false);
+    expect(furouOCompromisso(troca({ dataNova: null }))).toBe(false);
+    expect(furouOCompromisso(troca({ trocadaEm: null }))).toBe(false);
+  });
+});
+
+describe("quantos compromissos cada entrega gerou", () => {
+  it("entrega sem remarcação é um compromisso só", () => {
+    expect(compromissosDaEntrega(entrega())).toEqual({ combinados: 1, cumpridos: 1 });
+  });
+
+  it("cada data furada no caminho entra como mais uma", () => {
+    // Remarcada duas vezes e entregue na terceira: a doca foi preparada três
+    // vezes e o caminhão veio numa. Vale 1 de 3, e não 1 de 1.
+    expect(compromissosDaEntrega(entrega({ datasFuradas: 2 }))).toEqual({ combinados: 3, cumpridos: 1 });
+  });
+
+  it("a nota que furou e nunca chegou conta só as faltas", () => {
+    expect(compromissosDaEntrega(entrega({ datasFuradas: 1, receivedAt: null, status: "rejected" }))).toEqual({ combinados: 1, cumpridos: 0 });
+  });
+
+  it("entrega sem data combinada e sem falta não é cobrada", () => {
+    expect(compromissosDaEntrega(entrega({ semAgendamento: true }))).toEqual({ combinados: 0, cumpridos: 0 });
   });
 });
 
@@ -102,6 +167,28 @@ describe("o ranking", () => {
     expect(linha!.entregas).toBe(5);
     expect(linha!.comDataCombinada).toBe(3);
     expect(linha!.pontualidade).toBe(100);
+  });
+
+  it("reagendar não limpa a ficha: a data perdida continua pesando", () => {
+    // Quatro entregas limpas e uma que furou o dia e foi remarcada. Antes a
+    // quinta chegava "no dia" e o fornecedor ficava com 100; agora são seis
+    // datas combinadas e cinco cumpridas.
+    const [linha] = ranquearFornecedores([...varias(4), entrega({ datasFuradas: 1 })]);
+    expect(linha!.entregas).toBe(5);
+    expect(linha!.comDataCombinada).toBe(6);
+    expect(linha!.noPrazo).toBe(5);
+    expect(linha!.datasFuradas).toBe(1);
+    expect(linha!.pontualidade).toBe(83);
+  });
+
+  it("furar de novo conta de novo", () => {
+    // É a regra que o balcão pediu: a segunda ausência não é a mesma falta
+    // contada outra vez, é mais uma.
+    const uma = ranquearFornecedores([...varias(4), entrega({ datasFuradas: 1 })])[0]!;
+    const duas = ranquearFornecedores([...varias(4), entrega({ datasFuradas: 2 })])[0]!;
+    expect(duas.comDataCombinada).toBe(uma.comDataCombinada + 1);
+    expect(duas.noPrazo).toBe(uma.noPrazo);
+    expect(duas.pontualidade!).toBeLessThan(uma.pontualidade!);
   });
 
   it("a recusa derruba a aceitação e aparece separada por motivo", () => {

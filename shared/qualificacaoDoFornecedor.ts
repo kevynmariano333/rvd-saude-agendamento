@@ -22,6 +22,14 @@ export type EntregaAvaliada = {
   /** O horário agendado nunca foi combinado — não dá para cobrar pontualidade. */
   semAgendamento?: boolean | null;
   rejectionReasonCode?: string | null;
+  /**
+   * Quantas datas já confirmadas passaram sem a carga chegar.
+   *
+   * Vem do histórico da nota, e não do estado dela: o reagendamento apaga a
+   * data antiga do cadastro, e sem este número a entrega remarcada três vezes
+   * fica indistinguível da que foi combinada uma vez e cumprida.
+   */
+  datasFuradas?: number | null;
 };
 
 /**
@@ -42,6 +50,8 @@ export type NotaDoFornecedor = {
   /** Quantas tinham data combinada — só essas valem para pontualidade. */
   comDataCombinada: number;
   noPrazo: number;
+  /** Datas confirmadas que passaram em branco, somadas as de todas as entregas. */
+  datasFuradas: number;
   recusadas: number;
   recusasPorMotivo: Record<string, number>;
   /** 0 a 100, ou null quando não há data combinada para medir. */
@@ -77,6 +87,58 @@ export function chegouNoDia(entrega: EntregaAvaliada): boolean | null {
     combinado.getMonth() === chegou.getMonth() &&
     combinado.getDate() === chegou.getDate()
   );
+}
+
+/**
+ * A data combinada passou em branco antes de ser trocada?
+ *
+ * Esta é a pergunta que o reagendamento apagava. Remarcar reescreve o
+ * `scheduledFor` da nota, então a entrega que furou terça e chegou na
+ * quinta ficava registrada como se quinta sempre tivesse sido o combinado —
+ * pontualidade cheia, e o fornecedor que obrigou a doca a se reorganizar
+ * saía igual ao que veio no dia.
+ *
+ * Só conta o que era compromisso de verdade: a data tem que ter sido
+ * confirmada (o estado anterior era "agendada"). A data que o fornecedor
+ * pediu enquanto a nota estava pendente é pedido, não acordo, e o balcão
+ * confirmar depois dela não é falta de ninguém.
+ *
+ * E conta pelo dia, não pela hora — do mesmo jeito que `chegouNoDia`. Mudar
+ * das 10h para as 15h da mesma terça é a doca se reorganizando; o que
+ * desorganiza a semana é a terça inteira passar sem o caminhão.
+ */
+export function furouOCompromisso(troca: {
+  statusAnterior: string | null | undefined;
+  dataAnterior: Date | string | null | undefined;
+  dataNova: Date | string | null | undefined;
+  trocadaEm: Date | string | null | undefined;
+}): boolean {
+  if (troca.statusAnterior !== "scheduled") return false;
+  const combinada = paraData(troca.dataAnterior);
+  const nova = paraData(troca.dataNova);
+  const trocadaEm = paraData(troca.trocadaEm);
+  if (!combinada || !nova || !trocadaEm) return false;
+  // Remarcação que não mexeu na data não desmarcou compromisso nenhum.
+  if (nova.getTime() === combinada.getTime()) return false;
+  const fimDoDiaCombinado = new Date(combinada);
+  fimDoDiaCombinado.setHours(23, 59, 59, 999);
+  return trocadaEm.getTime() > fimDoDiaCombinado.getTime();
+}
+
+/**
+ * Quantos compromissos a entrega gerou, e quantos foram cumpridos.
+ *
+ * Um por data confirmada, e não um por nota: cada remarcação depois do dia
+ * perdido é mais uma vez que a operação contou com um caminhão que não veio.
+ * A nota remarcada duas vezes e entregue na terceira vale 1 de 3, não 1 de 1.
+ */
+export function compromissosDaEntrega(entrega: EntregaAvaliada): { combinados: number; cumpridos: number } {
+  const furadas = Math.max(0, entrega.datasFuradas ?? 0);
+  const chegou = chegouNoDia(entrega);
+  return {
+    combinados: furadas + (chegou === null ? 0 : 1),
+    cumpridos: chegou === true ? 1 : 0,
+  };
 }
 
 /** Só entrega com desfecho é julgada: o que ainda está em aberto não conta. */
@@ -133,9 +195,10 @@ export function ranquearFornecedores(entregas: EntregaAvaliada[]): NotaDoFornece
 
   const linhas: NotaDoFornecedor[] = [];
   for (const [cnpj, lista] of Array.from(porCnpj)) {
-    const avaliacoes = lista.map(chegouNoDia);
-    const comDataCombinada = avaliacoes.filter(valor => valor !== null).length;
-    const noPrazo = avaliacoes.filter(valor => valor === true).length;
+    const compromissos = lista.map(compromissosDaEntrega);
+    const comDataCombinada = compromissos.reduce((total, item) => total + item.combinados, 0);
+    const noPrazo = compromissos.reduce((total, item) => total + item.cumpridos, 0);
+    const datasFuradas = comDataCombinada - noPrazo;
     const recusadas = lista.filter(entrega => entrega.status === "rejected");
     const recusasPorMotivo: Record<string, number> = {};
     for (const recusada of recusadas) {
@@ -152,6 +215,7 @@ export function ranquearFornecedores(entregas: EntregaAvaliada[]): NotaDoFornece
       entregas: lista.length,
       comDataCombinada,
       noPrazo,
+      datasFuradas,
       recusadas: recusadas.length,
       recusasPorMotivo,
       pontualidade: pontualidade === null ? null : Math.round(pontualidade),

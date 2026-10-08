@@ -42,6 +42,7 @@ import { notasDoCalendario, propostasNoPeriodo } from "../shared/dataDoCalendari
 import { ehDoPlanejamento, sugestaoPrioritaria } from "../shared/prioridadeDaSugestao";
 import type { Situacao } from "../shared/presenca";
 import { ehNotaValida } from "../shared/notaDoPortal";
+import { furouOCompromisso } from "../shared/qualificacaoDoFornecedor";
 
 /**
  * Como o portal segura a conexão com o banco o dia inteiro.
@@ -621,6 +622,39 @@ export async function listAppointmentHistory(appointmentId: number) {
     .leftJoin(users, eq(appointmentStatusHistory.handledBy, users.id))
     .where(eq(appointmentStatusHistory.appointmentId, appointmentId))
     .orderBy(appointmentStatusHistory.createdAt, appointmentStatusHistory.id);
+}
+
+/**
+ * Quantas datas confirmadas cada nota deixou passar em branco.
+ *
+ * O cadastro guarda só a data que vale agora: remarcar escreve por cima, e a
+ * terça perdida deixa de existir para quem olha a nota. O histórico guarda as
+ * duas pontas de cada troca, e é dali que a qualificação tira o que o
+ * fornecedor combinou e não cumpriu.
+ *
+ * Traz todas as trocas de uma vez, e não uma consulta por nota: o painel
+ * qualifica o mês inteiro, e seriam centenas de idas ao banco para montar um
+ * card.
+ */
+export async function contarDatasFuradas(): Promise<Map<number, number>> {
+  const db = await getDb();
+  const furadas = new Map<number, number>();
+  if (!db) return furadas;
+  const trocas = await db
+    .select({
+      appointmentId: appointmentStatusHistory.appointmentId,
+      statusAnterior: appointmentStatusHistory.previousStatus,
+      dataAnterior: appointmentStatusHistory.previousScheduledFor,
+      dataNova: appointmentStatusHistory.nextScheduledFor,
+      trocadaEm: appointmentStatusHistory.createdAt,
+    })
+    .from(appointmentStatusHistory)
+    .where(and(eq(appointmentStatusHistory.previousStatus, "scheduled"), isNotNull(appointmentStatusHistory.previousScheduledFor), isNotNull(appointmentStatusHistory.nextScheduledFor)));
+  for (const troca of trocas) {
+    if (!furouOCompromisso(troca)) continue;
+    furadas.set(troca.appointmentId, (furadas.get(troca.appointmentId) ?? 0) + 1);
+  }
+  return furadas;
 }
 
 export async function listAppointmentMessages(appointmentId: number) {

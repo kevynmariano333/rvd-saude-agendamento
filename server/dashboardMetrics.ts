@@ -22,6 +22,8 @@ export type DashboardAppointment = {
   rejectionReasonCode?: string | null;
   /** Quando a nota mudou de estado pela última vez — é quando a recusa aconteceu. */
   updatedAt?: Date | null;
+  /** Datas confirmadas que passaram sem a carga chegar, vindas do histórico. */
+  datasFuradas?: number | null;
 };
 
 /**
@@ -153,6 +155,10 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
     // A qualificação olha o período inteiro escolhido, e não só o que foi
     // recebido: a entrega recusada nunca é recebida, e é justamente ela que
     // precisa pesar na nota do fornecedor.
+    //
+    // Cada nota entra com as datas que ela queimou no caminho: remarcar troca o
+    // combinado no cadastro, e sem isso a entrega que furou duas vezes e chegou
+    // na terceira ficava com pontualidade cheia.
     qualificacao: ranquearFornecedores(
       items
         .filter(item => isWithinPeriod(item.receivedAt, start, end) || (item.status === "rejected" && isWithinPeriod(item.updatedAt ?? null, start, end)))
@@ -164,6 +170,7 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
           receivedAt: item.receivedAt,
           semAgendamento: item.semAgendamento,
           rejectionReasonCode: item.rejectionReasonCode,
+          datasFuradas: item.datasFuradas,
         })),
     ).slice(0, 12),
     topSuppliers: Array.from(receivedBySupplier, ([name, notesReceived]) => ({ name, notesReceived }))

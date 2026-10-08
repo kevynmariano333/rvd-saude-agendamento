@@ -30,6 +30,7 @@ import {
   getUserByEmail,
   listAppointmentHistory,
   listAppointmentMessages,
+  contarDatasFuradas,
   listAppointments,
   listCalendarAppointments,
   ultimasNotasNoBacklog,
@@ -2301,7 +2302,10 @@ export const appRouter = router({
   analytics: router({
     dashboard: protectedProcedure.input(z.object({ month: z.number().int().min(1).max(12), year: z.number().int().min(2020).max(2100), day: z.number().int().min(1).max(31).optional() })).query(async ({ ctx, input }) => {
       assertSchedulingDesk(ctx.user.role);
-      const items = (await listAppointments()).filter(item => item.status !== "backlog");
+      const [todas, furadas] = await Promise.all([listAppointments(), contarDatasFuradas()]);
+      const items = todas
+        .filter(item => item.status !== "backlog")
+        .map(item => ({ ...item, datasFuradas: furadas.get(item.id) ?? 0 }));
       return buildDashboardMetrics(items, input);
     }),
   }),

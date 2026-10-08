@@ -259,6 +259,9 @@ const corDaFaixa: Record<string, string> = {
  * Os dois números que a formam ficam à vista, e não só o resultado: "87" não
  * diz a ninguém o que cobrar na próxima reunião; "chegou no dia em 8 de 10 e
  * teve 1 recusa" diz.
+ *
+ * O "de 10" conta datas combinadas, e não notas: a entrega remarcada duas
+ * vezes queimou três datas da doca, e é assim que ela aparece aqui.
  */
 function RankingDeQualificacao({ linhas, periodo }: { linhas: NotaDoFornecedor[]; periodo: string }) {
   if (!linhas.length) {
@@ -284,8 +287,8 @@ function RankingDeQualificacao({ linhas, periodo }: { linhas: NotaDoFornecedor[]
                 <span className="block truncate text-sm font-bold text-rvd-plum" title={linha.nome}>{linha.nome}</span>
                 <span className="mt-0.5 block text-[11px] text-ink-soft">
                   {linha.comDataCombinada > 0
-                    ? `Chegou no dia em ${linha.noPrazo} de ${linha.comDataCombinada}`
-                    : "Sem entrega com data combinada"}
+                    ? `Chegou no dia em ${linha.noPrazo} de ${linha.comDataCombinada} data${linha.comDataCombinada > 1 ? "s" : ""} combinada${linha.comDataCombinada > 1 ? "s" : ""}`
+                    : "Sem data combinada para cobrar"}
                   {linha.recusadas > 0 ? ` · ${linha.recusadas} recusa${linha.recusadas > 1 ? "s" : ""}` : ""}
                   {` · ${linha.entregas} entrega${linha.entregas > 1 ? "s" : ""}`}
                 </span>
@@ -308,8 +311,9 @@ function RankingDeQualificacao({ linhas, periodo }: { linhas: NotaDoFornecedor[]
       </ol>
       <p className="mt-4 border-t border-line pt-3 text-[11px] leading-5 text-ink-faint">
         A nota junta pontualidade (chegou no dia combinado) e aceitação (não foi recusada), com o mesmo peso.
-        Quem tem menos de {MINIMO_PARA_RANQUEAR} entregas no período aparece sem nota: pouco volume vira
-        ranking por acaso.
+        A pontualidade conta datas, não notas: remarcar não apaga o dia perdido, e cada data confirmada que
+        passa em branco entra como mais uma. Quem tem menos de {MINIMO_PARA_RANQUEAR} entregas no período
+        aparece sem nota: pouco volume vira ranking por acaso.
       </p>
     </>
   );
