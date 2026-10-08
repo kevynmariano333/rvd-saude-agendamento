@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { lazy, Suspense } from "react";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import LoadingTruck from "./components/LoadingTruck";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -32,7 +32,6 @@ const RelatorioDeFornecedores = lazy(() => import("./pages/RelatorioDeFornecedor
 const BacklogPage = lazy(() => import("@/pages/BacklogPage"));
 const AdminInvoiceManagement = lazy(() => import("./pages/AdminInvoiceManagement"));
 const AccessRequests = lazy(() => import("./pages/AccessRequests"));
-const EmpresasPage = lazy(() => import("@/pages/EmpresasPage"));
 const ImportarAcervo = lazy(() => import("@/pages/ImportarAcervo"));
 const PortariaPage = lazy(() => import("./pages/PortariaPage"));
 const GateHistoryPage = lazy(() => import("./pages/GateHistoryPage"));
@@ -40,5 +39,5 @@ const OperacaoPage = lazy(() => import("./pages/OperacaoPage"));
 const SupplierDashboard = lazy(() => import("./pages/SupplierDashboard"));
 const SupplierSuggestions = lazy(() => import("./pages/SupplierSuggestions"));
 
-function Router() { return <Switch><Route path="/" component={Home} /><Route path="/entrar" component={Login} /><Route path="/entrar/:profile" component={Login} /><Route path="/validar-agendamento" component={AppointmentValidation} /><Route path="/redefinir-senha" component={PasswordReset} /><Route path="/operador" component={OperatorDashboard} /><Route path="/operador/dashboard" component={OperatorOverview} /><Route path="/operador/calendario" component={CalendarPage} /><Route path="/operador/relatorios" component={ReportsPage} /><Route path="/operador/relatorios/backlog" component={ReportsPage} /><Route path="/operador/relatorios/fornecedores" component={RelatorioDeFornecedores} /><Route path="/operador/backlog" component={BacklogPage} /><Route path="/operador/notas" component={AdminInvoiceManagement} /><Route path="/operador/acessos" component={AccessRequests} /><Route path="/operador/empresas" component={EmpresasPage} /><Route path="/operador/importar" component={ImportarAcervo} /><Route path="/portaria" component={PortariaPage} /><Route path="/portaria/historico" component={GateHistoryPage} /><Route path="/operacao" component={OperacaoPage} /><Route path="/fornecedor" component={SupplierDashboard} /><Route path="/fornecedor/sugestoes" component={SupplierSuggestions} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>; }
+function Router() { return <Switch><Route path="/" component={Home} /><Route path="/entrar" component={Login} /><Route path="/entrar/:profile" component={Login} /><Route path="/validar-agendamento" component={AppointmentValidation} /><Route path="/redefinir-senha" component={PasswordReset} /><Route path="/operador" component={OperatorDashboard} /><Route path="/operador/dashboard" component={OperatorOverview} /><Route path="/operador/calendario" component={CalendarPage} /><Route path="/operador/relatorios" component={ReportsPage} /><Route path="/operador/relatorios/backlog" component={ReportsPage} /><Route path="/operador/relatorios/fornecedores" component={RelatorioDeFornecedores} /><Route path="/operador/backlog" component={BacklogPage} /><Route path="/operador/notas" component={AdminInvoiceManagement} /><Route path="/operador/acessos" component={AccessRequests} />{/* A tela de Empresas saiu; quem tinha o endereço salvo cai onde as contas são tratadas agora. */}<Route path="/operador/empresas"><Redirect to="/operador/acessos" /></Route><Route path="/operador/importar" component={ImportarAcervo} /><Route path="/portaria" component={PortariaPage} /><Route path="/portaria/historico" component={GateHistoryPage} /><Route path="/operacao" component={OperacaoPage} /><Route path="/fornecedor" component={SupplierDashboard} /><Route path="/fornecedor/sugestoes" component={SupplierSuggestions} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>; }
 export default function App() { return <ErrorBoundary><ThemeProvider><TooltipProvider><Toaster /><Suspense fallback={<LoadingTruck label="Abrindo a tela" />}><Router /></Suspense></TooltipProvider></ThemeProvider></ErrorBoundary>; }

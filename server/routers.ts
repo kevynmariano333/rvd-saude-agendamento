@@ -64,11 +64,6 @@ import {
   updateUserPassword,
   listApprovedCompanyUserIds,
   listarIdsDaEmpresa,
-  listarCnpjsDeFornecedores,
-  listarEmpresas,
-  listarMembrosDaEmpresa,
-  criarEmpresa,
-  agruparCnpj,
   listPendingAccessRequests,
   setUserAccessStatus,
   createPasswordResetToken,
@@ -2121,39 +2116,6 @@ export const appRouter = router({
           operatedById: ctx.user.id,
           dockNumber: input.dockNumber,
         });
-      }),
-  }),
-  /**
-   * Empresas: o guarda-chuva sobre os CNPJs de um mesmo fornecedor.
-   *
-   * Tudo aqui é do administrador. Agrupar CNPJ é decidir quem enxerga as notas
-   * de quem — é controle de acesso, não organização de cadastro.
-   */
-  empresas: router({
-    lista: adminProcedure.query(async () => ({ empresas: await listarEmpresas(), cnpjs: await listarCnpjsDeFornecedores() })),
-    membros: adminProcedure
-      .input(z.object({ empresaId: z.number().int().positive() }))
-      .query(async ({ input }) => listarMembrosDaEmpresa(input.empresaId)),
-    criar: adminProcedure
-      .input(z.object({ nome: z.string().trim().min(2, "Informe o nome da empresa.").max(255) }))
-      .mutation(async ({ input }) => {
-        const existentes = await listarEmpresas();
-        if (existentes.some(empresa => empresa.nome.toLowerCase() === input.nome.toLowerCase())) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe uma empresa com esse nome." });
-        }
-        return criarEmpresa(input.nome);
-      }),
-    agrupar: adminProcedure
-      .input(z.object({ cnpj: z.string().min(11).max(20), empresaId: z.number().int().positive().nullable() }))
-      .mutation(async ({ input }) => {
-        if (input.empresaId) {
-          const existentes = await listarEmpresas();
-          if (!existentes.some(empresa => empresa.id === input.empresaId)) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "Empresa não encontrada." });
-          }
-        }
-        await agruparCnpj(input.cnpj, input.empresaId);
-        return { ok: true as const };
       }),
   }),
   /**

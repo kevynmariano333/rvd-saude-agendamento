@@ -2,7 +2,7 @@ import { EmptyState, Panel, PanelBody, PanelHeader } from "@/components/PortalKi
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { formatCnpj, roleLabel, type PortalRole, homePathFor } from "@/lib/portal";
-import { Ban, Building2, CheckCircle2, KeyRound, Search, ShieldCheck, UserCheck, UsersRound, X } from "lucide-react";
+import { Ban, Building2, CheckCircle2, KeyRound, Search, ShieldCheck, UserCheck, UserPlus, UsersRound, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatarCnpj } from "@shared/recipients";
 import { presencaDe } from "@shared/presenca";
@@ -18,6 +18,7 @@ import EstadoDoSistemaCard from "../components/EstadoDoSistemaCard";
 import SegurancaCard from "../components/SegurancaCard";
 import LinkDeSenhaDialog, { type LinkDeSenha } from "../components/LinkDeSenhaDialog";
 import LogoDaConta from "../components/LogoDaConta";
+import CriarUsuarioDialog from "../components/CriarUsuarioDialog";
 import CaixaDeEntradaDeSugestoes from "../components/CaixaDeEntradaDeSugestoes";
 
 type PendingRequest = {
@@ -134,6 +135,7 @@ export default function AccessRequests() {
   const fornecedores = trpc.staff.fornecedores.useQuery(undefined, { enabled: isAdmin, refetchInterval: 60_000 });
   const [buscaDeFornecedor, setBuscaDeFornecedor] = useState("");
   const [linkDeSenha, setLinkDeSenha] = useState<LinkDeSenha | null>(null);
+  const [criarUsuario, setCriarUsuario] = useState(false);
   const [filtroDaEquipe, setFiltroDaEquipe] = useState<FiltroDePresenca>("todos");
   const [filtroDeFornecedores, setFiltroDeFornecedores] = useState<FiltroDePresenca>("todos");
 
@@ -243,6 +245,14 @@ export default function AccessRequests() {
       user={auth.data}
       title="Acessos ao sistema"
       subtitle="Todo cadastro novo passa por aqui antes de ter acesso, e é aqui que os perfis internos são definidos."
+      actions={
+        // Criar conta à mão era um botão na tela de Empresas, que saiu. O
+        // lugar dele é aqui: é esta a tela de quem entra no sistema.
+        <Button onClick={() => setCriarUsuario(true)} className="h-11 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand">
+          <UserPlus className="size-4" />
+          Criar usuário
+        </Button>
+      }
     >
       <div className="space-y-6">
         <Panel>
@@ -528,6 +538,7 @@ export default function AccessRequests() {
       <NotasRepetidasCard />
       <BackupCard />
       <LinkDeSenhaDialog link={linkDeSenha} onFechar={() => setLinkDeSenha(null)} />
+      <CriarUsuarioDialog open={criarUsuario} onOpenChange={setCriarUsuario} onCriado={() => { void utils.staff.list.invalidate(); void utils.staff.fornecedores.invalidate(); }} />
       </div>
     </PortalLayout>
   );
