@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import CaminhaoDaMarca from "../components/CaminhaoDaMarca";
 import MarcaDoPortal from "../components/MarcaDoPortal";
 import { fieldClass } from "@/components/PortalKit";
 import {
@@ -176,15 +177,8 @@ export default function Login() {
           <div className="absolute right-[-6rem] top-[-5rem] size-64 rounded-full bg-on-brand/45" />
           <div className="absolute bottom-[-10rem] left-[-7rem] size-80 rounded-full bg-white/10" />
           <div className="absolute left-14 top-32 z-10 hidden sm:block" aria-hidden="true">
-            <div className="absolute -bottom-2 -left-5 w-32 border-t border-dashed border-white/45" />
-            <div className="rvd-login-truck relative h-10 w-20 drop-shadow-lg">
-              <span className="absolute left-0 top-1 h-6 w-11 overflow-hidden rounded-md border-2 border-brand bg-white">
-                <img src="/RVD-Saude.png" alt="" className="size-full object-contain p-0.5" />
-              </span>
-              <span className="absolute left-11 top-3 h-4 w-6 rounded-r-md border-2 border-l-0 border-brand bg-on-brand" />
-              <span className="absolute bottom-0 left-2 size-3 rounded-full border-2 border-white bg-brand" />
-              <span className="absolute bottom-0 right-2 size-3 rounded-full border-2 border-white bg-brand" />
-            </div>
+            {/* O chão tracejado faz parte do desenho do caminhão agora. */}
+            <CaminhaoDaMarca tom="branco" className="rvd-login-truck h-20 w-auto drop-shadow-lg" />
           </div>
           <div className="relative z-10">
             <MarcaDoPortal altura="h-6" tom="branco" comDescricao />
