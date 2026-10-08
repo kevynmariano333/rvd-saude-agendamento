@@ -1,6 +1,15 @@
 import { inicialDaConta, marcaDoEmail, MARCAS_DA_CONTA } from "@shared/marcaDaConta";
 import { useId } from "react";
 
+/**
+ * O quanto a letra engrossa.
+ *
+ * O peso 800 é o mais pesado que a fonte tem, e ainda é mais fino que as
+ * letras do logo, que são desenhadas e não digitadas. O traço por cima do
+ * próprio contorno fecha essa diferença.
+ */
+const ENGROSSAR = 2.2;
+
 /** O azul do logo, que corta as letras na diagonal. */
 const AZUL_DA_MARCA = "#8FBED1";
 
@@ -60,6 +69,10 @@ export default function AvatarDaConta({
         fontSize="38"
         fontWeight="800"
         letterSpacing="-1"
+        stroke="currentColor"
+        strokeWidth={ENGROSSAR}
+        strokeLinejoin="round"
+        paintOrder="stroke"
       >
         {letra}
       </text>
@@ -73,6 +86,10 @@ export default function AvatarDaConta({
         fontSize="38"
         fontWeight="800"
         letterSpacing="-1"
+        stroke={AZUL_DA_MARCA}
+        strokeWidth={ENGROSSAR}
+        strokeLinejoin="round"
+        paintOrder="stroke"
       >
         {letra}
       </text>
