@@ -44,3 +44,55 @@ export function marcaDoEmail(email: string | null | undefined): MarcaDaConta | n
   if (ehDe("amil.com.br")) return "amil";
   return null;
 }
+
+/**
+ * A letra que representa a conta no lugar do retrato.
+ *
+ * O logo da RVD em toda linha não distingue ninguém: todo mundo de dentro é da
+ * RVD. A inicial de quem usa a conta distingue — e é o que se procura numa
+ * lista de contas. O logo fica reservado para quem é de fora da casa, que é a
+ * informação que de fato muda de linha para linha.
+ */
+export function inicialDaConta(...candidatos: (string | null | undefined)[]): string {
+  for (const candidato of candidatos) {
+    const limpo = (candidato ?? "").trim();
+    if (!limpo) continue;
+    // A primeira letra de verdade: "3M Brasil" começa com um número, e um
+    // avatar com "3" não ajuda ninguém a reconhecer a conta.
+    const letra = limpo.split("").find(caractere => /[a-zà-ÿ]/i.test(caractere));
+    if (letra) return letra.toLocaleUpperCase("pt-BR");
+  }
+  return "?";
+}
+
+/**
+ * As duas cores da marca, para o retrato da conta.
+ *
+ * São as mesmas do logo: o roxo e o azul do RVD. Alternar entre elas dá à
+ * lista a variação que faz o olho distinguir uma linha da outra sem ler, e
+ * mantém a tela dentro da marca — um arco-íris de avatares faria o portal
+ * parecer outra coisa.
+ *
+ * Os valores vão fixos, e não pelos tokens do tema: a plaquinha leva o próprio
+ * fundo, então ela precisa ter contraste por conta própria no claro e no
+ * escuro.
+ */
+export const CORES_DA_CONTA = [
+  { fundo: "#782078", letra: "#FFFFFF" },
+  { fundo: "#8FBED1", letra: "#5E1A61" },
+] as const;
+
+/**
+ * Qual das duas cores cabe a esta conta.
+ *
+ * Sorteada a partir do que identifica a conta, e não da posição na lista: a
+ * mesma pessoa tem sempre a mesma cor, em qualquer tela e depois de qualquer
+ * reordenação. Cor que muda de lugar para lugar não ajuda a reconhecer
+ * ninguém.
+ */
+export function corDaConta(chave: string | null | undefined): (typeof CORES_DA_CONTA)[number] {
+  const texto = (chave ?? "").trim().toLowerCase();
+  let soma = 0;
+  for (let i = 0; i < texto.length; i += 1) soma = (soma + texto.charCodeAt(i) * (i + 1)) % 1000;
+  return CORES_DA_CONTA[soma % CORES_DA_CONTA.length]!;
+}

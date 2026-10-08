@@ -17,7 +17,7 @@ import CartazDaPortariaCard from "../components/CartazDaPortariaCard";
 import EstadoDoSistemaCard from "../components/EstadoDoSistemaCard";
 import SegurancaCard from "../components/SegurancaCard";
 import LinkDeSenhaDialog, { type LinkDeSenha } from "../components/LinkDeSenhaDialog";
-import LogoDaConta from "../components/LogoDaConta";
+import AvatarDaConta from "../components/AvatarDaConta";
 import CriarUsuarioDialog from "../components/CriarUsuarioDialog";
 import CaixaDeEntradaDeSugestoes from "../components/CaixaDeEntradaDeSugestoes";
 
@@ -349,7 +349,7 @@ export default function AccessRequests() {
                         Amil planeja. Antes as duas eram a mesma linha de
                         texto, e descobrir quem era de qual lado exigia ler o
                         e-mail letra por letra. */}
-                    <LogoDaConta email={member.email} className="mt-0.5 size-8" />
+                    <AvatarDaConta email={member.email} nome={member.name} className="mt-0.5 size-8 text-sm" />
                     <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-ink">
                       {member.name || "Conta sem nome"}
@@ -451,7 +451,9 @@ export default function AccessRequests() {
                 const bloqueado = conta.accessStatus === "rejected";
                 return (
                   <li key={conta.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <AvatarDaConta email={conta.email} nome={conta.companyName || conta.name} className="mt-0.5 size-8 text-sm" />
+                      <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-ink">{conta.companyName || conta.name || "Conta sem nome"}</p>
                       <p className="mt-0.5 truncate text-[13px] text-ink-soft">{conta.email || "E-mail não informado"}</p>
                       <SeloDePresenca situacao={conta.situacao} vistoEm={conta.vistoEm} saiuEm={conta.saiuEm} />
@@ -464,6 +466,7 @@ export default function AccessRequests() {
                           {conta.accessStatus === "pending" ? "Aguardando aprovação" : "Bloqueado — não entra no sistema"}
                         </span>
                       )}
+                      </div>
                     </div>
                     {/* Fornecedor não muda de perfil: ele é fornecedor. O que se
                         decide aqui é se a conta entra ou não — e, quando o

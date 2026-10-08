@@ -4,8 +4,7 @@ import { serviceTypeCopy } from "@/lib/attendance";
 import { rotuloDoMotivo } from "@shared/backlogReasons";
 import { ehSituacao, ROTULO_DA_SITUACAO, SITUACAO_PADRAO, SITUACOES } from "@shared/presenca";
 import { CORES_DA_SITUACAO } from "@/lib/presenca";
-import { marcaDoEmail } from "@shared/marcaDaConta";
-import LogoDaConta from "../components/LogoDaConta";
+import AvatarDaConta from "../components/AvatarDaConta";
 import CaixaDeSugestao from "../components/CaixaDeSugestao";
 import MarcaDoPortal from "../components/MarcaDoPortal";
 import { unidadePorCnpj } from "@shared/recipients";
@@ -98,9 +97,6 @@ export default function PortalLayout({
   // O recado que evita o "oi, tá aí?" — e que só vale enquanto a pessoa
   // estiver de fato no sistema, para não envelhecer na tela dos outros.
   const situacao = ehSituacao(user.situacao) ? user.situacao : SITUACAO_PADRAO;
-  // De qual casa é esta conta: a RVD opera o recebimento, a Amil planeja. Quem
-  // não é de nenhuma das duas — o fornecedor — continua com o boneco.
-  const temMarca = Boolean(marcaDoEmail(user.email));
   const definirSituacao = trpc.auth.definirSituacao.useMutation({
     onSuccess: ({ situacao: escolhida }) => {
       void utils.auth.me.invalidate();
@@ -418,13 +414,7 @@ export default function PortalLayout({
                   "ocupado" de manhã não lembra disso à tarde sem abrir o
                   menu. */}
               <span className="relative flex shrink-0">
-                {temMarca ? (
-                  <LogoDaConta email={user.email} />
-                ) : (
-                  <span className="flex size-8 items-center justify-center rounded-lg bg-rvd-plum-pale/60 text-rvd-plum">
-                    <UserRound className="size-4" />
-                  </span>
-                )}
+                <AvatarDaConta email={user.email} nome={user.name} className="size-8 text-sm" />
                 <span
                   title={`${ROTULO_DA_SITUACAO[situacao].rotulo} — ${ROTULO_DA_SITUACAO[situacao].explica}`}
                   className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-surface ${CORES_DA_SITUACAO[situacao]}`}
@@ -658,7 +648,7 @@ export default function PortalLayout({
         {profileOpen && (
           <div className="absolute right-5 top-[4.25rem] w-[19rem] max-w-[calc(100vw-2.5rem)] rounded-2xl border border-line bg-surface p-4 shadow-lg sm:right-8">
             <div className="flex items-start gap-3">
-              <LogoDaConta email={user.email} className="size-10" />
+              <AvatarDaConta email={user.email} nome={user.name} className="size-10 text-base" />
               <div className="min-w-0">
                 <p className="truncate font-display text-sm font-extrabold text-ink">{user.name || "Acesso RVD"}</p>
                 <p className="mt-1 truncate text-xs text-ink-soft">{user.email}</p>
