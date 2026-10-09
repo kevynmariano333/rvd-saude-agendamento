@@ -272,6 +272,30 @@ describe("procedures de agendamento", () => {
     expect(mocks.createAppointmentSuggestion).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, supplierId: 12, notes: "Prefiro este horário" }));
   });
 
+  it("recusa a sugestão do fornecedor no dia do inventário", async () => {
+    // Deixar sugerir um dia que o balcão vai ter de recusar só adia o
+    // problema, e com uma ida e volta a mais.
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled", recipientCnpj: "06033403000113" });
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.suggestions.create({ appointmentId: 1, suggestedFor: "2026-11-11T13:00:00.000Z" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.createAppointmentSuggestion).not.toHaveBeenCalled();
+  });
+
+  it("recusa a sugestão do planejador no dia do inventário", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "pending", recipientCnpj: "06033403000113" });
+    const caller = appRouter.createCaller(context("planejador"));
+    await expect(caller.suggestions.create({ appointmentId: 1, suggestedFor: "2026-11-13T13:00:00.000Z" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.createAppointmentSuggestion).not.toHaveBeenCalled();
+  });
+
+  it("a sugestão para a Maternidade passa nos mesmos dias", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 2, supplierId: 12, status: "scheduled", recipientCnpj: "43293604002120" });
+    mocks.createAppointmentSuggestion.mockResolvedValue({ id: 9, status: "pending" });
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.suggestions.create({ appointmentId: 2, suggestedFor: "2026-11-11T13:00:00.000Z" });
+    expect(mocks.createAppointmentSuggestion).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 2 }));
+  });
+
   it("bloqueia o histórico de outro fornecedor", async () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 99, status: "pending" });
     const caller = appRouter.createCaller(context("supplier"));

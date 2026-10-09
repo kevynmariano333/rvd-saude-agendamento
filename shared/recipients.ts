@@ -102,6 +102,11 @@ export function daUnidade(unidade: Unidade): string {
   return `${unidade.artigo === "o" ? "do" : "da"} ${unidade.nome}`;
 }
 
+/** "no Hospital", "na Maternidade" — a unidade depois de "em". */
+export function naUnidade(unidade: Unidade): string {
+  return `${unidade.artigo === "o" ? "no" : "na"} ${unidade.nome}`;
+}
+
 export function unidadePorCnpj(cnpj: string | null | undefined): Unidade | null {
   const digitos = apenasDigitos(cnpj);
   if (digitos.length !== 14) return null;

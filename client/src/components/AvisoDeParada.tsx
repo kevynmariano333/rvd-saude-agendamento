@@ -37,7 +37,7 @@ export default function AvisoDeParada({
         <CalendarOff className={`mt-0.5 size-5 shrink-0 ${naCapa ? "text-on-brand" : "text-state-stop"}`} />
         <div>
           <p className={`text-sm font-bold ${naCapa ? "text-white" : "text-state-stop"}`}>
-            {lista.length > 1 ? "Estoques fechados em breve" : "Estoque fechado nesses dias"}
+            {lista.length > 1 ? "Dias sem recebimento em breve" : "Não teremos recebimento nesses dias"}
           </p>
           {lista.map(parada => (
             <p key={`${parada.cnpj}-${parada.dias[0]}`} className={`mt-1 text-xs leading-5 ${naCapa ? "text-white/90" : "text-ink-soft"}`}>

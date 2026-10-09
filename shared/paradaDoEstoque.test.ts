@@ -99,14 +99,14 @@ describe("como a parada é dita", () => {
 
   it("a recusa diz quem, quando e o que fazer, sem repetir o motivo", () => {
     const recusa = motivoDaRecusa(inventario, new Date("2026-11-12T13:00:00.000-03:00"));
-    expect(recusa).toBe("O Hospital não recebe carga em 12/11: inventário no estoque nos dias 11, 12 e 13 de novembro. Escolha uma data antes ou depois.");
+    expect(recusa).toBe("Não teremos recebimento no Hospital em 12/11: inventário no estoque nos dias 11, 12 e 13 de novembro. Escolha uma data antes ou depois.");
   });
 
   it("o artigo acompanha a unidade: nunca \"do Maternidade\"", () => {
     const naMaternidade = { ...inventario, cnpj: MATERNIDADE };
     expect(avisoDaParada(naMaternidade)).toContain("entrega da Maternidade");
     expect(avisoDaParada(naMaternidade)).toContain("O Hospital recebe normalmente");
-    expect(motivoDaRecusa(naMaternidade, new Date("2026-11-11T13:00:00.000-03:00"))).toContain("A Maternidade não recebe");
+    expect(motivoDaRecusa(naMaternidade, new Date("2026-11-11T13:00:00.000-03:00"))).toContain("recebimento na Maternidade");
   });
 
   it("o aviso diz a unidade, os dias e o que fazer", () => {

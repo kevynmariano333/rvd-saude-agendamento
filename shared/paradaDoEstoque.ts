@@ -12,7 +12,7 @@
 // mostra o que ainda está por vir.
 
 import { formatSaoPauloDateKey } from "./dateFilters";
-import { apenasDigitos, comArtigo, daUnidade, UNIDADES, unidadePorCnpj } from "./recipients";
+import { apenasDigitos, comArtigo, daUnidade, naUnidade, UNIDADES, unidadePorCnpj } from "./recipients";
 
 export type ParadaDoEstoque = {
   /** A unidade que para, pelo CNPJ do destinatário da nota. Só dígitos. */
@@ -105,7 +105,7 @@ export function avisoDaParada(parada: ParadaDoEstoque): string {
   const quemRecebe = seguem.length
     ? ` ${seguem.map(comArtigo).join(" e ")} recebe${seguem.length > 1 ? "m" : ""} normalmente.`
     : "";
-  const frase = `${parada.motivo} ${dela} em ${diasPorExtenso(parada)}: nesses dias o estoque não recebe carga. Agende a entrega ${dela} para antes ou depois.${quemRecebe}`;
+  const frase = `${parada.motivo} ${dela} em ${diasPorExtenso(parada)}: nesses dias não teremos recebimento. Agende a entrega ${dela} para antes ou depois.${quemRecebe}`;
   // "A Maternidade recebe", e não "a Maternidade recebe": a unidade abre uma
   // oração nova, e o artigo entra na frase em minúscula.
   return frase.replace(/\. (o|a) /g, (_todo, artigo: string) => `. ${artigo.toUpperCase()} `);
@@ -115,10 +115,9 @@ export function avisoDaParada(parada: ParadaDoEstoque): string {
 export function motivoDaRecusa(parada: ParadaDoEstoque, quando: Date): string {
   const unidade = unidadePorCnpj(parada.cnpj);
   const dia = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }).format(quando);
-  const nomeada = unidade ? comArtigo(unidade) : "a unidade";
+  const onde = unidade ? naUnidade(unidade) : "nesta unidade";
   // O motivo entra no meio da frase, e por isso em minúscula: dizê-lo duas
   // vezes, uma como título e outra como explicação, só dobra o tamanho do erro.
   const motivo = parada.motivo.charAt(0).toLowerCase() + parada.motivo.slice(1);
-  const frase = `${nomeada} não recebe carga em ${dia}: ${motivo} nos dias ${diasPorExtenso(parada)}. Escolha uma data antes ou depois.`;
-  return frase.charAt(0).toUpperCase() + frase.slice(1);
+  return `Não teremos recebimento ${onde} em ${dia}: ${motivo} nos dias ${diasPorExtenso(parada)}. Escolha uma data antes ou depois.`;
 }

@@ -784,6 +784,10 @@ function SuggestDialog({ item, open, onOpenChange, date, time, notes, onDate, on
     { enabled: open && Boolean(item?.supplierId) },
   );
   const outras = (entregas.data ?? []).filter(entrega => entrega.id !== item?.id);
+  // A sugestão também esbarra no estoque fechado: deixar propor um dia que o
+  // balcão vai ter de recusar só adia o problema, e com uma ida e volta a mais.
+  const paradaEscolhida = date && time ? paradaNoDia(item?.recipientCnpj, new Date(`${date}T${time}:00`)) : null;
+  const paradaDaNota = paradaDaUnidade(item?.recipientCnpj);
 
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="w-[calc(100%-1rem)] rounded-[2rem] border-line bg-surface p-7 sm:!max-w-3xl">
@@ -794,11 +798,17 @@ function SuggestDialog({ item, open, onOpenChange, date, time, notes, onDate, on
       <div className="mt-5 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
           <p className="rounded-2xl bg-sunken p-4 text-sm leading-6 text-ink-soft">A data vai para o Operador como sugestão. O agendamento só passa a valer depois que ele aceitar.</p>
+          {paradaDaNota && <AvisoDeParada paradas={[paradaDaNota]} className="mt-5" />}
           <div className="mt-5 space-y-5">
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="font-bold text-rvd-plum">Data</Label><Input type="date" value={date} onChange={event => onDate(event.target.value)} className="mt-2 h-12 border-line bg-surface text-rvd-plum" /></div>
               <div><Label className="font-bold text-rvd-plum">Hora</Label><Input type="time" value={time} onChange={event => onTime(event.target.value)} className="mt-2 h-12 border-line bg-surface text-rvd-plum" /></div>
             </div>
+            {paradaEscolhida && (
+              <p className="rounded-xl bg-state-stop-bg px-3 py-2 text-xs font-bold leading-5 text-state-stop">
+                {motivoDaRecusa(paradaEscolhida, new Date(`${date}T${time}:00`))}
+              </p>
+            )}
             <div>
               <Label className="font-bold text-rvd-plum">Motivo <span className="font-normal text-ink-soft">(opcional)</span></Label>
               <Textarea value={notes} onChange={event => onNotes(event.target.value)} placeholder="Ex.: doca livre na manhã de terça." className="mt-2 min-h-24 border-line bg-surface text-rvd-plum" />
@@ -847,7 +857,7 @@ function SuggestDialog({ item, open, onOpenChange, date, time, notes, onDate, on
       </div>
       <div className="mt-6 flex justify-end gap-3">
         <Button variant="ghost" onClick={() => onOpenChange(false)} className="font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button>
-        <Button onClick={onConfirm} disabled={loading} className="h-12 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand">{loading ? "Enviando..." : "Enviar sugestão"}</Button>
+        <Button onClick={onConfirm} disabled={loading || Boolean(paradaEscolhida)} className="h-12 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand disabled:opacity-60">{loading ? "Enviando..." : "Enviar sugestão"}</Button>
       </div>
     </DialogContent>
   </Dialog>;
