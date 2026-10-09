@@ -15,13 +15,20 @@ export type Unidade = {
   nome: string;
   /** Como o nome cabe na coluna da tabela, que é estreita. */
   curto: string;
+  /**
+   * O artigo do nome: "o" Hospital, "a" Maternidade.
+   *
+   * Sem ele, toda frase que cita a unidade precisa ser escrita de um jeito que
+   * fuja do artigo — e a que não fugiu sai "entrega do Maternidade".
+   */
+  artigo: "o" | "a";
   /** O cliente dono da unidade. As unidades de um grupo são filtradas juntas. */
   grupo: string;
 };
 
 export const UNIDADES: Unidade[] = [
-  { cnpj: "06033403000113", sigla: "HSH", nome: "Hospital", curto: "HOSPITAL", grupo: "Amil" },
-  { cnpj: "43293604002120", sigla: "MSH", nome: "Maternidade", curto: "MATERN.", grupo: "Amil" },
+  { cnpj: "06033403000113", sigla: "HSH", nome: "Hospital", curto: "HOSPITAL", artigo: "o", grupo: "Amil" },
+  { cnpj: "43293604002120", sigla: "MSH", nome: "Maternidade", curto: "MATERN.", artigo: "a", grupo: "Amil" },
 ];
 
 /** Os grupos na ordem em que apareceram, cada um com as suas unidades. */
@@ -83,6 +90,16 @@ export function formatarCnpj(valor: string | null | undefined): string {
   const digitos = apenasDigitos(valor);
   if (digitos.length !== 14) return valor?.trim() || "—";
   return digitos.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+}
+
+/** "o Hospital", "a Maternidade" — a unidade dentro de uma frase. */
+export function comArtigo(unidade: Unidade): string {
+  return `${unidade.artigo} ${unidade.nome}`;
+}
+
+/** "do Hospital", "da Maternidade" — a unidade depois de "de". */
+export function daUnidade(unidade: Unidade): string {
+  return `${unidade.artigo === "o" ? "do" : "da"} ${unidade.nome}`;
 }
 
 export function unidadePorCnpj(cnpj: string | null | undefined): Unidade | null {

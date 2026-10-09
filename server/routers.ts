@@ -142,6 +142,7 @@ let importacaoEmCurso = false;
 import { normalizePurchaseOrder, pedidosCabem, PURCHASE_ORDER_MAX } from "./purchaseOrder";
 import { MIRO_DIGITS, normalizeMiroNumber } from "../shared/miro";
 import { buildDashboardMetrics } from "./dashboardMetrics";
+import { motivoDaRecusa, paradaNoDia } from "../shared/paradaDoEstoque";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
 import { buildAttendanceMetrics } from "./attendanceMetrics";
 import {
@@ -236,6 +237,23 @@ function assertPortaria(role: UserRole) {
 
 function assertOperacao(role: UserRole) {
   if (!canManageOperation(role)) throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o perfil de Operação pode executar esta ação." });
+}
+
+/**
+ * O estoque daquela unidade está fechado no dia escolhido?
+ *
+ * Fica no servidor, e não só na tela, porque a tela é um conselho: quem manda
+ * a chamada direto passa por cima dela, e a carga aparece na doca no dia do
+ * inventário do mesmo jeito.
+ *
+ * Vale para quem pede e para quem confirma. O balcão é quem sabe do
+ * inventário, mas é também quem tem trinta notas para despachar — e a data que
+ * escapa aqui vira caminhão parado no portão.
+ */
+function assertEstoqueAberto(recipientCnpj: string | null | undefined, quando: Date | null | undefined) {
+  if (!quando) return;
+  const parada = paradaNoDia(recipientCnpj, quando);
+  if (parada) throw new TRPCError({ code: "BAD_REQUEST", message: motivoDaRecusa(parada, quando) });
 }
 
 /**
@@ -1237,6 +1255,9 @@ export const appRouter = router({
           { accessKey: invoice.accessKey, supplierCnpj: invoice.supplierCnpj, companyCnpj: ctx.user.companyCnpj, invoiceNumber: invoice.invoiceNumber },
           'Se esta nota cobre mais de um pedido de compra, eles vão todos num envio só: use o botão "Outro pedido" antes de enviar. Se faltou incluir um pedido, fale com a equipe de recebimento em vez de enviar a nota de novo.',
         );
+        // O destinatário sai do XML, e não do que o fornecedor digitou: é a
+        // nota que diz para qual unidade a carga vai.
+        assertEstoqueAberto(invoice.recipientCnpj, suggestedFor);
         const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
         const stored = await storagePut(`agendamentos-xml/${ctx.user.id}/${safeName}`, content, "application/xml");
         return createManualXmlAppointment({
@@ -1445,6 +1466,7 @@ export const appRouter = router({
         if (!canScheduleAppointment(appointment.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Este item não pode ser agendado." });
         const scheduledFor = new Date(input.scheduledFor);
         if (Number.isNaN(scheduledFor.getTime())) throw new TRPCError({ code: "BAD_REQUEST", message: "Data e horário inválidos." });
+        assertEstoqueAberto(appointment.recipientCnpj, scheduledFor);
         if (input.acceptedSuggestionId) {
           const suggestion = await getSuggestionById(input.acceptedSuggestionId);
           if (!suggestion || suggestion.appointmentId !== appointment.id || suggestion.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "A sugestão selecionada não está disponível." });
@@ -1526,6 +1548,7 @@ export const appRouter = router({
         if (!canApplySuggestion(appointment.status)) throw new TRPCError({ code: "BAD_REQUEST", message: "Este agendamento não aceita novas sugestões." });
         const suggestedFor = new Date(input.suggestedFor);
         if (Number.isNaN(suggestedFor.getTime()) || suggestedFor.getTime() <= Date.now()) throw new TRPCError({ code: "BAD_REQUEST", message: "Sugira uma data e horário futuros." });
+        assertEstoqueAberto(appointment.recipientCnpj, suggestedFor);
         // `supplierId` sempre guardou quem escreveu a sugestão, e continua
         // assim com o planejador. O efeito colateral é bem-vindo: a proposta
         // dele fica fora do recorte do fornecedor, que não precisa acompanhar

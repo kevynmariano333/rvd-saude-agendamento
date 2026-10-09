@@ -404,6 +404,23 @@ describe("procedures de agendamento", () => {
     expect(mocks.scheduleAppointment).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, previousScheduledFor, scheduledFor: new Date("2030-09-01T10:00:00.000Z"), rescheduled: true }));
   });
 
+  it("não deixa o balcão marcar o Hospital no dia do inventário", async () => {
+    // O balcão é quem sabe do inventário, e é também quem tem trinta notas
+    // para despachar: a data que escapa aqui vira caminhão parado no portão.
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, status: "pending", scheduledFor: new Date("2026-10-01T09:00:00.000Z"), recipientCnpj: "06033403000113" });
+    const caller = appRouter.createCaller(context("operator"));
+    await expect(caller.appointments.schedule({ appointmentId: 1, scheduledFor: "2026-11-12T13:00:00.000Z" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.scheduleAppointment).not.toHaveBeenCalled();
+  });
+
+  it("a Maternidade recebe normalmente nos dias do inventário do Hospital", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 2, status: "pending", scheduledFor: new Date("2026-10-01T09:00:00.000Z"), recipientCnpj: "43293604002120" });
+    mocks.scheduleAppointment.mockResolvedValue({ id: 2, status: "scheduled" });
+    const caller = appRouter.createCaller(context("operator"));
+    await caller.appointments.schedule({ appointmentId: 2, scheduledFor: "2026-11-12T13:00:00.000Z" });
+    expect(mocks.scheduleAppointment).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 2 }));
+  });
+
   it("confirma o agendamento e registra a sugestão aceita", async () => {
     const previousScheduledFor = new Date("2030-09-01T09:00:00.000Z");
     mocks.getAppointmentById.mockResolvedValue({ id: 1, status: "pending", scheduledFor: previousScheduledFor });

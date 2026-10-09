@@ -1,3 +1,5 @@
+import AvisoDeParada from "@/components/AvisoDeParada";
+import { motivoDaRecusa, paradaDaUnidade, paradaNoDia } from "@shared/paradaDoEstoque";
 import { SegmentedControl } from "@/components/PortalKit";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -673,6 +675,10 @@ function EntregaJaMarcada({ entrega }: { entrega: { id: number; invoiceNumber?: 
 }
 
 function ScheduleDialog({ item, open, onOpenChange, date, time, onDate, onTime, onConfirm, loading, activeAppointments, suggestions, acceptedSuggestionId, onAcceptSuggestion }: { item: Appointment | null; open: boolean; onOpenChange: (open: boolean) => void; date: string; time: string; onDate: (value: string) => void; onTime: (value: string) => void; onConfirm: () => void; loading: boolean; activeAppointments: { id: number; invoiceNumber?: string | null; serviceType: string; scheduledFor: Date; status: string }[]; suggestions: ScheduleSuggestion[]; acceptedSuggestionId?: number; onAcceptSuggestion: (suggestion: ScheduleSuggestion) => void }) {
+  // O estoque desta unidade está fechado no dia escolhido? O servidor recusa de
+  // qualquer jeito; aqui o balcão descobre antes de clicar, e com o motivo.
+  const paradaEscolhida = date && time ? paradaNoDia(item?.recipientCnpj, new Date(`${date}T${time}:00`)) : null;
+  const paradaDaNota = paradaDaUnidade(item?.recipientCnpj);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100vh-3rem)] w-[calc(100%-2rem)] !max-w-4xl overflow-y-auto rounded-[2rem] border border-line bg-surface p-0 shadow-2xl sm:!max-w-4xl">
@@ -715,6 +721,10 @@ function ScheduleDialog({ item, open, onOpenChange, date, time, onDate, onTime, 
               </div>
             )}
 
+            {/* Só a parada da unidade desta nota: o inventário do Hospital não
+                é assunto de quem está marcando uma entrega da Maternidade. */}
+            {paradaDaNota && <AvisoDeParada paradas={[paradaDaNota]} className="mb-5" />}
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label className="text-xs font-bold uppercase tracking-wide text-rvd-plum">Data</Label>
@@ -725,6 +735,11 @@ function ScheduleDialog({ item, open, onOpenChange, date, time, onDate, onTime, 
                 <Input type="time" value={time} onChange={event => onTime(event.target.value)} className="mt-2 h-11 border-line bg-surface text-rvd-plum" />
               </div>
             </div>
+            {paradaEscolhida && (
+              <p className="mt-3 rounded-xl bg-state-stop-bg px-3 py-2 text-xs font-bold leading-5 text-state-stop">
+                {motivoDaRecusa(paradaEscolhida, new Date(`${date}T${time}:00`))}
+              </p>
+            )}
           </section>
 
           <aside className="min-w-0">
@@ -747,7 +762,7 @@ function ScheduleDialog({ item, open, onOpenChange, date, time, onDate, onTime, 
 
         <div className="flex justify-end gap-3 border-t border-line px-7 py-5">
           <Button variant="ghost" onClick={() => onOpenChange(false)} className="font-bold text-rvd-plum hover:bg-rvd-plum-pale hover:text-rvd-plum">Cancelar</Button>
-          <Button onClick={onConfirm} disabled={loading} className="h-11 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand">{loading ? "Confirmando..." : "Confirmar agendamento"}</Button>
+          <Button onClick={onConfirm} disabled={loading || Boolean(paradaEscolhida)} className="h-11 rounded-xl bg-brand px-5 font-bold text-white hover:bg-brand disabled:opacity-60">{loading ? "Confirmando..." : "Confirmar agendamento"}</Button>
         </div>
       </DialogContent>
     </Dialog>
