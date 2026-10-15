@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { storageGetSignedUrl } from "../storage";
 import { getRvdSessionUser } from "../session";
+import { podeBaixarArquivo } from "../escopoDeNotas";
 import { isS3Configured } from "./s3Client";
 
 /**
@@ -38,6 +39,18 @@ export function registerStorageProxy(app: Express) {
     if (!chavePermitida(key)) {
       // Mesma resposta de arquivo inexistente: quem tenta adivinhar um caminho
       // não deve descobrir que ele existe mas é de outra natureza.
+      res.status(404).send("Arquivo não encontrado.");
+      return;
+    }
+
+    // Estar logado não basta: o anexo é documento fiscal de uma empresa, e o
+    // fornecedor só lê os da dele. Antes, quem estivesse dentro do portal e
+    // soubesse o nome do arquivo baixava o XML de qualquer outro — o sigilo
+    // ficava por conta do sufixo sorteado no nome, que é obstáculo e não
+    // permissão. Mesma regra que vale na lista de notas, no mesmo lugar.
+    if (!(await podeBaixarArquivo(user, key))) {
+      // De novo a resposta de inexistente: dizer "não é seu" confirmaria que o
+      // arquivo existe e de quem ele é.
       res.status(404).send("Arquivo não encontrado.");
       return;
     }

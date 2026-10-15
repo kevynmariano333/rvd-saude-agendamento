@@ -42,7 +42,16 @@ export function getSessionCookieOptions(
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
+    // "lax" e não "none": com "none" o navegador mandava o cookie de sessão
+    // junto de requisições partidas de qualquer outro site, que é o que abre
+    // espaço para alguém disparar uma ação no portal em nome de quem está
+    // logado. Com "lax" ele só vai nas requisições do próprio portal e nos
+    // links que a pessoa clica para chegar aqui — que é tudo o que o portal
+    // precisa, inclusive o link do comprovante e o de redefinir senha.
+    //
+    // O portal não é embutido em site nenhum (o cabeçalho frame-ancestors já
+    // proíbe), então não há nada do outro lado para quebrar.
+    sameSite: "lax",
     secure: isSecureRequest(req),
   };
 }

@@ -662,6 +662,26 @@ export async function datasFuradasPorNota(): Promise<Map<number, Date[]>> {
   return furadas;
 }
 
+/**
+ * De quem é o arquivo guardado nesta chave do bucket.
+ *
+ * O download dos anexos precisa saber de quem é a nota antes de entregar o
+ * arquivo. A busca é pela chave exata — e não por um "começa com" —, porque o
+ * que vale é o arquivo daquela nota, e não qualquer um que se pareça com ele.
+ */
+export async function notaPelaChaveDoArquivo(chave: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const [linha] = await db
+    .select({ id: appointments.id, supplierId: appointments.supplierId })
+    .from(appointments)
+    // Uma coluna só: o documento da nota de serviço é guardado no mesmo campo
+    // do XML do fornecedor, e os dois chegam aqui pelo mesmo caminho.
+    .where(eq(appointments.xmlStorageKey, chave))
+    .limit(1);
+  return linha ?? null;
+}
+
 export async function listAppointmentMessages(appointmentId: number) {
   const db = await getDb();
   if (!db) return [];

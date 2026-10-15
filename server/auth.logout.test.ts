@@ -54,10 +54,13 @@ describe("auth.logout", () => {
     expect(clearedCookies).toHaveLength(2);
     const manusCookie = clearedCookies.find(cookie => cookie.name === COOKIE_NAME);
     const rvdCookie = clearedCookies.find(cookie => cookie.name === RVD_SESSION_COOKIE);
+    // "lax" nos dois: o cookie de sessão do portal já era assim, e o outro
+    // ficou igual. Com "none" o navegador o mandava junto de requisições
+    // partidas de qualquer site — folga que o portal nunca precisou.
     expect(manusCookie?.options).toMatchObject({
       maxAge: -1,
       secure: true,
-      sameSite: "none",
+      sameSite: "lax",
       httpOnly: true,
       path: "/",
     });

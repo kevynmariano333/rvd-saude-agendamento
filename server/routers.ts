@@ -63,8 +63,6 @@ import {
   consumePasswordResetToken,
   updateUserName,
   updateUserPassword,
-  listApprovedCompanyUserIds,
-  listarIdsDaEmpresa,
   listPendingAccessRequests,
   setUserAccessStatus,
   createPasswordResetToken,
@@ -124,7 +122,8 @@ import { montarEstadoDeSeguranca } from "./estadoDeSeguranca";
 import { isS3Configured } from "./_core/s3Client";
 import { conteudoDoAgendamento } from "./emailDeAgendamento";
 import { conteudoDaRecusa } from "./emailDeRecusa";
-import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
+import { isWithinScope } from "./supplierScope";
+import { idsNoEscopo, type UsuarioComEscopo } from "./escopoDeNotas";
 import { contarAgendamentos } from "./db";
 import { apagarNotaRegistrando, backupConhecido, backupsDisponiveis, excluirNotaRepetida, limparAvisos, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
 import { chaveDeDuplicidade } from "../shared/duplicidadeDeNota";
@@ -293,21 +292,11 @@ async function getExistingAttendance(attendanceId: number) {
   return attendance;
 }
 
-type ScopedUser = { id: number; role: UserRole; companyCnpj?: string | null; companyId?: number | null };
+type ScopedUser = UsuarioComEscopo;
 
-/**
- * The supplier logins whose appointments this caller may read. Logins sharing a
- * CNPJ see the company's records; only approved ones count, so a login waiting
- * on the operator neither sees the company nor is seen by it.
- */
-async function supplierScopeIds(user: ScopedUser): Promise<number[]> {
-  // Conta agrupada numa empresa enxerga os CNPJs todos dela — é para isso que a
-  // empresa existe. Sem grupo, continua valendo o CNPJ da própria conta.
-  if (user.companyId) return buildScopeIds(user.id, await listarIdsDaEmpresa(user.companyId));
-  const key = companyKey(user.companyCnpj);
-  if (!key) return [user.id];
-  return buildScopeIds(user.id, await listApprovedCompanyUserIds(key));
-}
+// A regra de escopo mora em escopoDeNotas.ts: o download dos anexos precisa da
+// mesma, e regra duplicada é regra que diverge na primeira correção.
+const supplierScopeIds = idsNoEscopo;
 
 async function getAccessibleAppointment(user: ScopedUser, appointmentId: number) {
   const appointment = await getAppointmentById(appointmentId);
