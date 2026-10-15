@@ -15,14 +15,22 @@
  */
 
 export type SugestaoComparavel = {
-  /** O perfil de quem escreveu a sugestão. "planejador" é o que tem prioridade. */
+  /** O perfil de quem escreveu. É o de dentro da casa que tem prioridade. */
   createdByRole?: string | null;
   createdAt: Date | string;
 };
 
-/** Quem escreveu manda mais do que quando escreveu. */
+/**
+ * Quem escreveu manda mais do que quando escreveu.
+ *
+ * O administrador conta como planejamento: quando ele propõe data, está
+ * cobrindo essa mesa, e a proposta enxerga a doca inteira do mesmo jeito. O
+ * que distingue não é o crachá, é o lado — de dentro ou de fora.
+ */
+const DE_DENTRO = new Set(["planejador", "admin"]);
+
 export function ehDoPlanejamento(sugestao: SugestaoComparavel): boolean {
-  return sugestao.createdByRole === "planejador";
+  return DE_DENTRO.has(sugestao.createdByRole ?? "");
 }
 
 function instante(valor: Date | string): number {

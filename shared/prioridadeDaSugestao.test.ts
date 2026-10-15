@@ -51,3 +51,18 @@ describe("a ordem na janela de agendamento", () => {
     ]);
   });
 });
+
+describe("o administrador cobrindo o planejamento", () => {
+  it("a proposta dele vale como a do planejamento", () => {
+    // O que distingue não é o crachá, é o lado: a proposta de dentro enxerga
+    // a doca inteira, a do fornecedor enxerga a entrega dele.
+    expect(ehDoPlanejamento({ createdByRole: "admin", createdAt: new Date() })).toBe(true);
+    expect(ehDoPlanejamento({ createdByRole: "supplier", createdAt: new Date() })).toBe(false);
+  });
+
+  it("e ganha da do fornecedor, mesmo sendo mais antiga", () => {
+    const doAdmin = { createdByRole: "admin", createdAt: new Date("2026-01-01T10:00:00.000Z") };
+    const doFornecedor = { createdByRole: "supplier", createdAt: new Date("2026-02-01T10:00:00.000Z") };
+    expect(sugestaoPrioritaria([doFornecedor, doAdmin])).toBe(doAdmin);
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canConfirmSchedule, canMoveAppointmentStatus, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, isOperator, isSchedulingDesk } from "./permissions";
+import { canConfirmSchedule, canMoveAppointmentStatus, canTreatBacklog, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, isOperator, isSchedulingDesk } from "./permissions";
 import { buildScopeIds, isWithinScope } from "./supplierScope";
 
 describe("regras de perfil e status", () => {
@@ -56,6 +56,24 @@ describe("planejador", () => {
     expect(canSuggestSchedule("planejador")).toBe(true);
     // Agendar é o compromisso com o fornecedor: continua sendo do Operador.
     expect(canConfirmSchedule("planejador")).toBe(false);
+  });
+
+  it("o administrador tem tudo, inclusive o que é do planejador", () => {
+    // Ele responde pelo sistema inteiro, e em equipe pequena é quem cobre o
+    // planejamento quando não há planejador na mesa.
+    expect(isSchedulingDesk("admin")).toBe(true);
+    expect(canConfirmSchedule("admin")).toBe(true);
+    expect(canMoveAppointmentStatus("admin")).toBe(true);
+    expect(canTreatBacklog("admin")).toBe(true);
+    // A que faltava: propor data sem marcá-la.
+    expect(canSuggestSchedule("admin")).toBe(true);
+  });
+
+  it("marcar continua sendo do operador, e o fornecedor não ganha nada com isso", () => {
+    expect(canSuggestSchedule("operator")).toBe(false);
+    expect(canSuggestSchedule("portaria")).toBe(false);
+    expect(canSuggestSchedule("operacao")).toBe(false);
+    expect(canConfirmSchedule("supplier")).toBe(false);
   });
 
   it("não se confunde com o operador nem com o fornecedor", () => {

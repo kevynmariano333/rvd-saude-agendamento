@@ -26,9 +26,16 @@ export function canConfirmSchedule(role: UserRole) {
   return isOperator(role);
 }
 
-/** Propor uma data sem marcá-la: o fornecedor pede, o planejador planeja. */
+/**
+ * Propor uma data sem marcá-la: o fornecedor pede, o planejador planeja.
+ *
+ * O administrador entra porque responde pelo sistema inteiro, e porque em
+ * equipe pequena é ele quem cobre o planejamento quando não há planejador na
+ * mesa. Marcar ele já podia; propor, não — e faltar a metade mais branda da
+ * ação era o recorte mais difícil de explicar do portal.
+ */
 export function canSuggestSchedule(role: UserRole) {
-  return role === "supplier" || role === "planejador";
+  return role === "supplier" || role === "planejador" || role === "admin";
 }
 
 /**

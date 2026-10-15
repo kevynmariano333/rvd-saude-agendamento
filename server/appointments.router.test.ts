@@ -281,6 +281,16 @@ describe("procedures de agendamento", () => {
     expect(mocks.createAppointmentSuggestion).not.toHaveBeenCalled();
   });
 
+  it("o administrador também pode propor data, sem marcá-la", async () => {
+    // É a função do planejador que faltava ao perfil que responde pelo
+    // sistema inteiro: marcar ele já podia; propor, não.
+    mocks.getAppointmentById.mockResolvedValue({ id: 3, supplierId: 12, status: "pending", recipientCnpj: "43293604002120" });
+    mocks.createAppointmentSuggestion.mockResolvedValue({ id: 10, status: "pending" });
+    const caller = appRouter.createCaller(context("admin"));
+    await caller.suggestions.create({ appointmentId: 3, suggestedFor: "2030-09-01T10:00:00.000Z", notes: "Melhor para a doca" });
+    expect(mocks.createAppointmentSuggestion).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 3, notes: "Melhor para a doca" }));
+  });
+
   it("recusa a sugestão do planejador no dia do inventário", async () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "pending", recipientCnpj: "06033403000113" });
     const caller = appRouter.createCaller(context("planejador"));

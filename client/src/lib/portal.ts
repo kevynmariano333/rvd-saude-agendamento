@@ -53,6 +53,29 @@ export function isPortalPlanner(role: PortalRole) {
 }
 
 /**
+ * Quem pode propor uma data sem marcá-la.
+ *
+ * O planejador por ofício, e o administrador porque responde pelo sistema
+ * inteiro — em equipe pequena é ele quem cobre o planejamento. Para o
+ * administrador é a ação a mais: ele continua podendo marcar direto, e propor
+ * é o caminho mais brando, para a data passar pelo aceite de quem opera.
+ */
+export function podeSugerirData(role: PortalRole) {
+  return isPortalPlanner(role) || isPortalAdmin(role);
+}
+
+/**
+ * A nota ainda aceita proposta de data?
+ *
+ * Só enquanto a data é assunto: depois que a carga chega, propor dia é falar
+ * de uma coisa que já aconteceu. Espelha a mesma regra do servidor, que é
+ * quem de fato recusa.
+ */
+export function podeReceberSugestao(status: PortalStatus) {
+  return status === "pending" || status === "scheduled" || status === "backlog";
+}
+
+/**
  * Quem trata o backlog. É do planejamento: o Operador é quem manda a nota para
  * lá, ao constatar que o recebimento não fechou. O administrador entra porque
  * responde pelo sistema inteiro.
