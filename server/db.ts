@@ -6,6 +6,7 @@ import {
   feedbacks,
   appointments,
   appointmentMessages,
+  appointmentMessageVersions,
   appointmentStatusHistory,
   appointmentInternalNoteReads,
   appointmentInternalNotes,
@@ -686,11 +687,70 @@ export async function listAppointmentMessages(appointmentId: number) {
   const db = await getDb();
   if (!db) return [];
   return db
-    .select({ id: appointmentMessages.id, appointmentId: appointmentMessages.appointmentId, senderId: appointmentMessages.senderId, senderName: users.name, senderRole: users.role, body: appointmentMessages.body, createdAt: appointmentMessages.createdAt })
+    .select({ id: appointmentMessages.id, appointmentId: appointmentMessages.appointmentId, senderId: appointmentMessages.senderId, senderName: users.name, senderRole: users.role, body: appointmentMessages.body, apagadaEm: appointmentMessages.apagadaEm, editadaEm: appointmentMessages.editadaEm, createdAt: appointmentMessages.createdAt })
     .from(appointmentMessages)
     .innerJoin(users, eq(appointmentMessages.senderId, users.id))
     .where(eq(appointmentMessages.appointmentId, appointmentId))
     .orderBy(appointmentMessages.createdAt, appointmentMessages.id);
+}
+
+/** A mensagem, só o que decide quem pode apagá-la. */
+export async function mensagemPeloId(messageId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [linha] = await db
+    .select({ id: appointmentMessages.id, appointmentId: appointmentMessages.appointmentId, senderId: appointmentMessages.senderId, body: appointmentMessages.body, apagadaEm: appointmentMessages.apagadaEm })
+    .from(appointmentMessages)
+    .where(eq(appointmentMessages.id, messageId))
+    .limit(1);
+  return linha ?? null;
+}
+
+/**
+ * Apagar uma mensagem da conversa.
+ *
+ * O texto é zerado aqui, e não escondido na consulta: apagar que deixa o texto
+ * no banco não é apagar, e quem pediu para excluir não tem como saber disso.
+ *
+ * A linha continua, com a marca de quem apagou e quando. A conversa é o
+ * registro entre a casa e o fornecedor — um trecho que some sem rastro
+ * reescreve o que o outro lado já leu.
+ */
+export async function editarMensagem(input: { messageId: number; textoAnterior: string; body: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.transaction(async tx => {
+    // A versão antiga é guardada antes de a nova entrar: se a ordem fosse a
+    // outra, uma falha no meio deixaria a mensagem trocada e sem o histórico.
+    await tx.insert(appointmentMessageVersions).values({ messageId: input.messageId, body: input.textoAnterior });
+    await tx.update(appointmentMessages).set({ body: input.body, editadaEm: new Date() }).where(eq(appointmentMessages.id, input.messageId));
+  });
+}
+
+/** O que a mensagem já disse, da versão mais antiga para a mais nova. */
+export async function versoesDaMensagem(messageId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({ id: appointmentMessageVersions.id, body: appointmentMessageVersions.body, trocadaEm: appointmentMessageVersions.trocadaEm })
+    .from(appointmentMessageVersions)
+    .where(eq(appointmentMessageVersions.messageId, messageId))
+    .orderBy(appointmentMessageVersions.trocadaEm, appointmentMessageVersions.id);
+}
+
+export async function apagarMensagem(input: { messageId: number; userId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.transaction(async tx => {
+    // As versões antigas vão junto. Apagar a mensagem e deixar no histórico o
+    // texto que ela tinha antes de uma edição seria apagar pela metade — e a
+    // metade que fica é justamente a que a pessoa quis tirar da frente.
+    await tx.delete(appointmentMessageVersions).where(eq(appointmentMessageVersions.messageId, input.messageId));
+    await tx
+      .update(appointmentMessages)
+      .set({ body: "", apagadaEm: new Date(), apagadaPor: input.userId })
+      .where(eq(appointmentMessages.id, input.messageId));
+  });
 }
 
 export async function createAppointmentMessage(input: { appointmentId: number; senderId: number; body: string; senderIsOperator: boolean }) {
@@ -718,7 +778,8 @@ export async function listUnreadAppointmentMessages(input: { userId: number; isO
     .from(appointmentMessages)
     .innerJoin(appointments, eq(appointmentMessages.appointmentId, appointments.id))
     .innerJoin(users, eq(appointmentMessages.senderId, users.id))
-    .where(and(ne(appointmentMessages.senderId, input.userId), isNull(unreadColumn), ...scope))
+    // A apagada fica de fora: o sino anunciaria uma novidade que não existe mais.
+    .where(and(ne(appointmentMessages.senderId, input.userId), isNull(unreadColumn), isNull(appointmentMessages.apagadaEm), ...scope))
     .orderBy(desc(appointmentMessages.createdAt))
     .limit(8);
 }
@@ -2994,7 +3055,9 @@ export async function contarMensagensPorNota(input: { userId: number; isOperator
     .select({
       appointmentId: appointmentMessages.appointmentId,
       total: count(),
-      naoLidas: sql<number>`sum(case when ${appointmentMessages.senderId} <> ${input.userId} and ${colunaDeLeitura} is null then 1 else 0 end)`.mapWith(Number),
+      // Mensagem apagada não conta: o sino apontaria para um "Mensagem
+      // apagada", e quem fosse olhar não encontraria novidade nenhuma.
+      naoLidas: sql<number>`sum(case when ${appointmentMessages.senderId} <> ${input.userId} and ${colunaDeLeitura} is null and ${appointmentMessages.apagadaEm} is null then 1 else 0 end)`.mapWith(Number),
     })
     .from(appointmentMessages)
     .innerJoin(appointments, eq(appointmentMessages.appointmentId, appointments.id))

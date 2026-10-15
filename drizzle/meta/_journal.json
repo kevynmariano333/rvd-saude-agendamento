@@ -323,6 +323,20 @@
       "when": 1791407674289,
       "tag": "0045_nota_do_portal",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "5",
+      "when": 1791494074289,
+      "tag": "0046_apagar_mensagem",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "5",
+      "when": 1791580474289,
+      "tag": "0047_editar_mensagem",
+      "breakpoints": true
     }
   ]
 }

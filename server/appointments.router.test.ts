@@ -14,6 +14,10 @@ const mocks = vi.hoisted(() => ({
   getUserByEmail: vi.fn(),
   listAppointmentHistory: vi.fn(),
   listAppointmentMessages: vi.fn(),
+  mensagemPeloId: vi.fn(),
+  apagarMensagem: vi.fn(),
+  editarMensagem: vi.fn(),
+  versoesDaMensagem: vi.fn(),
   listAppointments: vi.fn(),
   listAppointmentSuggestions: vi.fn(),
   listUnreadAppointmentMessages: vi.fn(),
@@ -580,6 +584,70 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("supplier"));
     await caller.messages.send({ appointmentId: 1, body: "Posso antecipar a entrega?" });
     expect(mocks.createAppointmentMessage).toHaveBeenCalledWith({ appointmentId: 1, senderId: 12, body: "Posso antecipar a entrega?", senderIsOperator: false });
+  });
+
+  it("quem escreveu apaga a própria mensagem, e o texto sai do banco", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.mensagemPeloId.mockResolvedValue({ id: 5, appointmentId: 1, senderId: 12, body: "errei o pedido", apagadaEm: null });
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.messages.apagar({ messageId: 5 });
+    expect(mocks.apagarMensagem).toHaveBeenCalledWith({ messageId: 5, userId: 12 });
+  });
+
+  it("ninguém apaga a mensagem do outro — exceto o administrador", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.mensagemPeloId.mockResolvedValue({ id: 6, appointmentId: 1, senderId: 99, body: "do balcão", apagadaEm: null });
+    const doFornecedor = appRouter.createCaller(context("supplier"));
+    await expect(doFornecedor.messages.apagar({ messageId: 6 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.apagarMensagem).not.toHaveBeenCalled();
+
+    // O administrador alcança todas porque responde pelo sistema.
+    const doAdmin = appRouter.createCaller(context("admin"));
+    await doAdmin.messages.apagar({ messageId: 6 });
+    expect(mocks.apagarMensagem).toHaveBeenCalledWith({ messageId: 6, userId: 24 });
+  });
+
+  it("editar é só de quem escreveu — nem o administrador entra", async () => {
+    // Apagar deixa um "Mensagem apagada" na tela; editar colocaria palavras na
+    // boca de quem escreveu, sem nada que denuncie a troca.
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.mensagemPeloId.mockResolvedValue({ id: 7, appointmentId: 1, senderId: 12, body: "texto antigo", apagadaEm: null });
+    const doAdmin = appRouter.createCaller(context("admin"));
+    await expect(doAdmin.messages.editar({ messageId: 7, body: "outro texto" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.editarMensagem).not.toHaveBeenCalled();
+  });
+
+  it("a edição guarda o que a mensagem dizia antes", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.mensagemPeloId.mockResolvedValue({ id: 8, appointmentId: 1, senderId: 12, body: "chego às 8h", apagadaEm: null });
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.messages.editar({ messageId: 8, body: "chego às 10h" });
+    expect(mocks.editarMensagem).toHaveBeenCalledWith({ messageId: 8, textoAnterior: "chego às 8h", body: "chego às 10h" });
+  });
+
+  it("salvar sem mudar nada não acende o \"editada\"", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.mensagemPeloId.mockResolvedValue({ id: 9, appointmentId: 1, senderId: 12, body: "chego às 8h", apagadaEm: null });
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.messages.editar({ messageId: 9, body: "  chego às 8h  " });
+    expect(mocks.editarMensagem).not.toHaveBeenCalled();
+  });
+
+  it("mensagem apagada não volta a ser editada", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.mensagemPeloId.mockResolvedValue({ id: 10, appointmentId: 1, senderId: 12, body: "", apagadaEm: new Date() });
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.messages.editar({ messageId: 10, body: "ressuscitar" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("não dá para apagar nem ler versões de mensagem de outro fornecedor", async () => {
+    // O acesso à nota é conferido antes de tudo: sem isso, um id sorteado
+    // diria se a mensagem existe e de quem ela é.
+    mocks.getAppointmentById.mockResolvedValue({ id: 2, supplierId: 99, status: "scheduled" });
+    mocks.mensagemPeloId.mockResolvedValue({ id: 11, appointmentId: 2, senderId: 99, body: "sigiloso", apagadaEm: null });
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.messages.apagar({ messageId: 11 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.messages.versoes({ messageId: 11 })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("bloqueia o chat de um agendamento que não pertence ao fornecedor", async () => {

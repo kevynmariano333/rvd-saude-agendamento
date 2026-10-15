@@ -424,9 +424,42 @@ export const appointmentMessages = mysqlTable(
     body: text("body").notNull(),
     operatorReadAt: datetime("operatorReadAt", { mode: "date" }),
     supplierReadAt: datetime("supplierReadAt", { mode: "date" }),
+    /**
+     * Quando a mensagem foi apagada por quem a escreveu.
+     *
+     * O texto sai do banco no mesmo ato — apagar que só esconde na tela não é
+     * apagar. Fica a marca de que houve mensagem ali: a conversa é o registro
+     * entre a casa e o fornecedor, e um trecho que some sem deixar rastro
+     * reescreve o que o outro lado já leu.
+     */
+    apagadaEm: timestamp("apagadaEm"),
+    apagadaPor: int("apagadaPor").references(() => users.id, { onDelete: "set null" }),
+    /** Quando o texto foi trocado pela última vez. É o que acende o "editada". */
+    editadaEm: timestamp("editadaEm"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => [index("appointment_messages_appointment_idx").on(table.appointmentId, table.createdAt)]
+);
+
+/**
+ * O que a mensagem dizia antes de ser editada.
+ *
+ * A marca "editada" avisa que o texto mudou, mas não diz o que mudou — e numa
+ * conversa que serve de combinado entre a casa e o fornecedor, "eu tinha
+ * escrito outra coisa" precisa ter onde ser conferido. Cada edição empurra a
+ * versão anterior para cá, em ordem.
+ */
+export const appointmentMessageVersions = mysqlTable(
+  "appointmentMessageVersions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    messageId: int("messageId")
+      .notNull()
+      .references(() => appointmentMessages.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    trocadaEm: timestamp("trocadaEm").defaultNow().notNull(),
+  },
+  table => [index("appointment_message_versions_idx").on(table.messageId, table.trocadaEm)]
 );
 
 export const attendances = mysqlTable(

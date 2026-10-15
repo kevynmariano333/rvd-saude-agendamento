@@ -30,6 +30,10 @@ import {
   getUserByEmail,
   listAppointmentHistory,
   listAppointmentMessages,
+  mensagemPeloId,
+  apagarMensagem,
+  editarMensagem,
+  versoesDaMensagem,
   datasFuradasPorNota,
   listAppointments,
   listCalendarAppointments,
@@ -1874,6 +1878,70 @@ export const appRouter = router({
         await getAccessibleAppointment(ctx.user, input.appointmentId);
         const id = await createAppointmentMessage({ appointmentId: input.appointmentId, senderId: ctx.user.id, body: input.body.trim(), senderIsOperator: isSchedulingDesk(ctx.user.role) });
         return { id };
+      }),
+    /**
+     * Apagar uma mensagem da conversa.
+     *
+     * De quem escreveu, e do administrador, que responde pelo sistema. Não de
+     * quem apenas participa da conversa: o fornecedor apagar o que o balcão
+     * escreveu — ou o contrário — seria editar a fala do outro.
+     *
+     * O texto sai do banco; a linha fica, marcando que houve mensagem ali. Na
+     * tela vira "Mensagem apagada", que é o que o outro lado precisa saber
+     * depois de já ter lido alguma coisa.
+     */
+    apagar: protectedProcedure
+      .input(z.object({ messageId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const mensagem = await mensagemPeloId(input.messageId);
+        if (!mensagem) throw new TRPCError({ code: "NOT_FOUND", message: "Mensagem não encontrada." });
+        // Primeiro o acesso à nota: sem isso, um id sorteado diria se a
+        // mensagem existe, e de quem ela é.
+        await getAccessibleAppointment(ctx.user, mensagem.appointmentId);
+        if (mensagem.senderId !== ctx.user.id && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Só quem escreveu a mensagem pode apagá-la." });
+        }
+        if (mensagem.apagadaEm) return { success: true } as const;
+        await apagarMensagem({ messageId: input.messageId, userId: ctx.user.id });
+        return { success: true } as const;
+      }),
+    /**
+     * Editar a própria mensagem.
+     *
+     * Só de quem escreveu — nem o administrador entra aqui. Apagar a mensagem
+     * de alguém deixa um "Mensagem apagada", e o outro lado vê o que houve;
+     * editar colocaria palavras na boca de quem escreveu, sem nada na tela que
+     * denuncie a troca.
+     *
+     * A versão anterior é guardada. A marca "editada" avisa que mudou, mas não
+     * diz o que mudou — e numa conversa que serve de combinado, "eu tinha
+     * escrito outra coisa" precisa ter onde ser conferido.
+     */
+    editar: protectedProcedure
+      .input(z.object({ messageId: z.number().int().positive(), body: z.string().trim().min(1, "Digite uma mensagem.").max(1000) }))
+      .mutation(async ({ ctx, input }) => {
+        const mensagem = await mensagemPeloId(input.messageId);
+        if (!mensagem) throw new TRPCError({ code: "NOT_FOUND", message: "Mensagem não encontrada." });
+        await getAccessibleAppointment(ctx.user, mensagem.appointmentId);
+        if (mensagem.senderId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Só quem escreveu a mensagem pode editá-la." });
+        }
+        if (mensagem.apagadaEm) throw new TRPCError({ code: "BAD_REQUEST", message: "Esta mensagem foi apagada." });
+        const texto = input.body.trim();
+        // Salvar sem ter mudado nada acenderia o "editada" à toa.
+        if (texto === mensagem.body) return { success: true } as const;
+        await editarMensagem({ messageId: input.messageId, textoAnterior: mensagem.body, body: texto });
+        return { success: true } as const;
+      }),
+    /** O que a mensagem dizia antes. Para quem participa da conversa. */
+    versoes: protectedProcedure
+      .input(z.object({ messageId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const mensagem = await mensagemPeloId(input.messageId);
+        if (!mensagem) throw new TRPCError({ code: "NOT_FOUND", message: "Mensagem não encontrada." });
+        await getAccessibleAppointment(ctx.user, mensagem.appointmentId);
+        if (mensagem.apagadaEm) return [];
+        return versoesDaMensagem(input.messageId);
       }),
     notifications: protectedProcedure.query(({ ctx }) => listUnreadAppointmentMessages({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
     /**
