@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cnpjsDoDestinatario, filtroDeDestinatario, formatarCnpj, gruposDeUnidades, rotuloDoDestinatario, unidadePorCnpj, valorDaUnidade, valorDoGrupo } from "./recipients";
+import { UNIDADES, cnpjsDoDestinatario, filtroDeDestinatario, formatarCnpj, gruposDeUnidades, rotuloDoDestinatario, unidadePorCnpj, valorDaUnidade, valorDoGrupo } from "./recipients";
 
 describe("destinatário da nota", () => {
   it("guarda o CNPJ no tooltip, que é o que o sistema realmente usa", () => {
@@ -55,11 +55,12 @@ describe("seletor de destinatário por grupo", () => {
     const grupos = gruposDeUnidades();
     expect(grupos).toHaveLength(1);
     expect(grupos[0].grupo).toBe("Amil");
-    expect(grupos[0].unidades.map(unidade => unidade.sigla)).toEqual(["HSH", "MSH"]);
+    expect(grupos[0].unidades.map(unidade => unidade.sigla)).toEqual(UNIDADES.map(unidade => unidade.sigla));
+    expect(grupos[0].unidades.map(unidade => unidade.sigla).slice(0, 3)).toEqual(["HSH", "MSH", "CM 19"]);
   });
 
   it("escolher o grupo filtra por todas as unidades dele", () => {
-    expect(cnpjsDoDestinatario(valorDoGrupo("Amil"))).toEqual(["06033403000113", "43293604002120"]);
+    expect(cnpjsDoDestinatario(valorDoGrupo("Amil"))).toEqual(UNIDADES.map(unidade => unidade.cnpj));
   });
 
   it("escolher uma unidade filtra só por ela", () => {
