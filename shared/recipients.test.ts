@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { UNIDADES, cnpjsDoDestinatario, filtroDeDestinatario, formatarCnpj, gruposDeUnidades, rotuloDoDestinatario, unidadePorCnpj, valorDaUnidade, valorDoGrupo } from "./recipients";
+import { afterEach, describe, expect, it } from "vitest";
+import { UNIDADES, definirUnidades, unidadesPadrao, cnpjsDoDestinatario, filtroDeDestinatario, formatarCnpj, gruposDeUnidades, rotuloDoDestinatario, unidadePorCnpj, valorDaUnidade, valorDoGrupo } from "./recipients";
 
 describe("destinatário da nota", () => {
   it("guarda o CNPJ no tooltip, que é o que o sistema realmente usa", () => {
@@ -80,5 +80,24 @@ describe("seletor de destinatário por grupo", () => {
 
   it("um grupo que não existe não vira lista vazia, que esconderia tudo", () => {
     expect(cnpjsDoDestinatario(valorDoGrupo("Inexistente"))).toBeUndefined();
+  });
+});
+
+describe("cadastro de unidades que muda em uso", () => {
+  afterEach(() => definirUnidades(unidadesPadrao()));
+
+  it("a lista nova vale para quem já tinha importado a antiga", () => {
+    definirUnidades([{ cnpj: "11222333000181", sigla: "CM 99", nome: "Centro Médico 99", curto: "CM 99", artigo: "o", grupo: "Amil", razaoSocial: "", endereco: "", bairro: "", cidade: "Santos", cep: "" }]);
+    // A mesma array de sempre: é isso que faz o resto do código enxergar.
+    expect(UNIDADES).toHaveLength(1);
+    expect(unidadePorCnpj("11222333000181")?.sigla).toBe("CM 99");
+    expect(unidadePorCnpj("06033403000113")).toBeNull();
+  });
+
+  it("volta ao que vinha no código quando o banco não responde", () => {
+    definirUnidades([]);
+    expect(UNIDADES).toHaveLength(0);
+    definirUnidades(unidadesPadrao());
+    expect(unidadePorCnpj("06033403000113")?.sigla).toBe("HSH");
   });
 });

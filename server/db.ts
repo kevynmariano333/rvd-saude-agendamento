@@ -29,6 +29,8 @@ import {
   purchaseOrderItems,
   backupRuns,
   systemAlerts,
+  unidadesDeEntrega,
+  type UnidadeDeEntrega,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { normalizeCnpj } from "./fiscalFilters";
@@ -44,6 +46,7 @@ import { ehDoPlanejamento, sugestaoPrioritaria } from "../shared/prioridadeDaSug
 import type { Situacao } from "../shared/presenca";
 import { ehNotaValida } from "../shared/notaDoPortal";
 import { furouOCompromisso } from "../shared/qualificacaoDoFornecedor";
+import { definirUnidades, UNIDADES, unidadesPadrao, type Unidade } from "../shared/recipients";
 
 /**
  * Como o portal segura a conexão com o banco o dia inteiro.
@@ -3371,4 +3374,116 @@ export async function marcarFeedbackLido(input: { feedbackId: number; adminId: n
     .update(feedbacks)
     .set(input.lido ? { lidoEm: new Date(), lidoPor: input.adminId } : { lidoEm: null, lidoPor: null })
     .where(eq(feedbacks.id, input.feedbackId));
+}
+
+/**
+ * O cadastro de unidades, do banco para a lista que o resto do código lê.
+ *
+ * A primeira subida com a tabela vazia semeia as unidades que estavam escritas
+ * no código, para ninguém chegar numa tela sem destinatário nenhum. Depois
+ * disso o banco manda, inclusive quando alguém apaga uma unidade de propósito.
+ */
+export async function carregarUnidadesDeEntrega(): Promise<Unidade[]> {
+  const db = await getDb();
+  if (!db) return UNIDADES.map(unidade => ({ ...unidade }));
+
+  let linhas = await db.select().from(unidadesDeEntrega).orderBy(asc(unidadesDeEntrega.id));
+  if (linhas.length === 0) {
+    await db.insert(unidadesDeEntrega).values(unidadesPadrao().map(unidade => ({ ...unidade })));
+    linhas = await db.select().from(unidadesDeEntrega).orderBy(asc(unidadesDeEntrega.id));
+  }
+
+  const ativas = linhas.filter(linha => linha.ativa).map(paraUnidade);
+  definirUnidades(ativas);
+  return ativas;
+}
+
+function paraUnidade(linha: UnidadeDeEntrega): Unidade {
+  return {
+    cnpj: linha.cnpj,
+    sigla: linha.sigla,
+    nome: linha.nome,
+    curto: linha.curto,
+    artigo: linha.artigo,
+    grupo: linha.grupo,
+    razaoSocial: linha.razaoSocial,
+    endereco: linha.endereco,
+    bairro: linha.bairro,
+    cidade: linha.cidade,
+    cep: linha.cep,
+  };
+}
+
+/** O cadastro inteiro, inclusive o que está desativado: é a tela de administração. */
+export async function listarUnidadesDeEntrega(): Promise<UnidadeDeEntrega[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(unidadesDeEntrega).orderBy(asc(unidadesDeEntrega.id));
+}
+
+export type DadosDaUnidade = {
+  cnpj: string;
+  sigla: string;
+  nome: string;
+  curto: string;
+  artigo: "o" | "a";
+  grupo: string;
+  razaoSocial: string;
+  endereco: string;
+  bairro: string;
+  cidade: string;
+  cep: string;
+  ativa: boolean;
+};
+
+/**
+ * Cria ou corrige uma unidade.
+ *
+ * O CNPJ é a chave pela qual a nota encontra a unidade, e dois cadastros com o
+ * mesmo CNPJ fariam metade das notas cair numa unidade e metade na outra. O
+ * banco recusa a repetição; aqui ela vira uma frase que diz qual é o problema.
+ */
+export async function salvarUnidadeDeEntrega(input: DadosDaUnidade & { id?: number }): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+
+  const cnpj = normalizeCnpj(input.cnpj) ?? "";
+  if (cnpj.length !== 14) throw new Error("O CNPJ precisa ter 14 dígitos — é por ele que a nota encontra a unidade.");
+
+  const [repetida] = await db.select({ id: unidadesDeEntrega.id }).from(unidadesDeEntrega).where(eq(unidadesDeEntrega.cnpj, cnpj));
+  if (repetida && repetida.id !== input.id) throw new Error("Já existe uma unidade cadastrada com este CNPJ.");
+
+  const valores = {
+    cnpj,
+    sigla: input.sigla.trim(),
+    nome: input.nome.trim(),
+    curto: input.curto.trim() || input.sigla.trim(),
+    artigo: input.artigo,
+    grupo: input.grupo.trim(),
+    razaoSocial: input.razaoSocial.trim(),
+    endereco: input.endereco.trim(),
+    bairro: input.bairro.trim(),
+    cidade: input.cidade.trim(),
+    cep: input.cep.trim(),
+    ativa: input.ativa,
+  };
+
+  if (input.id) await db.update(unidadesDeEntrega).set(valores).where(eq(unidadesDeEntrega.id, input.id));
+  else await db.insert(unidadesDeEntrega).values(valores);
+
+  await carregarUnidadesDeEntrega();
+}
+
+/**
+ * Tira a unidade do cadastro.
+ *
+ * As notas que ela recebeu continuam no banco com o CNPJ delas: apagar a
+ * unidade não apaga histórico nenhum, só faz o CNPJ voltar a aparecer sem nome
+ * nas telas antigas.
+ */
+export async function excluirUnidadeDeEntrega(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível.");
+  await db.delete(unidadesDeEntrega).where(eq(unidadesDeEntrega.id, id));
+  await carregarUnidadesDeEntrega();
 }

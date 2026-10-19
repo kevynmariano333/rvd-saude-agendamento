@@ -25,10 +25,12 @@ const DIAS_DA_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
  * volta e duas unidades sem relação nenhuma sairiam da mesma cor.
  */
 const CORES_DAS_CIDADES = ["bg-state-go", "bg-rvd-blue", "bg-state-wait", "bg-brand", "bg-state-move", "bg-state-stop", "bg-rvd-lilac-blue", "bg-state-done"];
-const CIDADES = UNIDADES.map(unidade => unidade.cidade).filter((cidade, posicao, todas) => todas.indexOf(cidade) === posicao);
 function corDaUnidade(cnpj: string) {
   const unidade = UNIDADES.find(item => item.cnpj === cnpj);
-  const posicao = unidade ? CIDADES.indexOf(unidade.cidade) : -1;
+  // As cidades são contadas na hora: o cadastro de unidades muda em uso, e uma
+  // lista fechada na carga do arquivo pintaria a unidade nova de cinza.
+  const cidades = UNIDADES.map(item => item.cidade).filter((cidade, posicao, todas) => todas.indexOf(cidade) === posicao);
+  const posicao = unidade ? cidades.indexOf(unidade.cidade) : -1;
   return CORES_DAS_CIDADES[posicao < 0 ? CORES_DAS_CIDADES.length - 1 : posicao % CORES_DAS_CIDADES.length];
 }
 

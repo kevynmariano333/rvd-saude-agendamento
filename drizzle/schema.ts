@@ -632,3 +632,47 @@ export const feedbacks = mysqlTable(
   },
   table => [index("feedbacks_recentes_idx").on(table.createdAt), index("feedbacks_nao_lidos_idx").on(table.lidoEm, table.createdAt)]
 );
+
+/**
+ * As unidades que recebem carga.
+ *
+ * Elas nasceram escritas no código, e por um tempo isso bastou: eram duas, e
+ * unidade nova era coisa de ano em ano. Com quinze, e com endereço e razão
+ * social de cada uma, esperar um deploy para corrigir um CEP é caro demais —
+ * a operação precisa cadastrar e arrumar unidade sozinha.
+ *
+ * O CNPJ é a chave: é por ele que a nota diz para onde vai. Sem ele a unidade
+ * existe no cadastro mas nenhuma nota a encontra, e por isso ele é obrigatório
+ * e único.
+ */
+export const unidadesDeEntrega = mysqlTable(
+  "unidadesDeEntrega",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    /** Só dígitos, como o XML e o resto do banco guardam. */
+    cnpj: varchar("cnpj", { length: 14 }).notNull(),
+    /** O código curto que a operação usa para falar da unidade: HSH, CM 19. */
+    sigla: varchar("sigla", { length: 20 }).notNull(),
+    nome: varchar("nome", { length: 160 }).notNull(),
+    /** Como o nome cabe na coluna da tabela, que é estreita. */
+    curto: varchar("curto", { length: 20 }).notNull(),
+    /** "o" Hospital, "a" Maternidade: sem ele sai "entrega do Maternidade". */
+    artigo: mysqlEnum("artigo", ["o", "a"]).default("o").notNull(),
+    /** O cliente dono da unidade. As unidades de um grupo são filtradas juntas. */
+    grupo: varchar("grupo", { length: 80 }).notNull(),
+    /** A razão social, que é o nome que aparece na nota. */
+    razaoSocial: varchar("razaoSocial", { length: 255 }).notNull().default(""),
+    endereco: varchar("endereco", { length: 255 }).notNull().default(""),
+    bairro: varchar("bairro", { length: 120 }).notNull().default(""),
+    cidade: varchar("cidade", { length: 120 }).notNull().default(""),
+    cep: varchar("cep", { length: 9 }).notNull().default(""),
+    /** A unidade que fechou sai das telas sem levar junto o histórico dela. */
+    ativa: boolean("ativa").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [uniqueIndex("unidades_cnpj_unique").on(table.cnpj)]
+);
+
+export type UnidadeDeEntrega = typeof unidadesDeEntrega.$inferSelect;
+export type InsertUnidadeDeEntrega = typeof unidadesDeEntrega.$inferInsert;

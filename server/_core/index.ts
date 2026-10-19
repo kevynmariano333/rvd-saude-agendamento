@@ -11,6 +11,7 @@ import { ENV } from "./env";
 import { migrarNaSubida } from "./migrations";
 import { estadoDasContasDeTeste, MINIMO_DA_SENHA_DE_TESTE } from "../contasDeTeste";
 import { appRouter } from "../routers";
+import { carregarUnidadesDeEntrega } from "../db";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ligarBackupAutomatico } from "../agendadorDeBackup";
@@ -117,6 +118,10 @@ async function startServer() {
   // este código espera. Subir com o banco atrasado publica telas que quebram
   // ao ler uma coluna que ainda não existe.
   await migrarNaSubida();
+  // Com o banco na versão certa, o cadastro de unidades sai dele e não do que
+  // está escrito no código: é o que faz uma unidade cadastrada hoje valer para
+  // as telas sem esperar o próximo deploy.
+  await carregarUnidadesDeEntrega();
   const app = express();
   // Atrás do proxy do hosting, req.ip é o do proxy para todo mundo. Sem isto, o
   // freio de tentativas de login contaria o mundo inteiro como um visitante só

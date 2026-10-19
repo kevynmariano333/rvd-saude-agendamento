@@ -62,6 +62,10 @@ import {
   marcarFeedbackLido,
   marcarSaidaDoUsuario,
   registrarFeedback,
+  carregarUnidadesDeEntrega,
+  listarUnidadesDeEntrega,
+  salvarUnidadeDeEntrega,
+  excluirUnidadeDeEntrega,
   touchUserSignIn,
   treatBacklogAppointment,
   updateAppointmentStatus,
@@ -2214,6 +2218,52 @@ export const appRouter = router({
    * ninguém daqui. Hoje ele liga para a doca para reclamar de uma tela — e a
    * doca, que não desenvolve nada, anota num papel.
    */
+  /**
+   * O cadastro de unidades.
+   *
+   * A lista é pública porque toda tela do portal precisa dela para traduzir o
+   * CNPJ da nota num nome — inclusive antes de alguém entrar. O que ela conta
+   * é o endereço de uma unidade da RVD, que está na porta do prédio. Mexer no
+   * cadastro é outra conversa: é do administrador.
+   */
+  unidades: router({
+    lista: publicProcedure.query(async () => carregarUnidadesDeEntrega()),
+    cadastro: adminProcedure.query(async () => listarUnidadesDeEntrega()),
+    salvar: adminProcedure
+      .input(z.object({
+        id: z.number().int().positive().optional(),
+        cnpj: z.string().trim().min(14).max(20),
+        sigla: z.string().trim().min(1).max(20),
+        nome: z.string().trim().min(1).max(160),
+        curto: z.string().trim().max(20),
+        artigo: z.enum(["o", "a"]),
+        grupo: z.string().trim().min(1).max(80),
+        razaoSocial: z.string().trim().max(255),
+        endereco: z.string().trim().max(255),
+        bairro: z.string().trim().max(120),
+        cidade: z.string().trim().max(120),
+        cep: z.string().trim().max(9),
+        ativa: z.boolean(),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          await salvarUnidadeDeEntrega(input);
+        } catch (erro) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "Não consegui salvar a unidade." });
+        }
+        return { salvo: true } as const;
+      }),
+    excluir: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        try {
+          await excluirUnidadeDeEntrega(input.id);
+        } catch (erro) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "Não consegui excluir a unidade." });
+        }
+        return { excluido: true } as const;
+      }),
+  }),
   feedback: router({
     enviar: protectedProcedure
       .input(z.object({

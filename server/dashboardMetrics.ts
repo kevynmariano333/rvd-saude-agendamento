@@ -38,8 +38,13 @@ export function siglaDaUnidade(recipientCnpj: string | null): string {
   return unidadePorCnpj(recipientCnpj)?.sigla ?? OUTROS;
 }
 
-/** As siglas por onde o período é destrinchado, na ordem fixa em que a operação as lê. */
-export const SIGLAS_DAS_UNIDADES = [...UNIDADES.map(unidade => unidade.sigla), OUTROS];
+/**
+ * As siglas por onde o período é destrinchado, na ordem fixa em que a operação
+ * as lê. Lida a cada chamada porque o cadastro de unidades muda em uso.
+ */
+export function siglasDasUnidades(): string[] {
+  return [...UNIDADES.map(unidade => unidade.sigla), OUTROS];
+}
 
 export function serieDaUnidade(recipientCnpj: string | null): string {
   return serieDaSigla(siglaDaUnidade(recipientCnpj));
@@ -146,7 +151,7 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
     // Volumes e a divisão por unidade no período escolhido: é o que o gráfico
     // mostra dia a dia, somado, para quem quer o número e não a forma.
     receivedVolumes: received.reduce((sum, item) => sum + (item.invoiceVolumeCount ?? 0), 0),
-    receivedPorUnidade: SIGLAS_DAS_UNIDADES.map(sigla => ({
+    receivedPorUnidade: siglasDasUnidades().map(sigla => ({
       sigla,
       notas: received.filter(item => siglaDaUnidade(item.recipientCnpj) === sigla).length,
       volumes: received

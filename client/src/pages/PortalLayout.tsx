@@ -226,6 +226,7 @@ export default function PortalLayout({
   const adminNav: NavItem[] = isAdmin
     ? [
         { label: "Acessos", path: "/operador/acessos", icon: UserCheck },
+        { label: "Unidades", path: "/operador/unidades", icon: Building2 },
         { label: "Administrar notas", path: "/operador/notas", icon: ShieldCheck },
       ]
     : [];

@@ -5,8 +5,11 @@
 // dígitos. Na tela vale a sigla que o pessoal usa; o CNPJ continua sendo o que
 // o sistema guarda, filtra e exporta.
 //
-// Uma unidade nova entra aqui. Enquanto não entrar, o CNPJ aparece formatado,
-// que é pior de ler mas nunca é mentira.
+// Unidade nova entra pela tela de cadastro, e o servidor manda a lista para cá
+// na subida. A lista escrita abaixo é o ponto de partida — o que o banco tinha
+// no dia em que o cadastro passou a existir — e vale enquanto o banco não
+// responder. Enquanto uma unidade não estiver na lista, o CNPJ dela aparece
+// formatado, que é pior de ler mas nunca é mentira.
 
 export type Unidade = {
   /** Só dígitos, como o XML e o banco guardam. */
@@ -34,7 +37,7 @@ export type Unidade = {
 
 const SANTA_HELENA = "SANTA HELENA ASSISTÊNCIA MÉDICA S/A";
 
-export const UNIDADES: Unidade[] = [
+const UNIDADES_PADRAO: Unidade[] = [
   { cnpj: "06033403000113", sigla: "HSH", nome: "Hospital", curto: "HOSPITAL", artigo: "o", grupo: "Amil", razaoSocial: "HOSPITAL SANTA HELENA S.A", endereco: "Rua Manoel Vaz, 59", bairro: "Vila Alzira", cidade: "Santo André", cep: "09015-410" },
   { cnpj: "43293604002120", sigla: "MSH", nome: "Maternidade", curto: "MATERN.", artigo: "a", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Av. Armando Ítalo Setti, 331", bairro: "Baeta Neves", cidade: "São Bernardo do Campo", cep: "09760-280" },
   { cnpj: "43293604000186", sigla: "CM 19", nome: "Centro Médico 19 de São Bernardo do Campo", curto: "S. BERNARDO", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Rua Bering, 114", bairro: "Jardim do Mar", cidade: "São Bernardo do Campo", cep: "09750-510" },
@@ -51,6 +54,27 @@ export const UNIDADES: Unidade[] = [
   { cnpj: "43293604001077", sigla: "CM 11", nome: "Centro Médico 11 de Ribeirão Pires", curto: "RIB. PIRES", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Av. Francisco Monteiro, 239", bairro: "Centro", cidade: "Ribeirão Pires", cep: "09400-310" },
   { cnpj: "43293604001158", sigla: "CM 08", nome: "Centro Médico 08 de São Caetano do Sul", curto: "S. CAETANO", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Rua Peri, 317", bairro: "Osvaldo Cruz", cidade: "São Caetano do Sul", cep: "09540-290" },
 ];
+
+/**
+ * As unidades em uso agora.
+ *
+ * É a mesma array do começo ao fim da vida do processo: trocar o conteúdo no
+ * lugar, e não a variável, é o que faz quem importou `UNIDADES` enxergar o
+ * cadastro novo sem ter que importar de outro jeito. Em compensação, nada que
+ * derive dela pode ser calculado uma vez só na carga do arquivo — quem precisa
+ * da lista a lê na hora.
+ */
+export const UNIDADES: Unidade[] = [...UNIDADES_PADRAO];
+
+/** Troca a lista em uso pela que veio do banco. */
+export function definirUnidades(unidades: Unidade[]): void {
+  UNIDADES.splice(0, UNIDADES.length, ...unidades);
+}
+
+/** A lista de fábrica, para semear o banco na primeira subida. */
+export function unidadesPadrao(): Unidade[] {
+  return UNIDADES_PADRAO.map(unidade => ({ ...unidade }));
+}
 
 /** A nota que veio sem destinatário reconhecido. É um resto, não uma unidade. */
 export const OUTROS = "Outros";
