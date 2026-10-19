@@ -24,12 +24,53 @@ export type Unidade = {
   artigo: "o" | "a";
   /** O cliente dono da unidade. As unidades de um grupo são filtradas juntas. */
   grupo: string;
+  /** A razão social, que é o nome que aparece na nota. */
+  razaoSocial: string;
+  endereco: string;
+  bairro: string;
+  cidade: string;
+  cep: string;
 };
 
+const SANTA_HELENA = "SANTA HELENA ASSISTÊNCIA MÉDICA S/A";
+
 export const UNIDADES: Unidade[] = [
-  { cnpj: "06033403000113", sigla: "HSH", nome: "Hospital", curto: "HOSPITAL", artigo: "o", grupo: "Amil" },
-  { cnpj: "43293604002120", sigla: "MSH", nome: "Maternidade", curto: "MATERN.", artigo: "a", grupo: "Amil" },
+  { cnpj: "06033403000113", sigla: "HSH", nome: "Hospital", curto: "HOSPITAL", artigo: "o", grupo: "Amil", razaoSocial: "HOSPITAL SANTA HELENA S.A", endereco: "Rua Manoel Vaz, 59", bairro: "Vila Alzira", cidade: "Santo André", cep: "09015-410" },
+  { cnpj: "43293604002120", sigla: "MSH", nome: "Maternidade", curto: "MATERN.", artigo: "a", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Av. Armando Ítalo Setti, 331", bairro: "Baeta Neves", cidade: "São Bernardo do Campo", cep: "09760-280" },
+  { cnpj: "43293604000186", sigla: "CM 19", nome: "Centro Médico 19 de São Bernardo do Campo", curto: "S. BERNARDO", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Rua Bering, 114", bairro: "Jardim do Mar", cidade: "São Bernardo do Campo", cep: "09750-510" },
+  { cnpj: "43293604000429", sigla: "CM 13", nome: "Centro Médico 13 de São Bernardo do Campo", curto: "S. BERNARDO", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Avenida Lucas Nogueira Garcez, 505", bairro: "Jardim do Mar", cidade: "São Bernardo do Campo", cep: "09750-660" },
+  { cnpj: "43293604002200", sigla: "CM 29", nome: "Centro Médico 29 de São Bernardo do Campo", curto: "S. BERNARDO", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Rua João de Azevedo Marques, 190/202", bairro: "Jardim Três Marias", cidade: "São Bernardo do Campo", cep: "09750-030" },
+  { cnpj: "43293604002634", sigla: "CM 34", nome: "Centro Médico 34 de São Bernardo do Campo", curto: "S. BERNARDO", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Rua Luiz Ferreira da Silva, 163", bairro: "Anchieta", cidade: "São Bernardo do Campo", cep: "09732-610" },
+  { cnpj: "43293604002715", sigla: "CM 38", nome: "Centro Médico 38 de São Bernardo do Campo", curto: "S. BERNARDO", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Rua João Azevedo Marques, 237", bairro: "Jardim Três Marias", cidade: "São Bernardo do Campo", cep: "09750-030" },
+  { cnpj: "43293604003282", sigla: "NACNE", nome: "Nacne de São Bernardo do Campo", curto: "NACNE SBC", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Rua Thales dos Santos Freire, 277", bairro: "Baeta Neves", cidade: "São Bernardo do Campo", cep: "09751-020" },
+  { cnpj: "43293604001310", sigla: "CM 12", nome: "Centro Médico 12 de Santo André", curto: "SANTO ANDRÉ", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Av. Dom Pedro II, 1330", bairro: "Jardim", cidade: "Santo André", cep: "09090-401" },
+  { cnpj: "43293604002391", sigla: "CM 31", nome: "Centro Médico 31 de Santo André", curto: "SANTO ANDRÉ", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Rua Carijós, 916/920", bairro: "Vila Alzira", cidade: "Santo André", cep: "09180-000" },
+  { cnpj: "43293604000933", sigla: "CM 10", nome: "Centro Médico 10 de Mauá", curto: "MAUÁ", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Rua Luis Mariani, 86", bairro: "Centro", cidade: "Mauá", cep: "09390-050" },
+  { cnpj: "43293604002553", sigla: "CM 37", nome: "Centro Médico 37 de Mauá", curto: "GUAPITUBA", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Av. Capitão João, 2569", bairro: "Jardim Guapituba", cidade: "Mauá", cep: "09360-120" },
+  { cnpj: "43293604000348", sigla: "CM 03", nome: "Centro Médico 03 de Diadema", curto: "DIADEMA", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Rua Manoel da Nóbrega, 605", bairro: "Centro", cidade: "Diadema", cep: "09910-720" },
+  { cnpj: "43293604001077", sigla: "CM 11", nome: "Centro Médico 11 de Ribeirão Pires", curto: "RIB. PIRES", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Av. Francisco Monteiro, 239", bairro: "Centro", cidade: "Ribeirão Pires", cep: "09400-310" },
+  { cnpj: "43293604001158", sigla: "CM 08", nome: "Centro Médico 08 de São Caetano do Sul", curto: "S. CAETANO", artigo: "o", grupo: "Amil", razaoSocial: SANTA_HELENA, endereco: "Rua Peri, 317", bairro: "Osvaldo Cruz", cidade: "São Caetano do Sul", cep: "09540-290" },
 ];
+
+/** A nota que veio sem destinatário reconhecido. É um resto, não uma unidade. */
+export const OUTROS = "Outros";
+
+/** As unidades que não são o hospital nem a maternidade, somadas. */
+export const CENTROS_MEDICOS = "Centros Médicos";
+
+/**
+ * As séries em que as unidades se juntam num gráfico.
+ *
+ * Uma série por unidade daria quinze faixas numa barra de vinte e seis pixels,
+ * que não se lê nem com o mouse em cima. O gráfico separa o que a operação
+ * separa — hospital, maternidade e os centros médicos juntos — e o número de
+ * cada unidade continua aparecendo fora do gráfico, que é onde cabe.
+ */
+export const SERIES_DO_GRAFICO = ["HSH", "MSH", CENTROS_MEDICOS, OUTROS];
+
+export function serieDaSigla(sigla: string): string {
+  return SERIES_DO_GRAFICO.includes(sigla) ? sigla : CENTROS_MEDICOS;
+}
 
 /** Os grupos na ordem em que apareceram, cada um com as suas unidades. */
 export function gruposDeUnidades(): { grupo: string; unidades: Unidade[] }[] {
