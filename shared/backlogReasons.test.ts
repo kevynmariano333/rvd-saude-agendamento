@@ -26,6 +26,14 @@ describe("motivos de backlog", () => {
     expect(new Set(codigos).size).toBe(codigos.length);
   });
 
+  it("a bonificação é um motivo próprio, e não \"Outro\"", () => {
+    // Nota de bonificação não é erro de ninguém: é brinde que chega sem pedido
+    // de compra. Jogada em "Outro motivo", sumia no meio de tudo que não tem
+    // categoria, e ninguém conseguia contar quantas foram.
+    expect(rotuloDoMotivo("NOTA_BONIFICACAO")).toBe("Nota de bonificação");
+    expect(curtoDoMotivo("NOTA_BONIFICACAO")).toBe("Bonificação");
+  });
+
   it("cabe na coluna do banco", () => {
     for (const motivo of MOTIVOS_DE_BACKLOG) expect(motivo.codigo.length).toBeLessThanOrEqual(60);
   });

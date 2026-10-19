@@ -26,6 +26,7 @@ export const MOTIVOS_DE_BACKLOG: MotivoDeBacklog[] = [
   { codigo: "ERRO_SISTEMA_ERP", rotulo: "Erro no sistema ERP", curto: "ERP" },
   { codigo: "ERRO_TRIBUTARIO_FISCAL", rotulo: "Erro tributário / fiscal", curto: "Tributário" },
   { codigo: "FORNECIMENTO_CONCLUIR", rotulo: "Fornecimento a concluir", curto: "Fornecimento" },
+  { codigo: "NOTA_BONIFICACAO", rotulo: "Nota de bonificação", curto: "Bonificação" },
   { codigo: "PENDENCIA_PEDIDO_COMPRA", rotulo: "Pendência em pedido de compra", curto: "Pedido de compra" },
   { codigo: "UNIDADE_MEDIDA_CAIXARIA", rotulo: "Unidade de medida — caixaria", curto: "Caixaria" },
   { codigo: "OUTRO", rotulo: "Outro motivo", curto: "Outro" },

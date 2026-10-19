@@ -140,6 +140,7 @@ export const MOTIVOS_DO_AGILIZA: Record<string, string> = {
   erro_atribuicao_itens: "ERRO_ATRIBUICAO_ITENS",
   erro_erp: "ERRO_SISTEMA_ERP",
   erro_tributario: "ERRO_TRIBUTARIO_FISCAL",
+  bonificacao: "NOTA_BONIFICACAO",
   pedido_compra: "PENDENCIA_PEDIDO_COMPRA",
   outro: "OUTRO",
 };
