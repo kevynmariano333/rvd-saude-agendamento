@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { canTreatBacklogPortal, formatAppointmentDate, homePathFor, isPortalAdmin, isPortalOperator, type PortalRole } from "@/lib/portal";
+import { canTreatBacklogPortal, formatAppointmentDate, homePathFor, isPortalAdmin, isPortalOperator, type PortalRole, ehSomenteConsulta } from "@/lib/portal";
 import { cnpjsDoDestinatario, rotuloDoDestinatario } from "@shared/recipients";
 import SeletorDeDestinatario from "../components/SeletorDeDestinatario";
 import { pedidoEhUrgente, pedidosDaNota } from "@shared/purchaseOrders";
@@ -48,6 +48,31 @@ const FILTROS_VAZIOS = {
 };
 type FiltrosDoBacklog = typeof FILTROS_VAZIOS;
 
+/**
+ * O botão da conversa interna, com o número do que há nela.
+ *
+ * O número é o total e não some ao abrir — some só o vermelho, que é o que
+ * ainda não foi lido. Nota que já teve tratativa nunca volta a parecer muda,
+ * e quem passa os olhos na fila vê onde a conversa está esperando resposta.
+ */
+function BotaoDaTratativa({ onAbrir, contagem }: { onAbrir: () => void; contagem?: { total: number; naoLidas: number } }) {
+  const total = contagem?.total ?? 0;
+  const naoLidas = contagem?.naoLidas ?? 0;
+  const titulo = total
+    ? `Conversa da tratativa — interna, o fornecedor não vê · ${total} ${total === 1 ? "observação" : "observações"}${naoLidas > 0 ? ` — ${naoLidas} sem ler` : ""}`
+    : "Conversa da tratativa — interna, o fornecedor não vê";
+  return (
+    <button onClick={onAbrir} title={titulo} className="relative rounded-lg p-1.5 text-rvd-plum hover:bg-rvd-plum-pale">
+      <MessagesSquare className="size-4" />
+      {total > 0 && (
+        <span className={`absolute -right-1 -top-1 flex min-w-[18px] items-center justify-center rounded-full px-1 py-0.5 text-[10px] font-extrabold leading-none text-white ring-2 ring-surface ${naoLidas > 0 ? "bg-state-stop" : "bg-rvd-plum"}`}>
+          {total > 99 ? "99+" : total}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export default function BacklogPage() {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
@@ -82,6 +107,10 @@ export default function BacklogPage() {
   const [tratando, setTratando] = useState<AppointmentDetail | null>(null);
   const [detalhes, setDetalhes] = useState<AppointmentDetail | null>(null);
   const [conversando, setConversando] = useState<AppointmentDetail | null>(null);
+  // Quantas observações cada nota já tem, e quantas ainda não foram lidas. Sem
+  // isto, o ícone da conversa é igual na nota com dez recados e na sem nenhum.
+  const tratativas = trpc.internalNotes.porNota.useQuery(undefined, { refetchInterval: 15_000 });
+  const tratativasPorNota = new Map((tratativas.data ?? []).map(linha => [linha.appointmentId, linha]));
   // Motivo clicado errado numa lista de catorze parecidos: o conserto tem que
   // estar onde a fila é trabalhada, e não numa tela que o planejamento não abre.
   const [corrigindoMotivo, setCorrigindoMotivo] = useState<AppointmentDetail | null>(null);
@@ -124,6 +153,8 @@ export default function BacklogPage() {
   // Quem crava data é o Operador; o planejador trata, mas não agenda.
   const podeAgendar = isPortalOperator(auth.data.role as PortalRole);
   const ehAdmin = isPortalAdmin(auth.data.role as PortalRole);
+  // Quem só consulta acompanha a fila e a conversa, e não trata nada.
+  const podeAgir = !ehSomenteConsulta(auth.data.role as PortalRole);
   // A planilha sai do que está na tela: o que a fila mostra é o que o arquivo
   // leva, sem uma segunda consulta que pudesse trazer outro conjunto.
   const exportarFila = async () => {
@@ -234,10 +265,10 @@ export default function BacklogPage() {
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => setDetalhes(item)} title="Abrir detalhes da nota" className="rounded-lg p-1.5 text-rvd-plum hover:bg-rvd-plum-pale"><FileText className="size-4" /></button>
                       {/* A tratativa é conversa, e conversa que vai por WhatsApp se perde: aqui ela fica na nota. */}
-                      <button onClick={() => setConversando(item)} title="Conversa da tratativa — interna, o fornecedor não vê" className="rounded-lg p-1.5 text-rvd-plum hover:bg-rvd-plum-pale"><MessagesSquare className="size-4" /></button>
+                      <BotaoDaTratativa onAbrir={() => setConversando(item)} contagem={tratativasPorNota.get(item.id)} />
                       {ehAdmin && <button onClick={() => setCorrigindoMotivo(item)} title={`Corrigir o motivo do backlog — hoje: ${rotuloDoMotivo(item.backlogReasonCode)}`} className="rounded-lg p-1.5 text-rvd-plum hover:bg-rvd-plum-pale"><ScrollText className="size-4" /></button>}
-                      {podeAgendar && <Button onClick={() => abrirReagendamento(item)} variant="outline" className="h-8 shrink-0 rounded-xl border-line bg-surface px-3 text-[11px] font-bold text-rvd-plum hover:bg-rvd-plum-pale"><CalendarDays className="size-3.5" />Reagendar</Button>}
-                      <Button onClick={() => setTratando(item)} className="h-8 shrink-0 rounded-xl bg-brand px-3.5 text-[11px] font-bold text-white hover:bg-brand"><ClipboardCheck className="size-3.5" />Tratar</Button>
+                      {podeAgendar && podeAgir && <Button onClick={() => abrirReagendamento(item)} variant="outline" className="h-8 shrink-0 rounded-xl border-line bg-surface px-3 text-[11px] font-bold text-rvd-plum hover:bg-rvd-plum-pale"><CalendarDays className="size-3.5" />Reagendar</Button>}
+                      {podeAgir && <Button onClick={() => setTratando(item)} className="h-8 shrink-0 rounded-xl bg-brand px-3.5 text-[11px] font-bold text-white hover:bg-brand"><ClipboardCheck className="size-3.5" />Tratar</Button>}
                     </div>
                   </td>
                 </tr>;
@@ -258,6 +289,7 @@ export default function BacklogPage() {
     </section>
 
     <ConversaDoBacklogDialog
+      somenteLeitura={!podeAgir}
       appointmentId={conversando?.id ?? null}
       invoiceNumber={conversando?.invoiceNumber ?? null}
       open={Boolean(conversando)}

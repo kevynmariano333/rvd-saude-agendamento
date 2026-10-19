@@ -23,11 +23,14 @@ const quando = (valor: Date | string) =>
 export default function ConversaDoBacklogDialog({
   appointmentId,
   invoiceNumber,
+  somenteLeitura = false,
   open,
   onOpenChange,
 }: {
   appointmentId: number | null;
   invoiceNumber: string | null;
+  /** O acesso de consulta acompanha a tratativa e não escreve nela. */
+  somenteLeitura?: boolean;
   open: boolean;
   onOpenChange: (aberto: boolean) => void;
 }) {
@@ -44,7 +47,9 @@ export default function ConversaDoBacklogDialog({
   // ela aparece na tela — era isso que faltava para o número querer dizer
   // alguma coisa.
   const marcarLida = trpc.internalNotes.marcarLida.useMutation({
-    onSuccess: () => { void utils.appointments.conversaDoBacklog.invalidate(); },
+    // O número no ícone da linha também precisa saber que foi lido, senão o
+    // vermelho só sairia na próxima atualização automática.
+    onSuccess: () => { void utils.appointments.conversaDoBacklog.invalidate(); void utils.internalNotes.porNota.invalidate(); },
   });
   const marcar = marcarLida.mutate;
   useEffect(() => {
@@ -62,6 +67,7 @@ export default function ConversaDoBacklogDialog({
     onSuccess: () => {
       setTexto("");
       void utils.internalNotes.list.invalidate({ appointmentId: appointmentId ?? 0 });
+      void utils.internalNotes.porNota.invalidate();
       void utils.appointments.conversaDoBacklog.invalidate();
     },
     onError: erro => toast.error(erro.message),
@@ -109,6 +115,11 @@ export default function ConversaDoBacklogDialog({
           <div ref={fim} />
         </div>
 
+        {somenteLeitura ? (
+          <p className="border-t border-line px-6 py-4 text-center text-xs font-bold text-ink-faint">
+            Este acesso é só de consulta: dá para acompanhar a tratativa, não para escrever nela.
+          </p>
+        ) : (
         <div className="border-t border-line px-6 py-4">
           <textarea
             value={texto}
@@ -139,6 +150,7 @@ export default function ConversaDoBacklogDialog({
             </Button>
           </div>
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );

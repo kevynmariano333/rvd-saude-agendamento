@@ -285,6 +285,33 @@ describe("procedures de agendamento", () => {
     expect(mocks.createAppointmentSuggestion).not.toHaveBeenCalled();
   });
 
+  it("o perfil de consulta lê a agenda", async () => {
+    const caller = appRouter.createCaller(context("planejador_leitura"));
+    await caller.appointments.list();
+    expect(mocks.listAppointments).toHaveBeenCalled();
+  });
+
+  it("e é barrado em qualquer ação, pela trava do meio do caminho", async () => {
+    // A trava não está rota a rota: está antes delas. É o que faz valer também
+    // para a rota que alguém escrever amanhã sem lembrar deste perfil.
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "pending", recipientCnpj: "43293604002120" });
+    const caller = appRouter.createCaller(context("planejador_leitura"));
+    await expect(caller.appointments.schedule({ appointmentId: 1, scheduledFor: "2030-09-01T10:00:00.000Z" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-01T10:00:00.000Z" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.messages.send({ appointmentId: 1, body: "oi" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.internalNotes.create({ appointmentId: 1, body: "observação" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.scheduleAppointment).not.toHaveBeenCalled();
+    expect(mocks.createAppointmentSuggestion).not.toHaveBeenCalled();
+    expect(mocks.createAppointmentMessage).not.toHaveBeenCalled();
+    expect(mocks.createAppointmentInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("mas ainda troca a própria senha e dá por visto o que leu", async () => {
+    const caller = appRouter.createCaller(context("planejador_leitura"));
+    await caller.internalNotes.marcarLida({ appointmentId: 1 });
+    expect(mocks.marcarConversaDaTratativaLida).toHaveBeenCalled();
+  });
+
   it("o administrador também pode propor data, sem marcá-la", async () => {
     // É a função do planejador que faltava ao perfil que responde pelo
     // sistema inteiro: marcar ele já podia; propor, não.

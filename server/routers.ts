@@ -39,6 +39,7 @@ import {
   listCalendarAppointments,
   ultimasNotasNoBacklog,
   conversasRecentesDoBacklog,
+  contarTratativasPorNota,
   listAppointmentInternalNotes,
   marcarConversaDaTratativaLida,
   listAppointmentSuggestions,
@@ -146,6 +147,7 @@ import { normalizePurchaseOrder, pedidosCabem, PURCHASE_ORDER_MAX } from "./purc
 import { MIRO_DIGITS, normalizeMiroNumber } from "../shared/miro";
 import { buildDashboardMetrics } from "./dashboardMetrics";
 import { motivoDaRecusa, paradaNoDia } from "../shared/paradaDoEstoque";
+import { ehSomenteLeitura } from "./permissions";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
 import { buildAttendanceMetrics } from "./attendanceMetrics";
 import {
@@ -582,7 +584,7 @@ export const appRouter = router({
           // conta continua entrando pela porta por onde se cadastrou, a do
           // Operador. Sem esta linha, promover alguém a Planejador o trancava
           // para fora do sistema.
-          const entraPelaPortaDoOperador = existing.role === "operacao" || existing.role === "planejador";
+          const entraPelaPortaDoOperador = existing.role === "operacao" || existing.role === "planejador" || ehSomenteLeitura(existing.role);
           const profileAllowed =
             existing.role === input.profile ||
             (existing.role === "admin" && input.profile !== "supplier") ||
@@ -2038,6 +2040,11 @@ export const appRouter = router({
         await marcarConversaDaTratativaLida({ userId: ctx.user.id, appointmentId: input.appointmentId });
         return { ok: true };
       }),
+    /** Quantas observações cada nota tem, e quantas ainda não foram lidas. */
+    porNota: protectedProcedure.query(({ ctx }) => {
+      assertSchedulingDesk(ctx.user.role);
+      return contarTratativasPorNota({ userId: ctx.user.id });
+    }),
     create: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), body: z.string().trim().min(1, "Escreva a observação.").max(2000) }))
       .mutation(async ({ ctx, input }) => {
@@ -2350,7 +2357,7 @@ export const appRouter = router({
         return { ...publicUser(criado), avisado };
       }),
     setRole: adminProcedure
-      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["admin", "operator", "portaria", "operacao", "planejador"]) }))
+      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["admin", "operator", "portaria", "operacao", "planejador", "planejador_leitura"]) }))
       .mutation(async ({ ctx, input }) => {
         // An administrator changing their own role would drop the only account
         // that can hand the role back.

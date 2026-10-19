@@ -2019,6 +2019,36 @@ export async function listAppointmentInternalNotes(appointmentId: number) {
  *
  * O que a pessoa mesma escreveu fica de fora: aviso da própria fala é ruído.
  */
+/**
+ * Quantas observações cada nota tem, e quantas ainda não foram lidas.
+ *
+ * Espelha a contagem do chat do fornecedor, e pela mesma razão: o ícone da
+ * conversa era igual na nota com dez recados e na nota sem nenhum, então quem
+ * cuida da tratativa abria uma por uma para descobrir onde havia resposta.
+ *
+ * Não lida é a que outra pessoa escreveu depois da última vez que esta abriu a
+ * conversa. A própria observação nunca é novidade para quem a escreveu.
+ */
+export async function contarTratativasPorNota(input: { userId: number }) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      appointmentId: appointmentInternalNotes.appointmentId,
+      total: count(),
+      naoLidas: sql<number>`sum(case when ${appointmentInternalNotes.authorId} <> ${input.userId} and (${appointmentInternalNoteReads.lastReadAt} is null or ${appointmentInternalNotes.createdAt} > ${appointmentInternalNoteReads.lastReadAt}) then 1 else 0 end)`.mapWith(Number),
+    })
+    .from(appointmentInternalNotes)
+    .leftJoin(
+      appointmentInternalNoteReads,
+      and(
+        eq(appointmentInternalNoteReads.appointmentId, appointmentInternalNotes.appointmentId),
+        eq(appointmentInternalNoteReads.userId, input.userId),
+      ),
+    )
+    .groupBy(appointmentInternalNotes.appointmentId);
+}
+
 export async function conversasRecentesDoBacklog(input: { exceptoAutorId: number; limite?: number }) {
   const db = await getDb();
   if (!db) return [];

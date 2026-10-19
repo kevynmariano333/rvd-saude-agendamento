@@ -31,7 +31,7 @@ type PendingRequest = {
 };
 
 /** Perfis internos que o administrador pode atribuir a uma conta já existente. */
-const assignableRoles = ["admin", "operator", "planejador", "portaria"] as const;
+const assignableRoles = ["admin", "operator", "planejador", "planejador_leitura", "portaria"] as const;
 
 /**
  * O que a tela diz depois de liberar um acesso.
@@ -194,7 +194,7 @@ export default function AccessRequests() {
    */
   const equipeAtiva = useMemo(() => (staff.data ?? []).filter(conta => conta.accessStatus !== "rejected"), [staff.data]);
   const equipePorPerfil = useMemo(() => {
-    const ordem: PortalRole[] = ["admin", "operator", "planejador", "portaria", "operacao"];
+    const ordem: PortalRole[] = ["admin", "operator", "planejador", "planejador_leitura", "portaria", "operacao"];
     return ordem
       .map(perfil => ({ perfil, contas: equipeAtiva.filter(conta => conta.role === perfil && passaNoFiltro(conta, filtroDaEquipe, agora)) }))
       .filter(grupo => grupo.contas.length > 0);

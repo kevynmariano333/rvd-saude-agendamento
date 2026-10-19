@@ -337,6 +337,13 @@
       "when": 1791580474289,
       "tag": "0047_editar_mensagem",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "5",
+      "when": 1792171777283,
+      "tag": "0048_perfil_de_consulta",
+      "breakpoints": true
     }
   ]
 }

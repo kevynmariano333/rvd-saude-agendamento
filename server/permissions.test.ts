@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canConfirmSchedule, canMoveAppointmentStatus, canTreatBacklog, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, isOperator, isSchedulingDesk } from "./permissions";
+import { canConfirmSchedule, canMoveAppointmentStatus, canTreatBacklog, ehSomenteLeitura, podeExecutar, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, isOperator, isSchedulingDesk } from "./permissions";
 import { buildScopeIds, isWithinScope } from "./supplierScope";
 
 describe("regras de perfil e status", () => {
@@ -56,6 +56,37 @@ describe("planejador", () => {
     expect(canSuggestSchedule("planejador")).toBe(true);
     // Agendar é o compromisso com o fornecedor: continua sendo do Operador.
     expect(canConfirmSchedule("planejador")).toBe(false);
+  });
+
+  it("o perfil de consulta lê a agenda e não age em nada", () => {
+    expect(isSchedulingDesk("planejador_leitura")).toBe(true);
+    expect(canConfirmSchedule("planejador_leitura")).toBe(false);
+    expect(canSuggestSchedule("planejador_leitura")).toBe(false);
+    expect(canMoveAppointmentStatus("planejador_leitura")).toBe(false);
+    expect(canTreatBacklog("planejador_leitura")).toBe(false);
+    expect(canRequestAppointment("planejador_leitura")).toBe(false);
+  });
+
+  it("a trava é por negação: ação nova nasce barrada para quem só consulta", () => {
+    // O contrário — listar o que é proibido — deixaria passar sozinha cada
+    // rota nova que alguém escrevesse depois.
+    expect(podeExecutar("planejador_leitura", "appointments.schedule")).toBe(false);
+    expect(podeExecutar("planejador_leitura", "messages.send")).toBe(false);
+    expect(podeExecutar("planejador_leitura", "internalNotes.create")).toBe(false);
+    expect(podeExecutar("planejador_leitura", "rota.que.ainda.nao.existe")).toBe(false);
+  });
+
+  it("ainda cuida da própria conta e do que já olhou", () => {
+    for (const acao of ["auth.changePassword", "auth.updateName", "auth.definirSituacao", "internalNotes.marcarLida", "messages.limparAvisos"]) {
+      expect(podeExecutar("planejador_leitura", acao)).toBe(true);
+    }
+  });
+
+  it("os outros perfis não são tocados pela trava", () => {
+    for (const perfil of ["admin", "operator", "planejador", "supplier", "portaria", "operacao"] as const) {
+      expect(podeExecutar(perfil, "appointments.schedule")).toBe(true);
+      expect(ehSomenteLeitura(perfil)).toBe(false);
+    }
   });
 
   it("o administrador tem tudo, inclusive o que é do planejador", () => {

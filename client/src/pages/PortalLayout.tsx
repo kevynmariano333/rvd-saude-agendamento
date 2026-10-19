@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { canSeeGateHistory, canTreatBacklogPortal, isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalSchedulingDesk, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
+import { canSeeGateHistory, canTreatBacklogPortal, ehSomenteConsulta, isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalSchedulingDesk, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
 import { serviceTypeCopy } from "@/lib/attendance";
 import { rotuloDoMotivo } from "@shared/backlogReasons";
 import { ehSituacao, ROTULO_DA_SITUACAO, SITUACAO_PADRAO, SITUACOES } from "@shared/presenca";
@@ -210,7 +210,9 @@ export default function PortalLayout({
     ? [...schedulingNav, ...backlogNav, ...patioNav, ...importarNav]
     : isOperator
       ? [...schedulingNav, ...patioNav]
-      : isPortalPlanner(role)
+      : // Quem só consulta vê as mesmas telas do planejador — é o acesso dele,
+        // sem os botões.
+        isPortalPlanner(role) || ehSomenteConsulta(role)
         ? [...schedulingNav, ...backlogNav]
         : // A Portaria tem uma tela só: quem está no portão não navega pelo
           // sistema no meio do turno.

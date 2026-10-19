@@ -17,7 +17,11 @@ import { SITUACOES } from "../shared/presenca";
 // "planejador" cuida da agenda sem confirmá-la: enxerga o painel, a lista de
 // notas, o calendário e os relatórios, propõe datas ao Operador e acompanha o
 // recebimento até concluir. O pátio e a administração ficam de fora.
-export const userRoles = ["admin", "operator", "supplier", "portaria", "operacao", "planejador"] as const;
+//
+// "planejador_leitura" vê as mesmas quatro telas e não mexe em nada: nem
+// propõe data, nem escreve na tratativa, nem manda mensagem. É para quem
+// precisa acompanhar a operação sem responder por ela.
+export const userRoles = ["admin", "operator", "supplier", "portaria", "operacao", "planejador", "planejador_leitura"] as const;
 export const appointmentStatuses = ["pending", "scheduled", "received", "completed", "backlog", "rejected"] as const;
 // "importado" marca o histórico trazido de fora do portal (hoje, o acervo do
 // sistema Agiliza). Sem um valor próprio, milhares de notas antigas ficariam

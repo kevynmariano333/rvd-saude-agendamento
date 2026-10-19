@@ -9,7 +9,7 @@ import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 
 /** Os perfis que o administrador pode criar, na ordem em que são pedidos. */
-const PERFIS: PortalRole[] = ["supplier", "operator", "planejador", "portaria", "operacao", "admin"];
+const PERFIS: PortalRole[] = ["supplier", "operator", "planejador", "planejador_leitura", "portaria", "operacao", "admin"];
 
 /**
  * Criação de conta pelo administrador.

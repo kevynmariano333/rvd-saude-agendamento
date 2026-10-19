@@ -1,4 +1,4 @@
-export type PortalRole = "admin" | "operator" | "supplier" | "portaria" | "operacao" | "planejador";
+export type PortalRole = "admin" | "operator" | "supplier" | "portaria" | "operacao" | "planejador" | "planejador_leitura";
 export type PortalStatus = "pending" | "scheduled" | "received" | "completed" | "backlog" | "rejected";
 
 export const statusCopy: Record<PortalStatus, string> = {
@@ -32,6 +32,7 @@ export const roleLabel: Record<PortalRole, string> = {
   portaria: "Portaria",
   operacao: "Operação",
   planejador: "Planejador",
+  planejador_leitura: "Planejador (consulta)",
 };
 
 export function isPortalOperator(role: PortalRole) {
@@ -44,12 +45,23 @@ export function isPortalOperator(role: PortalRole) {
  * marcar a data, que continua sendo dele.
  */
 export function isPortalSchedulingDesk(role: PortalRole) {
-  return isPortalOperator(role) || role === "planejador";
+  return isPortalOperator(role) || role === "planejador" || ehSomenteConsulta(role);
 }
 
 /** Quem planeja propõe a data; quem opera confirma. */
 export function isPortalPlanner(role: PortalRole) {
   return role === "planejador";
+}
+
+/**
+ * O acesso que só olha.
+ *
+ * Enxerga as mesmas telas do planejador e não age em nenhuma: os botões sequer
+ * aparecem. O servidor recusa qualquer ação dele de qualquer jeito — esconder
+ * é para a tela não oferecer o que vai ser negado.
+ */
+export function ehSomenteConsulta(role: PortalRole) {
+  return role === "planejador_leitura";
 }
 
 /**
@@ -62,6 +74,11 @@ export function isPortalPlanner(role: PortalRole) {
  */
 export function podeSugerirData(role: PortalRole) {
   return isPortalPlanner(role) || isPortalAdmin(role);
+}
+
+/** Quem pode escrever na conversa — da nota e da tratativa. */
+export function podeEscreverNaConversa(role: PortalRole) {
+  return !ehSomenteConsulta(role);
 }
 
 /**
@@ -81,7 +98,7 @@ export function podeReceberSugestao(status: PortalStatus) {
  * responde pelo sistema inteiro.
  */
 export function canTreatBacklogPortal(role: PortalRole) {
-  return role === "planejador" || role === "admin";
+  return role === "planejador" || role === "admin" || ehSomenteConsulta(role);
 }
 
 export function isPortalAdmin(role: PortalRole) {

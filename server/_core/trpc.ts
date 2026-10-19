@@ -4,6 +4,7 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 import { precisaGravarSinal } from "../../shared/presenca";
 import { gravarSinalDePresenca } from "../db";
+import { podeExecutar } from "../permissions";
 import type { TrpcContext } from "./context";
 
 /**
@@ -82,6 +83,14 @@ const requireUser = t.middleware(async opts => {
           ? "Seu acesso ainda está em análise pelo Operador."
           : "Seu acesso a esta empresa não foi autorizado. Fale com o Operador.",
     });
+  }
+
+  // O perfil de consulta não executa ação nenhuma. A trava fica aqui, e não
+  // rota a rota, porque aqui ela vale para a rota que alguém escrever amanhã
+  // sem lembrar deste perfil — que é exatamente como um acesso de leitura vira
+  // um acesso comum sem ninguém decidir isso.
+  if (opts.type === "mutation" && !podeExecutar(ctx.user.role, opts.path)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Este acesso é só de consulta: dá para acompanhar a operação, mas não para alterar nada." });
   }
 
   marcarPresenca(ctx.user.id);
