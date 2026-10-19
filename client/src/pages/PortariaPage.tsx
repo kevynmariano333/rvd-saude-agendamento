@@ -28,8 +28,6 @@ import {
 } from "@/lib/attendance";
 import { homePathFor, isPortalGate, type PortalRole } from "@/lib/portal";
 import { supplierNameRule } from "@shared/attendanceFields";
-import { FROTA } from "@shared/frota";
-import { MOTORISTAS } from "@shared/motoristas";
 import { trpc } from "@/lib/trpc";
 import {
   ClipboardPlus,
@@ -204,7 +202,6 @@ export default function PortariaPage() {
               <FieldShell label="Motorista" htmlFor="driverName">
                 <input
                   id="driverName"
-                  list="motoristas"
                   value={form.driverName}
                   onChange={event => update("driverName", event.target.value)}
                   placeholder="Nome completo"
@@ -212,12 +209,6 @@ export default function PortariaPage() {
                   minLength={3}
                   className={fieldClass}
                 />
-                {/* Sugere os de casa; quem não está na lista continua sendo digitado. */}
-                <datalist id="motoristas">
-                  {MOTORISTAS.map(motorista => (
-                    <option key={motorista} value={motorista} />
-                  ))}
-                </datalist>
               </FieldShell>
               <FieldShell label="RG" htmlFor="driverDocument">
                 <input
@@ -232,7 +223,6 @@ export default function PortariaPage() {
               <FieldShell label="Placa" htmlFor="licensePlate">
                 <input
                   id="licensePlate"
-                  list="frota"
                   value={form.licensePlate}
                   onChange={event => update("licensePlate", event.target.value.toUpperCase())}
                   placeholder="ABC1D23"
@@ -240,12 +230,6 @@ export default function PortariaPage() {
                   minLength={7}
                   className={`${fieldClass} font-mono uppercase tracking-wide`}
                 />
-                {/* O nome do veículo ao lado da placa: é por ele que a portaria reconhece o carro. */}
-                <datalist id="frota">
-                  {FROTA.map(veiculo => (
-                    <option key={veiculo.placa} value={veiculo.placa}>{veiculo.nome}</option>
-                  ))}
-                </datalist>
               </FieldShell>
               {showSupplier && (
                 <FieldShell label="Fornecedor" htmlFor="supplierName">

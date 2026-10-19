@@ -1,6 +1,6 @@
 import { ranquearFornecedores, recortarRanking } from "../shared/qualificacaoDoFornecedor";
 import type { AppointmentStatus } from "../drizzle/schema";
-import { OUTROS, SERIES_DO_GRAFICO, UNIDADES, serieDaSigla, unidadePorCnpj } from "../shared/recipients";
+import { UNIDADES, unidadePorCnpj } from "../shared/recipients";
 
 export type DashboardAppointment = {
   status: AppointmentStatus;
@@ -33,23 +33,20 @@ export type DashboardAppointment = {
  * pode sumir da contagem: some do gráfico e o total do dia deixa de bater com o
  * número de notas recebidas, que é o pior jeito de um painel mentir.
  */
+const OUTROS = "Outros";
 
 export function siglaDaUnidade(recipientCnpj: string | null): string {
   return unidadePorCnpj(recipientCnpj)?.sigla ?? OUTROS;
 }
 
-/** As siglas por onde o período é destrinchado, na ordem fixa em que a operação as lê. */
+/** As colunas da barra empilhada, na ordem fixa em que a operação as lê. */
 export const SIGLAS_DAS_UNIDADES = [...UNIDADES.map(unidade => unidade.sigla), OUTROS];
-
-export function serieDaUnidade(recipientCnpj: string | null): string {
-  return serieDaSigla(siglaDaUnidade(recipientCnpj));
-}
 
 type BarraDoGrafico = { label: string; total: number; volumes: number } & Record<string, number | string>;
 
 function barraVazia(label: string): BarraDoGrafico {
   const barra = { label, total: 0, volumes: 0 } as BarraDoGrafico;
-  for (const serie of SERIES_DO_GRAFICO) barra[serie] = 0;
+  for (const sigla of SIGLAS_DAS_UNIDADES) barra[sigla] = 0;
   return barra;
 }
 
@@ -110,20 +107,20 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
   items.forEach(item => {
     const receivedAt = item.receivedAt;
     if (!receivedAt) return;
-    const serie = serieDaUnidade(item.recipientCnpj);
+    const sigla = siglaDaUnidade(item.recipientCnpj);
     const volumes = item.invoiceVolumeCount ?? 0;
     if (isWithinPeriod(receivedAt, monthStart, monthEnd)) {
       const barra = dailyReceived[receivedAt.getDate() - 1]!;
       barra.total += 1;
       barra.volumes += volumes;
-      barra[serie] = (barra[serie] as number) + 1;
+      barra[sigla] = (barra[sigla] as number) + 1;
     }
     // A leitura por mês é do ano inteiro: é ela que mostra o ano tomando forma.
     if (isWithinPeriod(receivedAt, yearStart, yearEnd)) {
       const barra = monthlyReceived[receivedAt.getMonth()]!;
       barra.total += 1;
       barra.volumes += volumes;
-      barra[serie] = (barra[serie] as number) + 1;
+      barra[sigla] = (barra[sigla] as number) + 1;
     }
   });
 

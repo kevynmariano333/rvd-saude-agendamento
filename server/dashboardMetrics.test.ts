@@ -121,13 +121,11 @@ describe("a divisão por unidade e os volumes", () => {
       { month: 8, year: 2026, now: new Date("2026-08-20T10:00:00") },
     );
     expect(metrics.receivedVolumes).toBe(12);
-    // A lista traz todas as unidades cadastradas, na ordem fixa; quem não
-    // recebeu nada no período entra zerada e a tela não a mostra.
-    expect(metrics.receivedPorUnidade.filter(unidade => unidade.notas > 0)).toEqual([
+    expect(metrics.receivedPorUnidade).toEqual([
       { sigla: "HSH", notas: 1, volumes: 12 },
       { sigla: "MSH", notas: 1, volumes: 0 },
+      { sigla: "Outros", notas: 0, volumes: 0 },
     ]);
-    expect(metrics.receivedPorUnidade.at(-1)).toEqual({ sigla: "Outros", notas: 0, volumes: 0 });
   });
 
   it("reconhece a unidade pelo CNPJ do destinatário", () => {

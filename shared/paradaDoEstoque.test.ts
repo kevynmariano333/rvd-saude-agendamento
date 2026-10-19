@@ -105,6 +105,7 @@ describe("como a parada é dita", () => {
   it("o artigo acompanha a unidade: nunca \"do Maternidade\"", () => {
     const naMaternidade = { ...inventario, cnpj: MATERNIDADE };
     expect(avisoDaParada(naMaternidade)).toContain("entrega da Maternidade");
+    expect(avisoDaParada(naMaternidade)).toContain("O Hospital recebe normalmente");
     expect(motivoDaRecusa(naMaternidade, new Date("2026-11-11T13:00:00.000-03:00"))).toContain("recebimento na Maternidade");
   });
 
@@ -114,12 +115,7 @@ describe("como a parada é dita", () => {
     expect(aviso).toContain("11, 12 e 13 de novembro");
     // Sem a frase seguinte, o aviso só gera uma ligação para o balcão.
     expect(aviso).toContain("antes ou depois");
-  });
-
-  it("com muitas unidades cadastradas, não enumera todas as que seguem recebendo", () => {
-    const aviso = avisoDaParada(inventario);
-    expect(aviso).toContain("As demais unidades recebem normalmente");
-    expect(aviso).not.toContain("Centro Médico");
+    expect(aviso).toContain("Maternidade");
   });
 
   it("a unidade vem da lista de destinatários, e não escrita à mão", () => {

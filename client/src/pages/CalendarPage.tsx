@@ -16,20 +16,15 @@ const statusStyle: Record<PortalStatus, string> = { pending: "bg-rvd-blue-pale t
 const DIAS_DA_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
 /**
- * A cor de cada unidade, pela cidade em que ela fica.
+ * A cor de cada unidade, na ordem em que elas estão cadastradas.
  *
- * O calendário mostra o dia inteiro num número só; a cor é o que separa as
- * entregas de relance, sem obrigar a abrir o dia. Pintar por cidade e não por
- * unidade é o que mantém a cor significando alguma coisa: são sete cidades e
- * cores que chegam para todas, enquanto quinze unidades fariam a paleta dar a
- * volta e duas unidades sem relação nenhuma sairiam da mesma cor.
+ * O calendário mostra o dia inteiro num número só; a cor é o que separa
+ * hospital de maternidade de relance, sem obrigar a abrir o dia.
  */
-const CORES_DAS_CIDADES = ["bg-state-go", "bg-rvd-blue", "bg-state-wait", "bg-brand", "bg-state-move", "bg-state-stop", "bg-rvd-lilac-blue", "bg-state-done"];
-const CIDADES = UNIDADES.map(unidade => unidade.cidade).filter((cidade, posicao, todas) => todas.indexOf(cidade) === posicao);
+const CORES_DAS_UNIDADES = ["bg-state-go", "bg-rvd-blue", "bg-state-wait", "bg-brand"];
 function corDaUnidade(cnpj: string) {
-  const unidade = UNIDADES.find(item => item.cnpj === cnpj);
-  const posicao = unidade ? CIDADES.indexOf(unidade.cidade) : -1;
-  return CORES_DAS_CIDADES[posicao < 0 ? CORES_DAS_CIDADES.length - 1 : posicao % CORES_DAS_CIDADES.length];
+  const posicao = UNIDADES.findIndex(unidade => unidade.cnpj === cnpj);
+  return CORES_DAS_UNIDADES[posicao < 0 ? CORES_DAS_UNIDADES.length - 1 : posicao % CORES_DAS_UNIDADES.length];
 }
 
 /** A chave do dia em São Paulo — é por ela que a nota cai numa célula. */
