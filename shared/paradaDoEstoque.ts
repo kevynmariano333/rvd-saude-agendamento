@@ -99,12 +99,16 @@ export function diasPorExtenso(parada: ParadaDoEstoque): string {
 export function avisoDaParada(parada: ParadaDoEstoque): string {
   const unidade = unidadePorCnpj(parada.cnpj);
   const dela = unidade ? daUnidade(unidade) : "da unidade";
-  // Quem continua recebendo sai da lista de unidades, e não escrito à mão: no
-  // dia em que entrar uma terceira unidade, o aviso já a inclui.
+  // Quem continua recebendo sai da lista de unidades, e não escrito à mão. Até
+  // duas, o aviso diz o nome de cada uma; de três em diante a frase viraria uma
+  // enumeração de quinze unidades, e quem lê só precisa saber que a parada é de
+  // uma unidade só.
   const seguem = UNIDADES.filter(outra => outra.cnpj !== parada.cnpj);
-  const quemRecebe = seguem.length
-    ? ` ${seguem.map(comArtigo).join(" e ")} recebe${seguem.length > 1 ? "m" : ""} normalmente.`
-    : "";
+  const quemRecebe = seguem.length === 0
+    ? ""
+    : seguem.length <= 2
+      ? ` ${seguem.map(comArtigo).join(" e ")} recebe${seguem.length > 1 ? "m" : ""} normalmente.`
+      : " As demais unidades recebem normalmente.";
   const frase = `${parada.motivo} ${dela} em ${diasPorExtenso(parada)}: nesses dias não teremos recebimento. Agende a entrega ${dela} para antes ou depois.${quemRecebe}`;
   // "A Maternidade recebe", e não "a Maternidade recebe": a unidade abre uma
   // oração nova, e o artigo entra na frase em minúscula.
