@@ -8,17 +8,20 @@ const HSH = "06033403000113";
 const MSH = "43293604002120";
 
 describe("notaParaOBi", () => {
-  const base = { invoiceNumber: " 12345 ", status: "completed", updatedAt: new Date("2026-10-15T13:00:00Z"), scheduledFor: new Date("2026-10-14T12:00:00Z"), recipientCnpj: HSH };
+  const base = { invoiceNumber: " 12345 ", status: "completed", updatedAt: new Date("2026-10-15T13:00:00Z"), scheduledFor: new Date("2026-10-14T12:00:00Z"), receivedAt: new Date("2026-10-14T15:30:00Z"), recipientCnpj: HSH };
 
   it("leva só o que a conta do D+1 usa", () => {
     expect(notaParaOBi(base)).toEqual({
       nota: "12345",
       status: "completed",
+      recebidoEm: "2026-10-14T15:30:00.000Z",
       ultimoStatusEm: "2026-10-15T13:00:00.000Z",
       agendadoPara: "2026-10-14T12:00:00.000Z",
       unidade: "HSH",
     });
     expect(notaParaOBi({ ...base, recipientCnpj: MSH })?.unidade).toBe("MSH");
+    // Nota do acervo antigo, sem a data do Recebido: vai com null, e o BI decide.
+    expect(notaParaOBi({ ...base, receivedAt: null })?.recebidoEm).toBeNull();
   });
 
   it("deixa de fora status que não é recebimento, outra unidade e nota sem número", () => {

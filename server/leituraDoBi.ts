@@ -12,8 +12,10 @@ import { getDb } from "./db";
  * entrada no SIAL. Antes isso vinha de uma planilha montada à mão; agora o
  * robô pergunta direto, de hora em hora.
  *
- * Só leitura, e só o que a conta precisa: número da nota, status, a data do
- * último status, a data de agendamento e a unidade (HSH ou MSH). Nada de
+ * Só leitura, e só o que a conta precisa: número da nota, status, quando ela
+ * foi marcada como Recebida, a data do último status, a data de agendamento e
+ * a unidade (HSH ou MSH). O D+1 conta a partir do Recebido — não do
+ * Concluído, que vem depois e afrouxaria o prazo. Nada de
  * fornecedor, valor, item ou anexo. Só entram as notas que o relatório já
  * conta como recebidas — Recebido, Concluído e Backlog — e das duas unidades
  * da Amil.
@@ -29,6 +31,8 @@ const MAX_NOTAS = 20_000;
 export type NotaParaOBi = {
   nota: string;
   status: (typeof STATUS_DO_BI)[number];
+  /** Quando a nota foi marcada como Recebida: é daqui que o D+1 conta. */
+  recebidoEm: string | null;
   /** A "Data do Último Status" do relatório: quando a nota mudou pela última vez. */
   ultimoStatusEm: string;
   agendadoPara: string | null;
@@ -40,6 +44,7 @@ type Linha = {
   status: string;
   updatedAt: Date | string | null;
   scheduledFor: Date | string | null;
+  receivedAt: Date | string | null;
   recipientCnpj: string | null;
 };
 
@@ -59,9 +64,11 @@ export function notaParaOBi(linha: Linha): NotaParaOBi | null {
   const ultimo = comoData(linha.updatedAt);
   if (!ultimo) return null;
   const agendado = comoData(linha.scheduledFor);
+  const recebido = comoData(linha.receivedAt);
   return {
     nota,
     status: linha.status as NotaParaOBi["status"],
+    recebidoEm: recebido ? recebido.toISOString() : null,
     ultimoStatusEm: ultimo.toISOString(),
     agendadoPara: agendado ? agendado.toISOString() : null,
     unidade: sigla,
@@ -99,24 +106,26 @@ export function registrarLeituraDoBi(app: Express, chave: () => string = () => (
       res.status(503).json({ error: "Banco de dados indisponível." });
       return;
     }
-    // Entra a nota que mudou ou foi agendada desde a data pedida: o D+1 olha a
-    // data do último status, e o gráfico de NFs recebidas, a do agendamento.
+    // Entra a nota recebida, mudada ou agendada desde a data pedida: o D+1 conta
+    // do Recebido, e o gráfico de NFs recebidas, do agendamento.
     const inicio = new Date(`${desde}T00:00:00-03:00`);
     const colunas = {
       invoiceNumber: appointments.invoiceNumber,
       status: appointments.status,
       updatedAt: appointments.updatedAt,
       scheduledFor: appointments.scheduledFor,
+      receivedAt: appointments.receivedAt,
       recipientCnpj: appointments.recipientCnpj,
     };
     const filtro = and(inArray(appointments.status, [...STATUS_DO_BI]), isNotNull(appointments.invoiceNumber));
-    const [porStatus, porAgenda] = await Promise.all([
+    const [porRecebido, porStatus, porAgenda] = await Promise.all([
+      db.select(colunas).from(appointments).where(and(filtro, gte(appointments.receivedAt, inicio))).limit(MAX_NOTAS),
       db.select(colunas).from(appointments).where(and(filtro, gte(appointments.updatedAt, inicio))).limit(MAX_NOTAS),
       db.select(colunas).from(appointments).where(and(filtro, gte(appointments.scheduledFor, inicio))).limit(MAX_NOTAS),
     ]);
     const vistas = new Set<string>();
     const notas: NotaParaOBi[] = [];
-    for (const linha of [...porStatus, ...porAgenda]) {
+    for (const linha of [...porRecebido, ...porStatus, ...porAgenda]) {
       const n = notaParaOBi(linha);
       if (!n) continue;
       const chaveDaNota = `${n.unidade}|${n.nota}`;
@@ -124,6 +133,6 @@ export function registrarLeituraDoBi(app: Express, chave: () => string = () => (
       vistas.add(chaveDaNota);
       notas.push(n);
     }
-    res.json({ notas, geradoEm: new Date().toISOString(), cortado: porStatus.length >= MAX_NOTAS || porAgenda.length >= MAX_NOTAS });
+    res.json({ notas, geradoEm: new Date().toISOString(), cortado: [porRecebido, porStatus, porAgenda].some((l) => l.length >= MAX_NOTAS) });
   });
 }
