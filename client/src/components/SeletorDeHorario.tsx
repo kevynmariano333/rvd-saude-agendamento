@@ -6,6 +6,7 @@ import {
   type HorarioDaAgenda,
 } from "@shared/horariosDaAgenda";
 import { Clock3, Lock } from "lucide-react";
+import { useEffect } from "react";
 
 /**
  * Os horários do dia, para escolher um.
@@ -48,6 +49,17 @@ export default function SeletorDeHorario({
     { data, appointmentId },
     { enabled: Boolean(data) },
   );
+
+  // Trocar de dia pode tornar inválida a hora já escolhida: 10:00 estava livre
+  // na terça e está tomada na quarta. Sem isto a pílula continua pintada como
+  // escolhida, a pessoa confirma, e só então o servidor recusa — com a culpa
+  // parecendo dela. Quem pode marcar por cima mantém a escolha: para a mesa
+  // não é erro, é decisão.
+  const escolhidoAgora = agenda.data?.find(horario => horario.hora === valor);
+  const perdeuAVaga = Boolean(valor) && !podeOcupar && escolhidoAgora?.situacao === "ocupado";
+  useEffect(() => {
+    if (perdeuAVaga) onEscolher("");
+  }, [perdeuAVaga, onEscolher]);
 
   if (!data) {
     return (
