@@ -843,6 +843,36 @@ async function listAppointmentsBetween(start: Date, end: Date, status?: Appointm
     .orderBy(appointments.scheduledFor);
 }
 
+/**
+ * As entregas já marcadas num dia, para o cálculo dos horários livres.
+ *
+ * Só as agendadas ocupam a doca. A nota pendente tem `scheduledFor` preenchido
+ * com a data de emissão enquanto ninguém marcou nada — contá-la lotaria a
+ * agenda com horários que não existem.
+ */
+export async function entregasMarcadasNoDia(dateKey: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const range = getSaoPauloDayRange(dateKey);
+  if (!range) return [];
+  return db
+    .select({
+      quando: appointments.scheduledFor,
+      supplierId: appointments.supplierId,
+      fornecedor: appointments.invoiceSupplierName,
+      nomeDaConta: users.name,
+      invoiceNumber: appointments.invoiceNumber,
+    })
+    .from(appointments)
+    .innerJoin(users, eq(appointments.supplierId, users.id))
+    .where(and(
+      gte(appointments.scheduledFor, range.start),
+      lte(appointments.scheduledFor, range.end),
+      eq(appointments.status, "scheduled"),
+    ))
+    .orderBy(appointments.scheduledFor);
+}
+
 /** As mesmas notas, buscadas por id — para o calendário completar o mês. */
 async function listAppointmentsByIds(ids: number[], status?: AppointmentStatus[]) {
   const db = await getDb();

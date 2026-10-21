@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => ({
   registrarNoHistorico: vi.fn(),
   notaJaRegistrada: vi.fn(),
   listApprovedCompanyUserIds: vi.fn(),
+  entregasMarcadasNoDia: vi.fn(),
   listPendingAccessRequests: vi.fn(),
   setUserAccessStatus: vi.fn(),
   createPasswordResetToken: vi.fn(),
@@ -106,6 +107,7 @@ describe("procedures de agendamento", () => {
     mocks.listAppointments.mockResolvedValue([]);
     mocks.listAppointmentSuggestions.mockResolvedValue([]);
     mocks.listApprovedCompanyUserIds.mockResolvedValue([]);
+    mocks.entregasMarcadasNoDia.mockResolvedValue([]);
   });
 
   it("permite que o fornecedor crie uma solicitação própria", async () => {
@@ -144,7 +146,7 @@ describe("procedures de agendamento", () => {
   });
 
   it("permite somente ao Administrador retornar nota recebida para novo agendamento", async () => {
-    const scheduledFor = new Date("2030-09-01T10:00:00.000Z");
+    const scheduledFor = new Date("2030-09-01T13:00:00.000Z");
     mocks.getAppointmentById.mockResolvedValue({ id: 72, supplierId: 12, status: "received", scheduledFor });
     mocks.returnAppointmentForRescheduling.mockResolvedValue({ id: 72, status: "scheduled" });
 
@@ -157,7 +159,7 @@ describe("procedures de agendamento", () => {
   });
 
   it("impede retorno administrativo para novo agendamento fora de Recebido ou Concluído", async () => {
-    mocks.getAppointmentById.mockResolvedValue({ id: 73, supplierId: 12, status: "scheduled", scheduledFor: new Date("2030-09-01T10:00:00.000Z") });
+    mocks.getAppointmentById.mockResolvedValue({ id: 73, supplierId: 12, status: "scheduled", scheduledFor: new Date("2030-09-01T13:00:00.000Z") });
     const adminCaller = appRouter.createCaller(context("admin"));
     await expect(adminCaller.appointments.returnForRescheduling({ appointmentId: 73 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(mocks.returnAppointmentForRescheduling).not.toHaveBeenCalled();
@@ -272,8 +274,52 @@ describe("procedures de agendamento", () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
     mocks.createAppointmentSuggestion.mockResolvedValue({ id: 8, status: "pending" });
     const caller = appRouter.createCaller(context("supplier"));
-    await caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-01T10:00:00.000Z", notes: "Prefiro este horário" });
+    await caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-01T13:00:00.000Z", notes: "Prefiro este horário" });
     expect(mocks.createAppointmentSuggestion).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, supplierId: 12, notes: "Prefiro este horário" }));
+  });
+
+  it("recusa a sugestão do fornecedor num horário de outro fornecedor", async () => {
+    // A doca é uma só. Antes o fornecedor digitava a hora sem ver a agenda, e
+    // os dois caminhões se encontravam no portão.
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.entregasMarcadasNoDia.mockResolvedValue([
+      { quando: new Date("2030-09-01T13:00:00.000Z"), supplierId: 99, fornecedor: "Cremer" },
+    ]);
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-01T13:00:00.000Z" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.createAppointmentSuggestion).not.toHaveBeenCalled();
+  });
+
+  it("deixa o fornecedor juntar carga no horário que já é dele", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.createAppointmentSuggestion.mockResolvedValue({ id: 9, status: "pending" });
+    mocks.entregasMarcadasNoDia.mockResolvedValue([
+      { quando: new Date("2030-09-01T13:00:00.000Z"), supplierId: 12, fornecedor: "Fornecedor Exemplo" },
+    ]);
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-01T13:00:00.000Z" });
+    expect(mocks.createAppointmentSuggestion).toHaveBeenCalled();
+  });
+
+  it("recusa hora que não existe na janela de recebimento", async () => {
+    // 07:00 em São Paulo: a doca ainda está fechada. É o que o campo livre
+    // deixava passar.
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-01T10:00:00.000Z" })).rejects.toThrow(/horários de recebimento/);
+  });
+
+  it("a mesa de agendamentos marca por cima, porque ela vê o aviso antes", async () => {
+    // O balcão às vezes precisa de dois caminhões na mesma hora. O servidor
+    // não o impede; a tela é que pergunta se é mesmo isso.
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.createAppointmentSuggestion.mockResolvedValue({ id: 10, status: "pending" });
+    mocks.entregasMarcadasNoDia.mockResolvedValue([
+      { quando: new Date("2030-09-01T13:00:00.000Z"), supplierId: 99, fornecedor: "Cremer" },
+    ]);
+    const caller = appRouter.createCaller(context("admin"));
+    await caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-01T13:00:00.000Z" });
+    expect(mocks.createAppointmentSuggestion).toHaveBeenCalled();
   });
 
   it("recusa a sugestão do fornecedor no dia do inventário", async () => {
@@ -296,8 +342,8 @@ describe("procedures de agendamento", () => {
     // para a rota que alguém escrever amanhã sem lembrar deste perfil.
     mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "pending", recipientCnpj: "43293604002120" });
     const caller = appRouter.createCaller(context("planejador_leitura"));
-    await expect(caller.appointments.schedule({ appointmentId: 1, scheduledFor: "2030-09-01T10:00:00.000Z" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-01T10:00:00.000Z" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.appointments.schedule({ appointmentId: 1, scheduledFor: "2030-09-01T13:00:00.000Z" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-01T13:00:00.000Z" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.messages.send({ appointmentId: 1, body: "oi" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.internalNotes.create({ appointmentId: 1, body: "observação" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(mocks.scheduleAppointment).not.toHaveBeenCalled();
@@ -318,7 +364,7 @@ describe("procedures de agendamento", () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 3, supplierId: 12, status: "pending", recipientCnpj: "43293604002120" });
     mocks.createAppointmentSuggestion.mockResolvedValue({ id: 10, status: "pending" });
     const caller = appRouter.createCaller(context("admin"));
-    await caller.suggestions.create({ appointmentId: 3, suggestedFor: "2030-09-01T10:00:00.000Z", notes: "Melhor para a doca" });
+    await caller.suggestions.create({ appointmentId: 3, suggestedFor: "2030-09-01T13:00:00.000Z", notes: "Melhor para a doca" });
     expect(mocks.createAppointmentSuggestion).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 3, notes: "Melhor para a doca" }));
   });
 
@@ -465,8 +511,8 @@ describe("procedures de agendamento", () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 1, status: "scheduled", scheduledFor: previousScheduledFor });
     mocks.scheduleAppointment.mockResolvedValue({ id: 1, status: "scheduled" });
     const caller = appRouter.createCaller(context("operator"));
-    await caller.appointments.schedule({ appointmentId: 1, scheduledFor: "2030-09-01T10:00:00.000Z" });
-    expect(mocks.scheduleAppointment).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, previousScheduledFor, scheduledFor: new Date("2030-09-01T10:00:00.000Z"), rescheduled: true }));
+    await caller.appointments.schedule({ appointmentId: 1, scheduledFor: "2030-09-01T13:00:00.000Z" });
+    expect(mocks.scheduleAppointment).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, previousScheduledFor, scheduledFor: new Date("2030-09-01T13:00:00.000Z"), rescheduled: true }));
   });
 
   it("não deixa o balcão marcar o Hospital no dia do inventário", async () => {
@@ -492,8 +538,8 @@ describe("procedures de agendamento", () => {
     mocks.getSuggestionById.mockResolvedValue({ id: 5, appointmentId: 1, status: "pending" });
     mocks.scheduleAppointment.mockResolvedValue({ id: 1, status: "scheduled" });
     const caller = appRouter.createCaller(context("operator"));
-    await caller.appointments.schedule({ appointmentId: 1, scheduledFor: "2030-09-01T10:00:00.000Z", acceptedSuggestionId: 5 });
-    expect(mocks.scheduleAppointment).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, acceptedSuggestionId: 5, scheduledFor: new Date("2030-09-01T10:00:00.000Z") }));
+    await caller.appointments.schedule({ appointmentId: 1, scheduledFor: "2030-09-01T13:00:00.000Z", acceptedSuggestionId: 5 });
+    expect(mocks.scheduleAppointment).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, acceptedSuggestionId: 5, scheduledFor: new Date("2030-09-01T13:00:00.000Z") }));
   });
 
   it("permite ao operador registrar um recebimento avulso pelo XML", async () => {
@@ -582,8 +628,8 @@ describe("procedures de agendamento", () => {
     mocks.createManualXmlAppointment.mockResolvedValue({ id: 11, status: "pending" });
     const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><emit><xNome>Fornecedor XML</xNome></emit><dest><CNPJ>12.345.678/0001-99</CNPJ></dest></infNFe></NFe>').toString("base64");
     const caller = appRouter.createCaller(context("supplier"));
-    await caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: "4504748409", suggestedFor: "2030-09-01T10:00:00.000Z", suggestionNotes: "Preferência pela manhã" });
-    expect(mocks.createManualXmlAppointment).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 12, purchaseOrder: "4504748409", suggestedFor: new Date("2030-09-01T10:00:00.000Z"), suggestionNotes: "Preferência pela manhã" }));
+    await caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: "4504748409", suggestedFor: "2030-09-01T13:00:00.000Z", suggestionNotes: "Preferência pela manhã" });
+    expect(mocks.createManualXmlAppointment).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 12, purchaseOrder: "4504748409", suggestedFor: new Date("2030-09-01T13:00:00.000Z"), suggestionNotes: "Preferência pela manhã" }));
   });
 
   it("recusa o envio do fornecedor sem pedido de compra", async () => {

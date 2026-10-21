@@ -23,6 +23,7 @@ import TratarPendenciaDialog from "../components/TratarPendenciaDialog";
 import ConversaDoBacklogDialog from "../components/ConversaDoBacklogDialog";
 import CorrigirMotivoDoBacklogDialog from "../components/CorrigirMotivoDoBacklogDialog";
 import PortalLayout from "./PortalLayout";
+import SeletorDeHorario from "@/components/SeletorDeHorario";
 
 /**
  * Fila de tratativa do backlog.
@@ -321,14 +322,14 @@ export default function BacklogPage() {
             </div>
           </div>
         </DialogHeader>
-        <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
-          <div>
+        <div className="space-y-4 px-6 py-5">
+          <div className="sm:max-w-xs">
             <Label htmlFor="backlog-data" className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Nova data *</Label>
             <Input id="backlog-data" type="date" value={novaData} onChange={evento => setNovaData(evento.target.value)} className="mt-2 h-11 border-line bg-surface text-rvd-plum" />
           </div>
           <div>
-            <Label htmlFor="backlog-hora" className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Novo horário *</Label>
-            <Input id="backlog-hora" type="time" value={novaHora} onChange={evento => setNovaHora(evento.target.value)} className="mt-2 h-11 border-line bg-surface text-rvd-plum" />
+            <Label className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Novo horário *</Label>
+            <SeletorDeHorario data={novaData} valor={novaHora} onEscolher={setNovaHora} appointmentId={reagendando?.id} podeOcupar className="mt-2" />
           </div>
         </div>
         <footer className="flex items-center justify-end gap-3 border-t border-line px-6 py-4">

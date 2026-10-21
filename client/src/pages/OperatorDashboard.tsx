@@ -18,6 +18,7 @@ import { MIRO_DIGITS, normalizeMiroNumber } from "@shared/miro";
 import { numerosDasPaginas } from "@/lib/paginacao";
 import UrgenciaBadge from "../components/UrgenciaBadge";
 import { MOTIVOS_DE_BACKLOG, passouPeloBacklog, rotuloDoMotivo } from "@shared/backlogReasons";
+import SeletorDeHorario from "@/components/SeletorDeHorario";
 import { compararSugestoes, ehDoPlanejamento, sugestaoPrioritaria } from "@shared/prioridadeDaSugestao";
 import { XCircle, AlertTriangle, MessagesSquare, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, ChevronsUpDown, ClipboardCheck, FileText, Filter, Grid2X2, MessageSquare, Paperclip, RefreshCw, ScrollText, RotateCcw, Search, Undo2, X, Wrench} from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
@@ -751,15 +752,13 @@ function ScheduleDialog({ item, open, onOpenChange, date, time, onDate, onTime, 
                 é assunto de quem está marcando uma entrega da Maternidade. */}
             {paradaDaNota && <AvisoDeParada paradas={[paradaDaNota]} className="mb-5" />}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label className="text-xs font-bold uppercase tracking-wide text-rvd-plum">Data</Label>
-                <Input type="date" value={date} onChange={event => onDate(event.target.value)} className="mt-2 h-11 border-line bg-surface text-rvd-plum" />
-              </div>
-              <div>
-                <Label className="text-xs font-bold uppercase tracking-wide text-rvd-plum">Hora</Label>
-                <Input type="time" value={time} onChange={event => onTime(event.target.value)} className="mt-2 h-11 border-line bg-surface text-rvd-plum" />
-              </div>
+            <div>
+              <Label className="text-xs font-bold uppercase tracking-wide text-rvd-plum">Data</Label>
+              <Input type="date" value={date} onChange={event => onDate(event.target.value)} className="mt-2 h-11 border-line bg-surface text-rvd-plum" />
+            </div>
+            <div className="mt-4">
+              <Label className="text-xs font-bold uppercase tracking-wide text-rvd-plum">Horário</Label>
+              <SeletorDeHorario data={date} valor={time} onEscolher={onTime} appointmentId={item?.id} podeOcupar className="mt-2" />
             </div>
             {paradaEscolhida && (
               <p className="mt-3 rounded-xl bg-state-stop-bg px-3 py-2 text-xs font-bold leading-5 text-state-stop">
@@ -828,7 +827,7 @@ function SuggestDialog({ item, open, onOpenChange, date, time, notes, onDate, on
           <div className="mt-5 space-y-5">
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="font-bold text-rvd-plum">Data</Label><Input type="date" value={date} onChange={event => onDate(event.target.value)} className="mt-2 h-12 border-line bg-surface text-rvd-plum" /></div>
-              <div><Label className="font-bold text-rvd-plum">Hora</Label><Input type="time" value={time} onChange={event => onTime(event.target.value)} className="mt-2 h-12 border-line bg-surface text-rvd-plum" /></div>
+              <div className="sm:col-span-2"><Label className="font-bold text-rvd-plum">Horário</Label><SeletorDeHorario data={date} valor={time} onEscolher={onTime} appointmentId={item?.id} podeOcupar className="mt-2" /></div>
             </div>
             {paradaEscolhida && (
               <p className="rounded-xl bg-state-stop-bg px-3 py-2 text-xs font-bold leading-5 text-state-stop">
