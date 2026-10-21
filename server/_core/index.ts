@@ -15,6 +15,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ligarBackupAutomatico } from "../agendadorDeBackup";
 import { ajustarTemposDoServidor, desligarComCalma, limitarCorpoAnonimo, protegerProcesso, registrarSaude, tratadorDeErros } from "./resiliencia";
+import { registrarLeituraDoBi } from "../leituraDoBi";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -140,6 +141,8 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // Responde antes de qualquer rota que dependa de sessão ou de banco.
   registrarSaude(app);
+  // A leitura do robô do BI Operacional (D+1 do recebimento), por chave fixa.
+  registrarLeituraDoBi(app);
   logStorageConfig();
   void probeStorage();
   registerStorageProxy(app);
