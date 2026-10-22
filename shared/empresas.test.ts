@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   cargoExisteNaEmpresa,
+  cargoExisteNasEmpresas,
+  gravarEmpresas,
+  lerEmpresas,
+  recursosDasEmpresas,
   cnpjsDaEmpresa,
   EMPRESAS,
   empresaDoCnpj,
@@ -45,25 +49,25 @@ describe("o corte de quem enxerga a nota", () => {
   });
 
   it("cada empresa vê só a dela", () => {
-    expect(notaNoEscopo("rvd", RVD)).toBe(true);
-    expect(notaNoEscopo("rvd", HOSPITAL)).toBe(false);
-    expect(notaNoEscopo("rvd", LLT)).toBe(false);
-    expect(notaNoEscopo("llt", LLT)).toBe(true);
-    expect(notaNoEscopo("llt", RVD)).toBe(false);
-    expect(notaNoEscopo("amil", HOSPITAL)).toBe(true);
-    expect(notaNoEscopo("amil", RVD)).toBe(false);
-    expect(notaNoEscopo("amil", LLT)).toBe(false);
+    expect(notaNoEscopo(["rvd"], RVD)).toBe(true);
+    expect(notaNoEscopo(["rvd"], HOSPITAL)).toBe(false);
+    expect(notaNoEscopo(["rvd"], LLT)).toBe(false);
+    expect(notaNoEscopo(["llt"], LLT)).toBe(true);
+    expect(notaNoEscopo(["llt"], RVD)).toBe(false);
+    expect(notaNoEscopo(["amil"], HOSPITAL)).toBe(true);
+    expect(notaNoEscopo(["amil"], RVD)).toBe(false);
+    expect(notaNoEscopo(["amil"], LLT)).toBe(false);
   });
 
   it("a nota sem destinatário não vaza para a RVD nem para a LLT", () => {
-    expect(notaNoEscopo("rvd", null)).toBe(false);
-    expect(notaNoEscopo("llt", null)).toBe(false);
-    expect(notaNoEscopo("amil", null)).toBe(true);
+    expect(notaNoEscopo(["rvd"], null)).toBe(false);
+    expect(notaNoEscopo(["llt"], null)).toBe(false);
+    expect(notaNoEscopo(["amil"], null)).toBe(true);
   });
 
   it("toda nota é de exatamente uma empresa: nenhuma fica sem dono nem com dois", () => {
     for (const cnpj of [HOSPITAL, MATERNIDADE, RVD, LLT, null, "99999999999999"]) {
-      const donas = EMPRESAS.filter(empresa => notaNoEscopo(empresa.codigo, cnpj));
+      const donas = EMPRESAS.filter(empresa => notaNoEscopo([empresa.codigo], cnpj));
       expect(donas).toHaveLength(1);
     }
   });
@@ -135,5 +139,63 @@ describe("os cargos por empresa", () => {
 
   it("operador existe nas três", () => {
     for (const empresa of ["amil", "rvd", "llt"]) expect(cargoExisteNaEmpresa("operator", empresa)).toBe(true);
+  });
+});
+
+describe("quem atende mais de uma empresa", () => {
+  it("lê a lista que a conta guarda, na ordem do cadastro", () => {
+    expect(lerEmpresas("rvd,llt")).toEqual(["rvd", "llt"]);
+    expect(lerEmpresas("llt,rvd")).toEqual(["rvd", "llt"]);
+    expect(lerEmpresas("amil")).toEqual(["amil"]);
+    expect(lerEmpresas("amil, rvd , llt")).toEqual(["amil", "rvd", "llt"]);
+  });
+
+  it("não repete nem aceita o que não existe", () => {
+    expect(lerEmpresas("rvd,rvd,xyz")).toEqual(["rvd"]);
+  });
+
+  it("valor vazio ou ilegível é Amil, e nunca abre as outras", () => {
+    for (const ruim of [null, undefined, "", "   ", "todas", "rvd;llt", "RVD"]) expect(lerEmpresas(ruim)).toEqual(["amil"]);
+  });
+
+  it("grava sempre do mesmo jeito: o mesmo conjunto dá o mesmo texto", () => {
+    expect(gravarEmpresas(["llt", "rvd"])).toBe("rvd,llt");
+    expect(gravarEmpresas(["rvd", "llt"])).toBe("rvd,llt");
+    expect(gravarEmpresas(["rvd", "rvd"])).toBe("rvd");
+  });
+
+  it("nunca grava uma lista vazia", () => {
+    expect(gravarEmpresas([])).toBe("amil");
+    expect(gravarEmpresas(["xyz"])).toBe("amil");
+  });
+
+  it("o que se grava cabe na coluna, mesmo com as três", () => {
+    expect(gravarEmpresas(["amil", "rvd", "llt"]).length).toBeLessThanOrEqual(30);
+  });
+
+  it("o que se grava volta igual quando é lido", () => {
+    for (const conjunto of [["amil"], ["rvd"], ["rvd", "llt"], ["amil", "rvd", "llt"]]) {
+      expect(lerEmpresas(gravarEmpresas(conjunto))).toEqual(conjunto);
+    }
+  });
+
+  it("o corte com duas empresas deixa passar as duas e barra a terceira", () => {
+    expect(notaNoEscopo(["rvd", "llt"], RVD)).toBe(true);
+    expect(notaNoEscopo(["rvd", "llt"], LLT)).toBe(true);
+    expect(notaNoEscopo(["rvd", "llt"], HOSPITAL)).toBe(false);
+    expect(notaNoEscopo(["rvd", "llt"], null)).toBe(false);
+  });
+
+  it("os recursos são os que qualquer uma das empresas tem", () => {
+    // Quem cuida da Amil e da RVD precisa do Backlog: a Amil o usa.
+    expect(recursosDasEmpresas(["amil", "rvd"]).temBacklog).toBe(true);
+    expect(recursosDasEmpresas(["rvd", "llt"])).toEqual({ temMiro: false, temBacklog: false, temPlanejador: false });
+    expect(recursosDasEmpresas(null)).toEqual({ temMiro: true, temBacklog: true, temPlanejador: true });
+  });
+
+  it("o planejador pede que todas as empresas da conta o tenham", () => {
+    expect(cargoExisteNasEmpresas("planejador", ["amil"])).toBe(true);
+    expect(cargoExisteNasEmpresas("planejador", ["amil", "rvd"])).toBe(false);
+    expect(cargoExisteNasEmpresas("operator", ["rvd", "llt"])).toBe(true);
   });
 });

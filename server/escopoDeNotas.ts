@@ -14,7 +14,7 @@ import { usuarioAtendeANota } from "./escopoDeEmpresa";
 import { isSchedulingDesk } from "./permissions";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 
-export type UsuarioComEscopo = { id: number; role: UserRole; companyCnpj?: string | null; companyId?: number | null; empresaOperada?: string | null };
+export type UsuarioComEscopo = { id: number; role: UserRole; companyCnpj?: string | null; companyId?: number | null; empresasOperadas?: string | null };
 
 /**
  * Os logins de fornecedor cujas notas este usuário pode ler.

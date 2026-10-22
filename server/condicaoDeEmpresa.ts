@@ -17,10 +17,9 @@
 
 import { isNull, like, not, or, type SQL } from "drizzle-orm";
 import { appointments } from "../drizzle/schema";
-import { cnpjsDaEmpresa, EMPRESAS, type CodigoDaEmpresa } from "../shared/empresas";
+import { cnpjsDaEmpresa, EMPRESAS, type CodigoDaEmpresa, type EscopoDeEmpresas } from "../shared/empresas";
 
-export function condicaoDaEmpresa(empresa: CodigoDaEmpresa | null | undefined): SQL | undefined {
-  if (!empresa) return undefined;
+function condicaoDeUma(empresa: CodigoDaEmpresa): SQL | undefined {
   const coluna = appointments.recipientCnpj;
   const casa = (cnpjs: string[]) => or(...cnpjs.map(cnpj => like(coluna, `%${cnpj}%`)));
 
@@ -32,4 +31,18 @@ export function condicaoDaEmpresa(empresa: CodigoDaEmpresa | null | undefined): 
     return outras ? or(isNull(coluna), not(outras)) : undefined;
   }
   return casa(cnpjsDaEmpresa(empresa));
+}
+
+/**
+ * A condição para uma conta que atende uma ou mais empresas: basta a nota ser
+ * de uma delas. Sem corte (`null`), sem condição.
+ */
+export function condicaoDaEmpresa(empresas: EscopoDeEmpresas | undefined): SQL | undefined {
+  if (!empresas) return undefined;
+  const condicoes = empresas.map(condicaoDeUma);
+  // A Amil sozinha, sem outras empresas cadastradas, é "tudo": sem condição.
+  // Se uma das empresas é "tudo", a lista inteira é.
+  if (condicoes.some(condicao => condicao === undefined)) return undefined;
+  const todas = condicoes as SQL[];
+  return todas.length === 1 ? todas[0] : or(...todas);
 }

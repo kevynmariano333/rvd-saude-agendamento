@@ -1,27 +1,26 @@
 import { trpc } from "@/lib/trpc";
-import { ehCargoDeMesa, ehCodigoDeEmpresa, recursosDaEmpresa, type CodigoDaEmpresa } from "@shared/empresas";
+import { ehCargoDeMesa, lerEmpresas, recursosDasEmpresas, type EscopoDeEmpresas } from "@shared/empresas";
 import { UNIDADES } from "@shared/recipients";
 
 /**
- * Para qual empresa quem está logado trabalha — e o que ela usa do portal.
+ * Para quais empresas quem está logado trabalha — e o que elas usam do portal.
  *
  * O servidor é quem recusa o que não é da empresa; aqui a tela só deixa de
  * oferecer. Um menu "Backlog" que o servidor responderia com erro é pior do que
  * um menu sem Backlog.
  *
- * Sem empresa (administrador, fornecedor, portaria): sem corte e com todos os
- * recursos. Cargo de mesa sem empresa marcada é Amil, como o servidor lê.
+ * Sem corte (administrador, fornecedor, portaria): todas, com todos os
+ * recursos. Cargo de mesa sem empresa marcada é Amil, como o servidor lê. Quem
+ * atende mais de uma — a RVD e a LLT — tem o que qualquer uma das duas tem.
  */
 export function useEmpresaDoUsuario() {
   const auth = trpc.auth.me.useQuery();
   const usuario = auth.data;
-  const empresa: CodigoDaEmpresa | null = usuario && ehCargoDeMesa(usuario.role)
-    ? (ehCodigoDeEmpresa(usuario.empresaOperada) ? usuario.empresaOperada : "amil")
-    : null;
+  const empresas: EscopoDeEmpresas = usuario && ehCargoDeMesa(usuario.role) ? lerEmpresas(usuario.empresasOperadas) : null;
   return {
-    empresa,
-    recursos: empresa ? recursosDaEmpresa(empresa) : { temMiro: true, temBacklog: true, temPlanejador: true },
-    /** As unidades que esta pessoa pode escolher: as da empresa, ou todas. */
-    unidades: UNIDADES.filter(unidade => !empresa || unidade.empresa === empresa),
+    empresas,
+    recursos: recursosDasEmpresas(empresas),
+    /** As unidades que esta pessoa pode escolher: as das empresas dela, ou todas. */
+    unidades: UNIDADES.filter(unidade => !empresas || empresas.includes(unidade.empresa)),
   };
 }

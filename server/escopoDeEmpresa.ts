@@ -11,15 +11,15 @@
 // dela já nasce coberta pelo middleware que chama estas funções.
 
 import type { UserRole } from "../drizzle/schema";
-import { ehCodigoDeEmpresa, notaNoEscopo, type CodigoDaEmpresa } from "../shared/empresas";
+import { lerEmpresas, notaNoEscopo, type EscopoDeEmpresas } from "../shared/empresas";
 
-export type UsuarioDeEmpresa = { role: UserRole; empresaOperada?: string | null };
+export type UsuarioDeEmpresa = { role: UserRole; empresasOperadas?: string | null };
 
 /** Os cargos de mesa: quem opera as notas de uma empresa. */
 const CARGOS_DA_MESA: UserRole[] = ["operator", "planejador", "planejador_leitura"];
 
 /**
- * A empresa que este usuário atende, ou null quando não há corte.
+ * As empresas que este usuário atende, ou null quando não há corte.
  *
  * Sem corte: o administrador, que é quem cuida das três; e quem não trabalha
  * na mesa — fornecedor, portaria, operação —, que tem outros limites.
@@ -27,13 +27,16 @@ const CARGOS_DA_MESA: UserRole[] = ["operator", "planejador", "planejador_leitur
  * Cargo de mesa sem empresa marcada vale Amil. O portal nasceu só com ela, e
  * trancar para fora uma conta que sempre operou seria pior do que o contrário.
  * Mas é "Amil", nunca "todas": faltar o cadastro não pode abrir as outras duas.
+ *
+ * Uma conta pode atender mais de uma — quem cuida da RVD e da LLT ao mesmo
+ * tempo —, e aí a lista tem as duas.
  */
-export function empresaDoUsuario(user: UsuarioDeEmpresa): CodigoDaEmpresa | null {
+export function empresasDoUsuario(user: UsuarioDeEmpresa): EscopoDeEmpresas {
   if (!CARGOS_DA_MESA.includes(user.role)) return null;
-  return ehCodigoDeEmpresa(user.empresaOperada) ? user.empresaOperada : "amil";
+  return lerEmpresas(user.empresasOperadas);
 }
 
 /** Esta nota, pelo CNPJ de quem a recebe, está dentro do que o usuário atende? */
 export function usuarioAtendeANota(user: UsuarioDeEmpresa, recipientCnpj: string | null | undefined): boolean {
-  return notaNoEscopo(empresaDoUsuario(user), recipientCnpj);
+  return notaNoEscopo(empresasDoUsuario(user), recipientCnpj);
 }

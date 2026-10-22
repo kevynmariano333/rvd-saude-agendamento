@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
   getUserByEmail: vi.fn(),
   createLocalUser: vi.fn(),
   setUserRole: vi.fn(),
-  setUserEmpresa: vi.fn(),
+  setUserEmpresas: vi.fn(),
   countActiveAdmins: vi.fn(),
   avisarAcessoLiberado: vi.fn(),
 }));
@@ -48,9 +48,9 @@ const HOSPITAL = "06033403000113";
 const RVD = "39283469000110";
 const LLT = "45295469000133";
 
-function usuario(role: User["role"], empresaOperada: string | null = null, id = 24): User {
+function usuario(role: User["role"], empresasOperadas: string | null = null, id = 24): User {
   const now = new Date();
-  return { id, openId: `t-${role}-${empresaOperada}`, name: "Teste", email: `${role}@x.com`, loginMethod: "test", passwordHash: null, role, companyCnpj: null, empresaOperada, accessStatus: "approved", createdAt: now, updatedAt: now, lastSignedIn: now } as unknown as User;
+  return { id, openId: `t-${role}-${empresasOperadas}`, name: "Teste", email: `${role}@x.com`, loginMethod: "test", passwordHash: null, role, companyCnpj: null, empresasOperadas, accessStatus: "approved", createdAt: now, updatedAt: now, lastSignedIn: now } as unknown as User;
 }
 
 function como(user: User) {
@@ -84,7 +84,7 @@ beforeEach(() => {
   mocks.listAppointmentHistory.mockResolvedValue([]);
   mocks.updateAppointmentStatus.mockResolvedValue({ id: 1 });
   mocks.getUserByEmail.mockResolvedValue(undefined);
-  mocks.createLocalUser.mockImplementation(async (dados: Record<string, unknown>) => ({ id: 99, name: "Novo", email: dados.email, role: dados.role, empresaOperada: dados.empresaOperada ?? null }));
+  mocks.createLocalUser.mockImplementation(async (dados: Record<string, unknown>) => ({ id: 99, name: "Novo", email: dados.email, role: dados.role, empresasOperadas: dados.empresasOperadas ?? null }));
   mocks.countActiveAdmins.mockResolvedValue(2);
 });
 
@@ -173,55 +173,55 @@ describe("a conversa e o histórico de uma nota de outra empresa", () => {
 describe("as listas respeitam a empresa", () => {
   it("a lista de notas leva o corte da empresa", async () => {
     await como(usuario("operator", "rvd")).appointments.list();
-    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ empresa: "rvd" }));
+    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["rvd"] }));
   });
 
   it("o corte vale também para quem filtra pelo seletor de destinatário", async () => {
     // O seletor só estreita o que já é da empresa: escolher o CNPJ do Hospital
     // na conta da RVD não devolve o Hospital.
     await como(usuario("operator", "rvd")).appointments.list({ recipientCnpjs: [HOSPITAL] });
-    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ empresa: "rvd", recipientCnpjs: [HOSPITAL] }));
+    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["rvd"], recipientCnpjs: [HOSPITAL] }));
   });
 
   it("o total e as abas contam só a empresa", async () => {
     await como(usuario("operator", "llt")).appointments.total();
     await como(usuario("operator", "llt")).appointments.counts();
-    expect(mocks.countAppointments).toHaveBeenCalledWith(expect.objectContaining({ empresa: "llt" }));
-    expect(mocks.countAppointmentsByStatus).toHaveBeenCalledWith(expect.objectContaining({ empresa: "llt" }));
+    expect(mocks.countAppointments).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["llt"] }));
+    expect(mocks.countAppointmentsByStatus).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["llt"] }));
   });
 
   it("o administrador lista sem corte", async () => {
     await como(usuario("admin")).appointments.list();
-    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ empresa: null }));
+    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ empresas: null }));
   });
 
   it("o calendário, o relatório e o sino levam o corte", async () => {
     const rvd = como(usuario("operator", "rvd"));
     await rvd.calendar.list({ start: "2026-11-01T00:00:00.000Z", end: "2026-11-30T23:59:59.000Z" });
     await rvd.reports.notas();
-    expect(mocks.listCalendarAppointments).toHaveBeenCalledWith(expect.any(Date), expect.any(Date), "rvd");
+    expect(mocks.listCalendarAppointments).toHaveBeenCalledWith(expect.any(Date), expect.any(Date), ["rvd"]);
     await rvd.messages.notifications();
     await rvd.messages.porNota();
-    expect(mocks.listReportRows).toHaveBeenCalledWith(expect.objectContaining({ empresa: "rvd" }));
-    expect(mocks.listUnreadAppointmentMessages).toHaveBeenCalledWith(expect.objectContaining({ empresa: "rvd" }));
-    expect(mocks.contarMensagensPorNota).toHaveBeenCalledWith(expect.objectContaining({ empresa: "rvd" }));
+    expect(mocks.listReportRows).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["rvd"] }));
+    expect(mocks.listUnreadAppointmentMessages).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["rvd"] }));
+    expect(mocks.contarMensagensPorNota).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["rvd"] }));
   });
 
   it("as sugestões pendentes levam o corte", async () => {
     await como(usuario("operator", "llt")).suggestions.list();
-    expect(mocks.listAppointmentSuggestions).toHaveBeenCalledWith(expect.objectContaining({ empresa: "llt" }));
+    expect(mocks.listAppointmentSuggestions).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["llt"] }));
   });
 });
 
 describe("o anexo da nota", () => {
   it("a RVD não baixa o XML de uma nota do Hospital", async () => {
     mocks.notaPelaChaveDoArquivo.mockResolvedValue({ id: 1, supplierId: 50, recipientCnpj: HOSPITAL });
-    expect(await podeBaixarArquivo({ id: 24, role: "operator", empresaOperada: "rvd" }, "agendamentos-xml/50/a.xml")).toBe(false);
+    expect(await podeBaixarArquivo({ id: 24, role: "operator", empresasOperadas: "rvd" }, "agendamentos-xml/50/a.xml")).toBe(false);
   });
 
   it("a Amil baixa o da própria empresa", async () => {
     mocks.notaPelaChaveDoArquivo.mockResolvedValue({ id: 1, supplierId: 50, recipientCnpj: HOSPITAL });
-    expect(await podeBaixarArquivo({ id: 24, role: "operator", empresaOperada: "amil" }, "agendamentos-xml/50/a.xml")).toBe(true);
+    expect(await podeBaixarArquivo({ id: 24, role: "operator", empresasOperadas: "amil" }, "agendamentos-xml/50/a.xml")).toBe(true);
   });
 
   it("o administrador baixa de qualquer uma", async () => {
@@ -276,69 +276,129 @@ describe("o que a RVD e a LLT não usam", () => {
 });
 
 describe("a empresa de cada conta", () => {
-  const nova = (role: string, empresa?: string) => ({
+  const nova = (role: string, empresas?: string[]) => ({
     nome: "Fulano da Silva",
     email: "fulano@exemplo.com",
     senha: "senha-forte-123",
     role: role as never,
-    ...(empresa ? { empresa: empresa as never } : {}),
+    ...(empresas ? { empresas: empresas as never } : {}),
   });
 
   it("o operador criado sem empresa atende a Amil", async () => {
     await como(usuario("admin")).staff.criarUsuario(nova("operator"));
-    expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ role: "operator", empresaOperada: "amil" }));
+    expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ role: "operator", empresasOperadas: ["amil"] }));
   });
 
   it("o operador da RVD e o da LLT guardam a empresa", async () => {
-    await como(usuario("admin")).staff.criarUsuario(nova("operator", "rvd"));
-    expect(mocks.createLocalUser).toHaveBeenLastCalledWith(expect.objectContaining({ empresaOperada: "rvd" }));
-    await como(usuario("admin")).staff.criarUsuario({ ...nova("operator", "llt"), email: "outro@exemplo.com" });
-    expect(mocks.createLocalUser).toHaveBeenLastCalledWith(expect.objectContaining({ empresaOperada: "llt" }));
+    await como(usuario("admin")).staff.criarUsuario(nova("operator", ["rvd"]));
+    expect(mocks.createLocalUser).toHaveBeenLastCalledWith(expect.objectContaining({ empresasOperadas: ["rvd"] }));
+    await como(usuario("admin")).staff.criarUsuario({ ...nova("operator", ["llt"]), email: "outro@exemplo.com" });
+    expect(mocks.createLocalUser).toHaveBeenLastCalledWith(expect.objectContaining({ empresasOperadas: ["llt"] }));
+  });
+
+  it("uma pessoa pode atender a RVD e a LLT ao mesmo tempo", async () => {
+    await como(usuario("admin")).staff.criarUsuario(nova("operator", ["rvd", "llt"]));
+    expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ empresasOperadas: ["rvd", "llt"] }));
+  });
+
+  it("a conta precisa de ao menos uma empresa", async () => {
+    await expect(como(usuario("admin")).staff.criarUsuario(nova("operator", []))).rejects.toThrow(/ao menos uma empresa/);
+    expect(mocks.createLocalUser).not.toHaveBeenCalled();
   });
 
   it("não existe planejador na RVD nem na LLT, por enquanto", async () => {
-    for (const empresa of ["rvd", "llt"]) {
-      await expect(como(usuario("admin")).staff.criarUsuario(nova("planejador", empresa))).rejects.toThrow(/ainda não tem planejador/);
-      await expect(como(usuario("admin")).staff.criarUsuario(nova("planejador_leitura", empresa))).rejects.toThrow(/ainda não tem planejador/);
+    for (const empresas of [["rvd"], ["llt"], ["rvd", "llt"]]) {
+      await expect(como(usuario("admin")).staff.criarUsuario(nova("planejador", empresas))).rejects.toThrow(/ainda não tem planejador/);
+      await expect(como(usuario("admin")).staff.criarUsuario(nova("planejador_leitura", empresas))).rejects.toThrow(/ainda não tem planejador/);
     }
     expect(mocks.createLocalUser).not.toHaveBeenCalled();
   });
 
+  it("nem junto com a Amil: uma empresa sem planejador basta para recusar", async () => {
+    await expect(como(usuario("admin")).staff.criarUsuario(nova("planejador", ["amil", "rvd"]))).rejects.toThrow(/ainda não tem planejador/);
+    expect(mocks.createLocalUser).not.toHaveBeenCalled();
+  });
+
   it("o planejador da Amil é criado normalmente", async () => {
-    await como(usuario("admin")).staff.criarUsuario(nova("planejador", "amil"));
-    expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ role: "planejador", empresaOperada: "amil" }));
+    await como(usuario("admin")).staff.criarUsuario(nova("planejador", ["amil"]));
+    expect(mocks.createLocalUser).toHaveBeenCalledWith(expect.objectContaining({ role: "planejador", empresasOperadas: ["amil"] }));
   });
 
   it("administrador e fornecedor não ganham empresa", async () => {
     await como(usuario("admin")).staff.criarUsuario(nova("admin"));
-    expect(mocks.createLocalUser).toHaveBeenLastCalledWith(expect.objectContaining({ role: "admin", empresaOperada: null }));
+    expect(mocks.createLocalUser).toHaveBeenLastCalledWith(expect.objectContaining({ role: "admin", empresasOperadas: null }));
   });
 
-  it("só o administrador muda a empresa de uma conta", async () => {
-    await expect(como(usuario("operator", "amil")).staff.setEmpresa({ userId: 5, empresa: "rvd" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(mocks.setUserEmpresa).not.toHaveBeenCalled();
+  it("só o administrador muda as empresas de uma conta", async () => {
+    await expect(como(usuario("operator", "amil")).staff.setEmpresas({ userId: 5, empresas: ["rvd"] })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.setUserEmpresas).not.toHaveBeenCalled();
   });
 
-  it("move um operador da Amil para a RVD", async () => {
-    mocks.getUserById.mockResolvedValue({ id: 5, role: "operator", empresaOperada: "amil" });
-    await como(usuario("admin")).staff.setEmpresa({ userId: 5, empresa: "rvd" });
-    expect(mocks.setUserEmpresa).toHaveBeenCalledWith({ userId: 5, empresa: "rvd" });
+  it("move um operador da Amil para a RVD e a LLT", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 5, role: "operator", empresasOperadas: "amil" });
+    await como(usuario("admin")).staff.setEmpresas({ userId: 5, empresas: ["rvd", "llt"] });
+    expect(mocks.setUserEmpresas).toHaveBeenCalledWith({ userId: 5, empresas: ["rvd", "llt"] });
+  });
+
+  it("não deixa a conta sem nenhuma empresa", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 5, role: "operator", empresasOperadas: "rvd" });
+    await expect(como(usuario("admin")).staff.setEmpresas({ userId: 5, empresas: [] })).rejects.toThrow(/ao menos uma empresa/);
+    expect(mocks.setUserEmpresas).not.toHaveBeenCalled();
   });
 
   it("não move um planejador para uma empresa sem planejamento", async () => {
-    mocks.getUserById.mockResolvedValue({ id: 5, role: "planejador", empresaOperada: "amil" });
-    await expect(como(usuario("admin")).staff.setEmpresa({ userId: 5, empresa: "llt" })).rejects.toThrow(/ainda não tem planejador/);
-    expect(mocks.setUserEmpresa).not.toHaveBeenCalled();
+    mocks.getUserById.mockResolvedValue({ id: 5, role: "planejador", empresasOperadas: "amil" });
+    await expect(como(usuario("admin")).staff.setEmpresas({ userId: 5, empresas: ["llt"] })).rejects.toThrow(/ainda não tem planejador/);
+    await expect(como(usuario("admin")).staff.setEmpresas({ userId: 5, empresas: ["amil", "llt"] })).rejects.toThrow(/ainda não tem planejador/);
+    expect(mocks.setUserEmpresas).not.toHaveBeenCalled();
   });
 
   it("não dá empresa a quem não trabalha na mesa", async () => {
-    mocks.getUserById.mockResolvedValue({ id: 5, role: "supplier", empresaOperada: null });
-    await expect(como(usuario("admin")).staff.setEmpresa({ userId: 5, empresa: "rvd" })).rejects.toThrow(/Só operador e planejador/);
+    mocks.getUserById.mockResolvedValue({ id: 5, role: "supplier", empresasOperadas: null });
+    await expect(como(usuario("admin")).staff.setEmpresas({ userId: 5, empresas: ["rvd"] })).rejects.toThrow(/Só operador e planejador/);
   });
 
   it("transformar em planejador quem atende a RVD é recusado", async () => {
-    mocks.getUserById.mockResolvedValue({ id: 5, role: "operator", empresaOperada: "rvd" });
+    mocks.getUserById.mockResolvedValue({ id: 5, role: "operator", empresasOperadas: "rvd" });
     await expect(como(usuario("admin")).staff.setRole({ userId: 5, role: "planejador" })).rejects.toThrow(/ainda não tem planejador/);
     expect(mocks.setUserRole).not.toHaveBeenCalled();
+  });
+
+  it("transformar em planejador quem atende a RVD e a LLT também", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 5, role: "operator", empresasOperadas: "rvd,llt" });
+    await expect(como(usuario("admin")).staff.setRole({ userId: 5, role: "planejador" })).rejects.toThrow(/ainda não tem planejador/);
+  });
+});
+
+describe("quem atende a RVD e a LLT ao mesmo tempo", () => {
+  const dupla = () => como(usuario("operator", "rvd,llt"));
+
+  it("abre as notas das duas", async () => {
+    for (const cnpj of [RVD, LLT]) {
+      mocks.getAppointmentById.mockResolvedValue(notaDa(cnpj));
+      await expect(dupla().appointments.byId({ appointmentId: 1 })).resolves.toBeTruthy();
+    }
+  });
+
+  it("e continua sem abrir as da Amil", async () => {
+    mocks.getAppointmentById.mockResolvedValue(notaDa(HOSPITAL));
+    await expect(dupla().appointments.byId({ appointmentId: 1 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    mocks.getAppointmentById.mockResolvedValue(notaDa(null));
+    await expect(dupla().appointments.byId({ appointmentId: 1 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("as listas levam as duas empresas", async () => {
+    await dupla().appointments.list();
+    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["rvd", "llt"] }));
+  });
+
+  it("a conta guardada em outra ordem lê do mesmo jeito", async () => {
+    await como(usuario("operator", "llt,rvd")).appointments.list();
+    expect(mocks.listAppointments).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["rvd", "llt"] }));
+  });
+
+  it("um valor ilegível cai na Amil, e nunca abre as outras", async () => {
+    mocks.getAppointmentById.mockResolvedValue(notaDa(RVD));
+    await expect(como(usuario("operator", "rvd;llt")).appointments.byId({ appointmentId: 1 })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

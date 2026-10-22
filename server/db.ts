@@ -38,7 +38,7 @@ import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 import { getReceiptTimestampForStatus } from "./receiptStatus";
 import { getSaoPauloDayRange } from "../shared/dateFilters";
 import { condicaoDaEmpresa } from "./condicaoDeEmpresa";
-import type { CodigoDaEmpresa } from "../shared/empresas";
+import { gravarEmpresas, type EscopoDeEmpresas } from "../shared/empresas";
 import type { ChaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 import { copiaQueFica, copiasQueSaem } from "../shared/copiaQueFica";
 import { notasDoCalendario, propostasNoPeriodo } from "../shared/dataDoCalendario";
@@ -188,8 +188,8 @@ export async function createLocalUser(input: {
   companyName?: string;
   companyCnpj?: string;
   accessStatus?: UserAccessStatus;
-  /** Para qual empresa da operação a conta trabalha (só cargos de mesa). */
-  empresaOperada?: CodigoDaEmpresa | null;
+  /** Para quais empresas da operação a conta trabalha (só cargos de mesa). */
+  empresasOperadas?: readonly string[] | null;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
@@ -203,7 +203,7 @@ export async function createLocalUser(input: {
     loginMethod: "rvd-password",
     passwordHash: input.passwordHash,
     role: input.role,
-    empresaOperada: input.empresaOperada ?? null,
+    empresasOperadas: input.empresasOperadas?.length ? gravarEmpresas(input.empresasOperadas) : null,
     accessStatus: input.accessStatus ?? "approved",
     lastSignedIn: new Date(),
   };
@@ -276,7 +276,7 @@ export type AppointmentFilters = {
    * De qual empresa a mesa está olhando. Sem isto a lista é de todas, e só o
    * administrador chega a ela assim.
    */
-  empresa?: CodigoDaEmpresa | null;
+  empresas?: EscopoDeEmpresas;
   status?: AppointmentStatus;
   date?: string;
   invoiceNumber?: string;
@@ -432,7 +432,7 @@ function condicoesDaLista(filters: AppointmentFilters) {
   }
   // O corte da empresa vale antes de qualquer filtro do usuário: o seletor de
   // destinatário só estreita o que já é dele, nunca alarga.
-  const daEmpresa = condicaoDaEmpresa(filters.empresa);
+  const daEmpresa = condicaoDaEmpresa(filters.empresas);
   if (daEmpresa) conditions.push(daEmpresa);
   const cnpjsDestinatario = filters.recipientCnpjs?.map(normalizeCnpj).filter(Boolean) ?? [];
   if (cnpjsDestinatario.length) conditions.push(or(...cnpjsDestinatario.map(cnpj => like(appointments.recipientCnpj, `%${cnpj}%`))));
@@ -782,13 +782,13 @@ export async function markAppointmentMessagesRead(input: { appointmentId: number
   await db.update(appointmentMessages).set(input.isOperator ? { operatorReadAt: new Date() } : { supplierReadAt: new Date() }).where(and(eq(appointmentMessages.appointmentId, input.appointmentId), ne(appointmentMessages.senderId, input.userId), isNull(unreadColumn)));
 }
 
-export async function listUnreadAppointmentMessages(input: { userId: number; isOperator: boolean; empresa?: CodigoDaEmpresa | null }) {
+export async function listUnreadAppointmentMessages(input: { userId: number; isOperator: boolean; empresas?: EscopoDeEmpresas }) {
   const db = await getDb();
   if (!db) return [];
   const unreadColumn = input.isOperator ? appointmentMessages.operatorReadAt : appointmentMessages.supplierReadAt;
   // O sino da mesa só toca por nota da empresa dela: a mensagem de um
   // fornecedor da LLT não pode aparecer no sino de quem atende a Amil.
-  const daEmpresa = condicaoDaEmpresa(input.empresa);
+  const daEmpresa = condicaoDaEmpresa(input.empresas);
   const scope = input.isOperator ? (daEmpresa ? [daEmpresa] : []) : [eq(appointments.supplierId, input.userId)];
   return db
     .select({ id: appointmentMessages.id, appointmentId: appointmentMessages.appointmentId, invoiceNumber: appointments.invoiceNumber, serviceType: appointments.serviceType, senderName: users.name, body: appointmentMessages.body, createdAt: appointmentMessages.createdAt })
@@ -848,11 +848,11 @@ const COLUNAS_DA_NOTA_NO_CALENDARIO = {
       updatedAt: appointments.updatedAt,
 } as const;
 
-async function listAppointmentsBetween(start: Date, end: Date, status?: AppointmentStatus[], empresa?: CodigoDaEmpresa | null) {
+async function listAppointmentsBetween(start: Date, end: Date, status?: AppointmentStatus[], empresas?: EscopoDeEmpresas) {
   const db = await getDb();
   if (!db) return [];
   if (status && !status.length) return [];
-  const daEmpresa = condicaoDaEmpresa(empresa);
+  const daEmpresa = condicaoDaEmpresa(empresas);
   return db
     .select(COLUNAS_DA_NOTA_NO_CALENDARIO)
     .from(appointments)
@@ -895,11 +895,11 @@ export async function entregasMarcadasNoDia(dateKey: string) {
 }
 
 /** As mesmas notas, buscadas por id — para o calendário completar o mês. */
-async function listAppointmentsByIds(ids: number[], status?: AppointmentStatus[], empresa?: CodigoDaEmpresa | null) {
+async function listAppointmentsByIds(ids: number[], status?: AppointmentStatus[], empresas?: EscopoDeEmpresas) {
   const db = await getDb();
   if (!db || !ids.length) return [];
   if (status && !status.length) return [];
-  const daEmpresa = condicaoDaEmpresa(empresa);
+  const daEmpresa = condicaoDaEmpresa(empresas);
   return db
     .select(COLUNAS_DA_NOTA_NO_CALENDARIO)
     .from(appointments)
@@ -922,14 +922,14 @@ const STATUS_DO_CALENDARIO: AppointmentStatus[] = ["pending", "scheduled"];
  * pela mesma regra de prioridade da janela de agendamento, e é ela que filtra
  * o mês e escolhe a célula.
  */
-export async function listCalendarAppointments(start: Date, end: Date, empresa?: CodigoDaEmpresa | null) {
+export async function listCalendarAppointments(start: Date, end: Date, empresas?: EscopoDeEmpresas) {
   const sugestoes = await sugestoesPendentesPorNota();
   // Duas buscas porque a proposta pode estar num mês e o `scheduledFor` em
   // outro: uma traz quem está marcado no período, a outra quem foi proposto
   // para ele.
   const [porData, porProposta] = await Promise.all([
-    listAppointmentsBetween(start, end, STATUS_DO_CALENDARIO, empresa),
-    listAppointmentsByIds(propostasNoPeriodo(sugestoes, start, end), STATUS_DO_CALENDARIO, empresa),
+    listAppointmentsBetween(start, end, STATUS_DO_CALENDARIO, empresas),
+    listAppointmentsByIds(propostasNoPeriodo(sugestoes, start, end), STATUS_DO_CALENDARIO, empresas),
   ]);
   return notasDoCalendario([...porData, ...porProposta], sugestoes, start, end);
 }
@@ -966,10 +966,10 @@ export async function getSuggestionById(id: number) {
  * aqui, e não no banco, porque é a mesma regra que a janela de agendamento
  * aplica: escrita duas vezes, ela divergiria no dia em que mudasse.
  */
-export async function sugestoesPendentesPorNota(empresa?: CodigoDaEmpresa | null) {
+export async function sugestoesPendentesPorNota(empresas?: EscopoDeEmpresas) {
   const db = await getDb();
   if (!db) return [];
-  const daEmpresa = condicaoDaEmpresa(empresa);
+  const daEmpresa = condicaoDaEmpresa(empresas);
   const linhas = await db
     .select({
       appointmentId: appointmentSuggestions.appointmentId,
@@ -996,11 +996,11 @@ export async function sugestoesPendentesPorNota(empresa?: CodigoDaEmpresa | null
   });
 }
 
-export async function listAppointmentSuggestions(filters: { appointmentId?: number; supplierId?: number; supplierIds?: number[]; status?: SuggestionStatus; empresa?: CodigoDaEmpresa | null } = {}) {
+export async function listAppointmentSuggestions(filters: { appointmentId?: number; supplierId?: number; supplierIds?: number[]; status?: SuggestionStatus; empresas?: EscopoDeEmpresas } = {}) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
-  const daEmpresa = condicaoDaEmpresa(filters.empresa);
+  const daEmpresa = condicaoDaEmpresa(filters.empresas);
   if (daEmpresa) conditions.push(daEmpresa);
   if (filters.appointmentId) conditions.push(eq(appointmentSuggestions.appointmentId, filters.appointmentId));
   if (filters.supplierId) conditions.push(eq(appointmentSuggestions.supplierId, filters.supplierId));
@@ -1860,7 +1860,7 @@ export async function listStaffUsers() {
       name: users.name,
       email: users.email,
       role: users.role,
-      empresaOperada: users.empresaOperada,
+      empresasOperadas: users.empresasOperadas,
       accessStatus: users.accessStatus,
       lastSignedIn: users.lastSignedIn,
       situacao: users.situacao,
@@ -1951,10 +1951,10 @@ export async function setUserRole(input: { userId: number; role: UserRole }) {
   await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId));
 }
 
-export async function setUserEmpresa(input: { userId: number; empresa: CodigoDaEmpresa | null }) {
+export async function setUserEmpresas(input: { userId: number; empresas: readonly string[] }) {
   const db = await getDb();
   if (!db) return;
-  await db.update(users).set({ empresaOperada: input.empresa }).where(eq(users.id, input.userId));
+  await db.update(users).set({ empresasOperadas: gravarEmpresas(input.empresas) }).where(eq(users.id, input.userId));
 }
 
 /**
@@ -2092,10 +2092,10 @@ export async function listAppointmentInternalNotes(appointmentId: number) {
  * Não lida é a que outra pessoa escreveu depois da última vez que esta abriu a
  * conversa. A própria observação nunca é novidade para quem a escreveu.
  */
-export async function contarTratativasPorNota(input: { userId: number; empresa?: CodigoDaEmpresa | null }) {
+export async function contarTratativasPorNota(input: { userId: number; empresas?: EscopoDeEmpresas }) {
   const db = await getDb();
   if (!db) return [];
-  const daEmpresa = condicaoDaEmpresa(input.empresa);
+  const daEmpresa = condicaoDaEmpresa(input.empresas);
   return db
     .select({
       appointmentId: appointmentInternalNotes.appointmentId,
@@ -2115,10 +2115,10 @@ export async function contarTratativasPorNota(input: { userId: number; empresa?:
     .groupBy(appointmentInternalNotes.appointmentId);
 }
 
-export async function conversasRecentesDoBacklog(input: { exceptoAutorId: number; limite?: number; empresa?: CodigoDaEmpresa | null }) {
+export async function conversasRecentesDoBacklog(input: { exceptoAutorId: number; limite?: number; empresas?: EscopoDeEmpresas }) {
   const db = await getDb();
   if (!db) return [];
-  const daEmpresa = condicaoDaEmpresa(input.empresa);
+  const daEmpresa = condicaoDaEmpresa(input.empresas);
   return db
     .select({
       id: appointmentInternalNotes.id,
@@ -2263,10 +2263,10 @@ export async function createAppointmentInternalNote(input: { appointmentId: numb
  * inteira — a fila tem quinhentas linhas e meio megabyte, e o sino precisa de
  * dez.
  */
-export async function ultimasNotasNoBacklog(limite = 10, vistosEm: Date | null = null, empresa: CodigoDaEmpresa | null = null) {
+export async function ultimasNotasNoBacklog(limite = 10, vistosEm: Date | null = null, empresas: EscopoDeEmpresas = null) {
   const db = await getDb();
   if (!db) return [];
-  const daEmpresa = condicaoDaEmpresa(empresa);
+  const daEmpresa = condicaoDaEmpresa(empresas);
   const linhas = await db
     .select({
       id: appointments.id,
@@ -2297,10 +2297,10 @@ export async function ultimasNotasNoBacklog(limite = 10, vistosEm: Date | null =
   return recentes;
 }
 
-export async function listBacklogReportRows(empresa: CodigoDaEmpresa | null = null) {
+export async function listBacklogReportRows(empresas: EscopoDeEmpresas = null) {
   const db = await getDb();
   if (!db) return [];
-  const daEmpresa = condicaoDaEmpresa(empresa);
+  const daEmpresa = condicaoDaEmpresa(empresas);
 
   const eventos = await db
     .select({
@@ -2414,14 +2414,14 @@ export async function listReportRows(filtros: {
   /** Uma escolha de grupo vira vários CNPJs; qualquer um deles serve. */
   recipientCnpjs?: string[];
   /** De qual empresa o relatório é. Sem isto é de todas — só o administrador. */
-  empresa?: CodigoDaEmpresa | null;
+  empresas?: EscopoDeEmpresas;
   limite: number;
 }) {
   const db = await getDb();
   if (!db) return { linhas: [], total: 0 };
 
   const condicoes = [];
-  const daEmpresa = condicaoDaEmpresa(filtros.empresa);
+  const daEmpresa = condicaoDaEmpresa(filtros.empresas);
   if (daEmpresa) condicoes.push(daEmpresa);
   if (filtros.status) condicoes.push(eq(appointments.status, filtros.status));
   // O período vale sobre a data que a tela escolheu. Era sempre o agendamento,
@@ -3148,13 +3148,13 @@ export async function limparCopiasRepetidas(input: { identidade: string; adminId
  * depois não tem como saber que ali houve tratativa. O total não zera: a marca
  * fica, muda só de cor quando não há mais nada novo.
  */
-export async function contarMensagensPorNota(input: { userId: number; isOperator: boolean; empresa?: CodigoDaEmpresa | null }) {
+export async function contarMensagensPorNota(input: { userId: number; isOperator: boolean; empresas?: EscopoDeEmpresas }) {
   const db = await getDb();
   if (!db) return [];
   const colunaDeLeitura = input.isOperator ? appointmentMessages.operatorReadAt : appointmentMessages.supplierReadAt;
   // O fornecedor só conta o que está nas notas dele; quem cuida da agenda vê
   // as da empresa que atende, como já acontece no sino.
-  const daEmpresa = condicaoDaEmpresa(input.empresa);
+  const daEmpresa = condicaoDaEmpresa(input.empresas);
   const escopo = input.isOperator ? (daEmpresa ? [daEmpresa] : []) : [eq(appointments.supplierId, input.userId)];
   return db
     .select({

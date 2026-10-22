@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { roleLabel, type PortalRole } from "@/lib/portal";
-import { cargoExisteNaEmpresa, ehCargoDeMesa, EMPRESAS, type CodigoDaEmpresa } from "@shared/empresas";
+import { cargoExisteNaEmpresa, cargoExisteNasEmpresas, ehCargoDeMesa, EMPRESAS, type CodigoDaEmpresa } from "@shared/empresas";
 import { trpc } from "@/lib/trpc";
 import { UserPlus } from "lucide-react";
 import { FormEvent, useState } from "react";
@@ -22,14 +22,22 @@ const PERFIS: PortalRole[] = ["supplier", "operator", "planejador", "planejador_
  */
 export default function CriarUsuarioDialog({ open, onOpenChange, onCriado }: { open: boolean; onOpenChange: (open: boolean) => void; onCriado: () => void }) {
   const [role, setRole] = useState<PortalRole>("supplier");
-  // Para quem trabalha na mesa: qual empresa a conta atende. Quem escolhe um
-  // cargo que a empresa não tem — planejador na RVD — volta para a Amil, em vez
-  // de ficar com uma combinação que o servidor recusa.
-  const [empresa, setEmpresa] = useState<CodigoDaEmpresa>("amil");
+  // Para quem trabalha na mesa: quais empresas a conta atende — uma ou mais. A
+  // mesma pessoa pode cuidar da RVD e da LLT. Quem escolhe um cargo que alguma
+  // delas não tem — planejador na RVD — volta para a Amil, em vez de ficar com
+  // uma combinação que o servidor recusa.
+  const [empresas, setEmpresas] = useState<CodigoDaEmpresa[]>(["amil"]);
   const escolherPerfil = (perfil: PortalRole) => {
     setRole(perfil);
-    if (!cargoExisteNaEmpresa(perfil, empresa)) setEmpresa("amil");
+    if (!cargoExisteNasEmpresas(perfil, empresas)) setEmpresas(["amil"]);
   };
+  // Marca e desmarca, mas nunca deixa a lista vazia: uma conta sem empresa não
+  // enxergaria nota nenhuma.
+  const alternarEmpresa = (codigo: CodigoDaEmpresa) =>
+    setEmpresas(atual => {
+      if (!atual.includes(codigo)) return [...atual, codigo];
+      return atual.length > 1 ? atual.filter(item => item !== codigo) : atual;
+    });
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -56,7 +64,7 @@ export default function CriarUsuarioDialog({ open, onOpenChange, onCriado }: { o
     if (!email.includes("@")) return toast.error("Informe um e-mail válido.");
     if (senha.length < 6) return toast.error("A senha deve ter pelo menos 6 caracteres.");
     if (ehFornecedor && cnpj.replace(/\D/g, "").length !== 14) return toast.error("Informe o CNPJ do fornecedor com 14 dígitos.");
-    criar.mutate({ nome: nome.trim(), email: email.trim(), senha, role, empresa: temEmpresa ? empresa : undefined, razaoSocial: razaoSocial.trim() || undefined, cnpj: cnpj || undefined });
+    criar.mutate({ nome: nome.trim(), email: email.trim(), senha, role, empresas: temEmpresa ? empresas : undefined, razaoSocial: razaoSocial.trim() || undefined, cnpj: cnpj || undefined });
   };
 
   return (
@@ -86,18 +94,18 @@ export default function CriarUsuarioDialog({ open, onOpenChange, onCriado }: { o
               lê o que vai para o Hospital, e o da Amil não lê o da LLT. */}
           {temEmpresa && (
             <div>
-              <Label className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Empresa que atende *</Label>
+              <Label className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Empresas que atende *</Label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {EMPRESAS.map(item => {
                   const existe = cargoExisteNaEmpresa(role, item.codigo);
                   return (
-                    <button key={item.codigo} type="button" disabled={!existe} onClick={() => setEmpresa(item.codigo)} aria-pressed={empresa === item.codigo} title={existe ? undefined : "Esta empresa ainda não tem planejador"} className={`rounded-xl px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${empresa === item.codigo ? "bg-brand text-white" : "bg-sunken text-rvd-plum hover:bg-rvd-plum-pale"}`}>
+                    <button key={item.codigo} type="button" disabled={!existe} onClick={() => alternarEmpresa(item.codigo)} aria-pressed={empresas.includes(item.codigo)} title={existe ? undefined : "Esta empresa ainda não tem planejador"} className={`rounded-xl px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${empresas.includes(item.codigo) ? "bg-brand text-white" : "bg-sunken text-rvd-plum hover:bg-rvd-plum-pale"}`}>
                       {item.nome}
                     </button>
                   );
                 })}
               </div>
-              <p className="mt-2 text-[11px] leading-4 text-ink-soft">A conta só enxerga as notas desta empresa. O administrador é o único que vê as três.</p>
+              <p className="mt-2 text-[11px] leading-4 text-ink-soft">A conta só enxerga as notas das empresas marcadas — dá para marcar mais de uma, como quem cuida da RVD e da LLT. O administrador é o único que vê todas.</p>
             </div>
           )}
           <div>

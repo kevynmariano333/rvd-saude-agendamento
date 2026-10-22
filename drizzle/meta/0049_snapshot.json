@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "2d94e1eb-2a3a-43b7-8e17-9f9ee454987e",
+  "id": "ba631c6e-f565-4e95-a754-24163a712453",
   "prevId": "d0f2c5dc-d5c3-45fd-8594-134c81cc09cd",
   "tables": {
     "appointmentInternalNoteReads": {
@@ -2018,9 +2018,9 @@
           "autoincrement": false,
           "default": "'supplier'"
         },
-        "empresaOperada": {
-          "name": "empresaOperada",
-          "type": "varchar(10)",
+        "empresasOperadas": {
+          "name": "empresasOperadas",
+          "type": "varchar(30)",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

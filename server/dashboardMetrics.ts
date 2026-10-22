@@ -1,7 +1,7 @@
 import { ranquearFornecedores, recortarRanking } from "../shared/qualificacaoDoFornecedor";
 import type { AppointmentStatus } from "../drizzle/schema";
 import { UNIDADES, unidadePorCnpj } from "../shared/recipients";
-import { notaNoEscopo, type CodigoDaEmpresa } from "../shared/empresas";
+import { notaNoEscopo, type EscopoDeEmpresas } from "../shared/empresas";
 
 export type DashboardAppointment = {
   status: AppointmentStatus;
@@ -48,9 +48,9 @@ export function siglaDaUnidade(recipientCnpj: string | null): string {
  * fica só onde cabe — o acervo antigo sem destinatário é da Amil, e as outras
  * empresas não têm nota sem unidade.
  */
-export function siglasDoEscopo(empresa: CodigoDaEmpresa | null): string[] {
-  const unidades = UNIDADES.filter(unidade => !empresa || unidade.empresa === empresa).map(unidade => unidade.sigla);
-  return !empresa || empresa === "amil" ? [...unidades, OUTROS] : unidades;
+export function siglasDoEscopo(empresas: EscopoDeEmpresas): string[] {
+  const unidades = UNIDADES.filter(unidade => !empresas || empresas.includes(unidade.empresa)).map(unidade => unidade.sigla);
+  return !empresas || empresas.includes("amil") ? [...unidades, OUTROS] : unidades;
 }
 
 /** Todas as colunas, para quem enxerga tudo. */
@@ -71,10 +71,10 @@ export type DashboardPeriod = {
   day?: number | null;
   now?: Date;
   /**
-   * De qual empresa é o painel. Sem isto, o painel é de todas — só o
+   * De quais empresas é o painel. Sem isto, o painel é de todas — só o
    * administrador chega a ele assim.
    */
-  empresa?: CodigoDaEmpresa | null;
+  empresas?: EscopoDeEmpresas;
 };
 
 /** Os rótulos do gráfico por mês, curtos porque são doze numa linha só. */
@@ -102,9 +102,9 @@ export function buildDashboardMetrics(todas: DashboardAppointment[], period: Das
   // fornecedores, o tempo de espera e os totais saem todos do mesmo conjunto.
   // Filtrar só o gráfico deixaria o nome de um fornecedor da LLT no ranking da
   // Amil.
-  const empresa = period.empresa ?? null;
-  const items = todas.filter(item => notaNoEscopo(empresa, item.recipientCnpj));
-  const siglas = siglasDoEscopo(empresa);
+  const empresas = period.empresas ?? null;
+  const items = todas.filter(item => notaNoEscopo(empresas, item.recipientCnpj));
+  const siglas = siglasDoEscopo(empresas);
   const daysInMonth = new Date(period.year, period.month, 0).getDate();
   // Um dia que não existe no mês escolhido — 31 em setembro, 30 em fevereiro —
   // não pode virar um período vazio: aí o painel mostra o mês inteiro.

@@ -85,13 +85,56 @@ export function empresaDoCnpj(cnpj: string | null | undefined): CodigoDaEmpresa 
 }
 
 /**
+ * As empresas que uma conta atende. Quase sempre é uma; há quem opere duas — a
+ * mesma pessoa cuida da RVD e da LLT — e a conta guarda a lista.
+ *
+ * `null` é "sem corte": quem enxerga tudo. Lista vazia nunca existe: é sempre
+ * pelo menos uma, e `[]` é recusado onde a lista nasce.
+ */
+export type EscopoDeEmpresas = CodigoDaEmpresa[] | null;
+
+/**
+ * Lê o que a conta guarda — "rvd,llt" — como lista, na ordem do cadastro e sem
+ * repetir. Código que não existe é descartado, e o que sobra vazio é Amil: o
+ * portal nasceu só com ela, e um valor ilegível não pode abrir as outras duas.
+ */
+export function lerEmpresas(guardado: string | null | undefined): CodigoDaEmpresa[] {
+  const pedidas = new Set((guardado ?? "").split(",").map(parte => parte.trim()));
+  const validas = EMPRESAS.map(empresa => empresa.codigo).filter(codigo => pedidas.has(codigo));
+  return validas.length ? validas : ["amil"];
+}
+
+/** O que gravar na conta: sempre na ordem do cadastro, para o mesmo conjunto dar o mesmo texto. */
+export function gravarEmpresas(empresas: readonly string[]): string {
+  const pedidas = new Set(empresas);
+  const validas = EMPRESAS.map(empresa => empresa.codigo).filter(codigo => pedidas.has(codigo));
+  return (validas.length ? validas : ["amil"]).join(",");
+}
+
+/**
  * A empresa dona da nota está dentro do que este corte permite?
  *
  * `escopo` null é "sem corte": quem enxerga tudo.
  */
-export function notaNoEscopo(escopo: CodigoDaEmpresa | null, cnpjDoDestinatario: string | null | undefined): boolean {
+export function notaNoEscopo(escopo: EscopoDeEmpresas, cnpjDoDestinatario: string | null | undefined): boolean {
   if (!escopo) return true;
-  return empresaDoCnpj(cnpjDoDestinatario) === escopo;
+  return escopo.includes(empresaDoCnpj(cnpjDoDestinatario));
+}
+
+/**
+ * O que quem atende estas empresas tem: o que qualquer uma delas tem. É para o
+ * menu e as abas — quem cuida da Amil e da RVD precisa do Backlog, mesmo que
+ * as notas da RVD não passem por ele. A decisão de cada nota continua sendo da
+ * empresa dela (`recursosDaNota`).
+ */
+export function recursosDasEmpresas(empresas: EscopoDeEmpresas) {
+  if (!empresas) return { temMiro: true, temBacklog: true, temPlanejador: true };
+  const cada = empresas.map(recursosDaEmpresa);
+  return {
+    temMiro: cada.some(item => item.temMiro),
+    temBacklog: cada.some(item => item.temBacklog),
+    temPlanejador: cada.some(item => item.temPlanejador),
+  };
 }
 
 /**
@@ -120,4 +163,9 @@ export function ehCargoDeMesa(cargo: string): boolean {
 export function cargoExisteNaEmpresa(cargo: string, empresa: string | null | undefined): boolean {
   if (cargo === "planejador" || cargo === "planejador_leitura") return recursosDaEmpresa(empresa).temPlanejador;
   return true;
+}
+
+/** O cargo existe em todas as empresas desta conta? Uma que não tem basta para recusar. */
+export function cargoExisteNasEmpresas(cargo: string, empresas: readonly string[]): boolean {
+  return empresas.every(empresa => cargoExisteNaEmpresa(cargo, empresa));
 }

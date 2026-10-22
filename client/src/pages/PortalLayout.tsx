@@ -52,7 +52,7 @@ const themeOptions: { value: ThemeChoice; label: string; icon: LucideIcon }[] = 
   { value: "sistema", label: "Sistema", icon: MonitorSmartphone },
 ];
 
-type PortalUser = { id: number; name: string | null; email: string | null; role: string; situacao?: string | null; empresaOperada?: string | null };
+type PortalUser = { id: number; name: string | null; email: string | null; role: string; situacao?: string | null; empresasOperadas?: string | null };
 
 /** Item da barra de navegação. O badge é a contagem que pede atenção agora. */
 type NavItem = {
@@ -89,7 +89,7 @@ export default function PortalLayout({
   const [sugestaoAberta, setSugestaoAberta] = useState(false);
   const [location, setLocation] = useLocation();
   const role = user.role as PortalRole;
-  const empresaOperada = user.empresaOperada ?? null;
+  const empresasOperadas = user.empresasOperadas ?? null;
   const isOperator = isPortalOperator(role);
   const isAdmin = isPortalAdmin(role);
   const notifications = trpc.messages.notifications.useQuery(undefined, { refetchInterval: 15_000 });
@@ -428,8 +428,8 @@ export default function PortalLayout({
               </span>
               <span className="hidden max-w-28 sm:block 2xl:max-w-40">
                 <span className="block truncate text-sm font-bold text-ink">{user.name || "Acesso RVD"}</span>
-                <span title={rotuloDoCargo(role, empresaOperada)} className="block truncate text-[10px] font-bold uppercase tracking-wide text-ink-faint">
-                  {rotuloDoCargo(role, empresaOperada)}
+                <span title={rotuloDoCargo(role, empresasOperadas)} className="block truncate text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                  {rotuloDoCargo(role, empresasOperadas)}
                 </span>
               </span>
               <ChevronDown className="mr-1 hidden size-4 text-ink-faint sm:block" />
@@ -661,7 +661,7 @@ export default function PortalLayout({
               </div>
             </div>
             <p className="mt-3 inline-flex rounded-full bg-rvd-plum-pale/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">
-              {rotuloDoCargo(role, empresaOperada)}
+              {rotuloDoCargo(role, empresasOperadas)}
             </p>
             {adminNav.length > 0 && (
               <div className="mt-4 border-t border-line pt-3">

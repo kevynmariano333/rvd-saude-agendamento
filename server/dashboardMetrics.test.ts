@@ -118,7 +118,7 @@ describe("a divisão por unidade e os volumes", () => {
   it("soma os volumes do período, e nota sem volume informado conta como zero", () => {
     const metrics = buildDashboardMetrics(
       [recebida(2, HSH, 12), recebida(2, MSH, null)],
-      { month: 8, year: 2026, now: new Date("2026-08-20T10:00:00"), empresa: "amil" },
+      { month: 8, year: 2026, now: new Date("2026-08-20T10:00:00"), empresas: ["amil"] },
     );
     expect(metrics.receivedVolumes).toBe(12);
     expect(metrics.receivedPorUnidade).toEqual([
@@ -148,7 +148,7 @@ describe("a divisão por unidade e os volumes", () => {
       // O corte vale para tudo que o painel conta: o ranking também sai desse
       // conjunto. Filtrar só o gráfico deixaria o nome de um fornecedor da LLT
       // na lista da Amil.
-      const metrics = buildDashboardMetrics(notas, { ...periodo, empresa: "amil" });
+      const metrics = buildDashboardMetrics(notas, { ...periodo, empresas: ["amil"] });
       expect(metrics.receivedCount).toBe(2);
       const nomes = metrics.topSuppliers.map(item => item.name);
       expect(nomes).toContain("Cremer");
@@ -160,19 +160,19 @@ describe("a divisão por unidade e os volumes", () => {
     it("o acervo sem destinatário continua sendo da Amil", () => {
       // O portal nasceu só com a Amil: o que não se reconhece não pode sumir da
       // mesa dela.
-      const metrics = buildDashboardMetrics(notas, { ...periodo, empresa: "amil" });
+      const metrics = buildDashboardMetrics(notas, { ...periodo, empresas: ["amil"] });
       expect(metrics.receivedPorUnidade.find(item => item.sigla === "Outros")?.notas).toBe(1);
     });
 
     it("a RVD vê só as notas da RVD, e sem a coluna Outros", () => {
-      const metrics = buildDashboardMetrics(notas, { ...periodo, empresa: "rvd" });
+      const metrics = buildDashboardMetrics(notas, { ...periodo, empresas: ["rvd"] });
       expect(metrics.receivedCount).toBe(1);
       expect(metrics.topSuppliers.map(item => item.name)).toEqual(["Fornecedor da RVD"]);
       expect(metrics.receivedPorUnidade.map(item => item.sigla)).toEqual(["RVD"]);
     });
 
     it("a LLT vê só as da LLT", () => {
-      const metrics = buildDashboardMetrics(notas, { ...periodo, empresa: "llt" });
+      const metrics = buildDashboardMetrics(notas, { ...periodo, empresas: ["llt"] });
       expect(metrics.receivedCount).toBe(1);
       expect(metrics.topSuppliers.map(item => item.name)).toEqual(["Fornecedor da LLT"]);
     });

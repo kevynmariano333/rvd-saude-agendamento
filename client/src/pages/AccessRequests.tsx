@@ -20,7 +20,7 @@ import LinkDeSenhaDialog, { type LinkDeSenha } from "../components/LinkDeSenhaDi
 import AvatarDaConta from "../components/AvatarDaConta";
 import CriarUsuarioDialog from "../components/CriarUsuarioDialog";
 import CaixaDeEntradaDeSugestoes from "../components/CaixaDeEntradaDeSugestoes";
-import { cargoExisteNaEmpresa, ehCargoDeMesa, ehCodigoDeEmpresa, EMPRESAS } from "@shared/empresas";
+import { cargoExisteNaEmpresa, ehCargoDeMesa, EMPRESAS, lerEmpresas } from "@shared/empresas";
 
 type PendingRequest = {
   id: number;
@@ -177,9 +177,9 @@ export default function AccessRequests() {
     onError: error => toast.error(error.message),
   });
 
-  const setEmpresa = trpc.staff.setEmpresa.useMutation({
+  const setEmpresas = trpc.staff.setEmpresas.useMutation({
     onSuccess: () => {
-      toast.success("Empresa atualizada. A conta passa a ver só as notas dela.");
+      toast.success("Empresas atualizadas. A conta passa a ver só as notas delas.");
       utils.staff.list.invalidate();
     },
     onError: error => toast.error(error.message),
@@ -393,27 +393,34 @@ export default function AccessRequests() {
                     </div>
                     {/* A empresa decide quais notas a conta enxerga. Só quem
                         trabalha na mesa tem uma: o administrador vê as três. */}
-                    {ehCargoDeMesa(member.role) && (
-                      <div className="flex flex-wrap gap-1 rounded-xl bg-canvas p-1" title="Empresa que a conta atende">
-                        {EMPRESAS.map(empresa => {
-                          const atual = (ehCodigoDeEmpresa(member.empresaOperada) ? member.empresaOperada : "amil") === empresa.codigo;
-                          const existe = cargoExisteNaEmpresa(member.role, empresa.codigo);
-                          return (
-                            <button
-                              key={empresa.codigo}
-                              onClick={() => setEmpresa.mutate({ userId: member.id, empresa: empresa.codigo })}
-                              disabled={setEmpresa.isPending || atual || !existe}
-                              title={existe ? undefined : "Esta empresa ainda não tem planejador"}
-                              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed ${
-                                atual ? "bg-surface text-rvd-plum shadow-sm" : "text-ink-soft hover:text-ink disabled:opacity-40"
-                              }`}
-                            >
-                              {empresa.nome}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                    {ehCargoDeMesa(member.role) && (() => {
+                      const dela = lerEmpresas(member.empresasOperadas);
+                      return (
+                        <div className="flex flex-wrap gap-1 rounded-xl bg-canvas p-1" title="Empresas que a conta atende — dá para marcar mais de uma">
+                          {EMPRESAS.map(empresa => {
+                            const atual = dela.includes(empresa.codigo);
+                            const existe = cargoExisteNaEmpresa(member.role, empresa.codigo);
+                            // Desmarcar a única empresa deixaria a conta sem nota nenhuma.
+                            const ultima = atual && dela.length === 1;
+                            const proxima = atual ? dela.filter(codigo => codigo !== empresa.codigo) : [...dela, empresa.codigo];
+                            return (
+                              <button
+                                key={empresa.codigo}
+                                onClick={() => setEmpresas.mutate({ userId: member.id, empresas: proxima })}
+                                disabled={setEmpresas.isPending || ultima || (!atual && !existe)}
+                                aria-pressed={atual}
+                                title={!atual && !existe ? "Esta empresa ainda não tem planejador" : ultima ? "A conta precisa atender ao menos uma empresa" : undefined}
+                                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed ${
+                                  atual ? "bg-surface text-rvd-plum shadow-sm" : "text-ink-soft hover:text-ink disabled:opacity-40"
+                                }`}
+                              >
+                                {empresa.nome}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                     <Button
                       onClick={() => gerarLinkDeSenha.mutate({ userId: member.id })}
                       disabled={gerarLinkDeSenha.isPending}

@@ -1,4 +1,4 @@
-import { ehCargoDeMesa, ehCodigoDeEmpresa, nomeDaEmpresa } from "@shared/empresas";
+import { ehCargoDeMesa, lerEmpresas, nomeDaEmpresa } from "@shared/empresas";
 
 export type PortalRole = "admin" | "operator" | "supplier" | "portaria" | "operacao" | "planejador" | "planejador_leitura";
 export type PortalStatus = "pending" | "scheduled" | "received" | "completed" | "backlog" | "rejected";
@@ -43,9 +43,9 @@ export const roleLabel: Record<PortalRole, string> = {
  * Só os cargos de mesa têm empresa. O administrador cuida das três e o
  * fornecedor não pertence a nenhuma — para eles o rótulo é o cargo puro.
  */
-export function rotuloDoCargo(role: PortalRole, empresaOperada?: string | null) {
+export function rotuloDoCargo(role: PortalRole, empresasOperadas?: string | null) {
   if (!ehCargoDeMesa(role)) return roleLabel[role];
-  return `${roleLabel[role]} · ${nomeDaEmpresa(ehCodigoDeEmpresa(empresaOperada) ? empresaOperada : "amil")}`;
+  return `${roleLabel[role]} · ${lerEmpresas(empresasOperadas).map(nomeDaEmpresa).join(" + ")}`;
 }
 
 export function isPortalOperator(role: PortalRole) {

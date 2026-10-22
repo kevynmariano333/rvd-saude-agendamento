@@ -13,9 +13,9 @@ import { DESTINATARIO_TODOS, gruposDeUnidades, valorDaUnidade, valorDoGrupo } fr
 export default function SeletorDeDestinatario({ value, onChange, className }: { value: string; onChange: (value: string) => void; className?: string }) {
   // Quem atende uma empresa só escolhe entre as unidades dela. O servidor corta
   // de qualquer jeito; aqui a tela só não oferece o que não é da pessoa.
-  const { empresa } = useEmpresaDoUsuario();
+  const { empresas } = useEmpresaDoUsuario();
   const grupos = gruposDeUnidades()
-    .map(grupo => ({ ...grupo, unidades: grupo.unidades.filter(unidade => !empresa || unidade.empresa === empresa) }))
+    .map(grupo => ({ ...grupo, unidades: grupo.unidades.filter(unidade => !empresas || empresas.includes(unidade.empresa)) }))
     .filter(grupo => grupo.unidades.length);
   return (
     <div className={className}>
@@ -25,7 +25,7 @@ export default function SeletorDeDestinatario({ value, onChange, className }: { 
         onChange={event => onChange(event.target.value)}
         className="mt-2 h-11 w-full rounded-xl border border-line bg-surface px-3 text-sm font-semibold text-rvd-plum focus:outline-none focus:ring-2 focus:ring-rvd-blue"
       >
-        <option value={DESTINATARIO_TODOS}>{empresa ? "Todas as unidades" : "Todos os destinatários"}</option>
+        <option value={DESTINATARIO_TODOS}>{empresas ? "Todas as unidades" : "Todos os destinatários"}</option>
         {grupos.map(({ grupo, unidades }) => (
           <optgroup key={grupo} label={`Grupo ${grupo}`}>
             {unidades.length > 1 && <option value={valorDoGrupo(grupo)}>Grupo {grupo} — todas as unidades</option>}

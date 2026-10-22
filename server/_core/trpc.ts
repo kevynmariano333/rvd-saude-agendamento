@@ -4,7 +4,7 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 import { precisaGravarSinal } from "../../shared/presenca";
 import { getAppointmentById, gravarSinalDePresenca } from "../db";
-import { empresaDoUsuario, usuarioAtendeANota } from "../escopoDeEmpresa";
+import { empresasDoUsuario, usuarioAtendeANota } from "../escopoDeEmpresa";
 import { podeExecutar } from "../permissions";
 import type { TrpcContext } from "./context";
 
@@ -101,7 +101,7 @@ const requireUser = t.middleware(async opts => {
   //
   // Recusa como "não encontrado", e não como "proibido": dizer que a nota
   // existe mas é de outra empresa já seria contar o que não se deve.
-  if (empresaDoUsuario(ctx.user)) {
+  if (empresasDoUsuario(ctx.user)) {
     const entrada = await opts.getRawInput();
     const id = (entrada as { appointmentId?: unknown } | null | undefined)?.appointmentId;
     if (typeof id === "number" && Number.isInteger(id) && id > 0) {

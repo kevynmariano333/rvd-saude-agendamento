@@ -736,7 +736,7 @@ describe("procedures de agendamento", () => {
     await caller.messages.list({ appointmentId: 1 });
     await caller.messages.notifications();
     expect(mocks.markAppointmentMessagesRead).toHaveBeenCalledWith({ appointmentId: 1, userId: 24, isOperator: true });
-    expect(mocks.listUnreadAppointmentMessages).toHaveBeenCalledWith({ userId: 24, isOperator: true, empresa: "amil" });
+    expect(mocks.listUnreadAppointmentMessages).toHaveBeenCalledWith({ userId: 24, isOperator: true, empresas: ["amil"] });
   });
 });
 
@@ -1177,7 +1177,7 @@ describe("o aviso de nota caindo no backlog", () => {
     const ctx = context("planejador");
     (ctx.user as unknown as { avisosDoBacklogVistosEm: Date }).avisosDoBacklogVistosEm = quando;
     await appRouter.createCaller(ctx).appointments.novosNoBacklog();
-    expect(mocks.ultimasNotasNoBacklog).toHaveBeenCalledWith(10, quando, "amil");
+    expect(mocks.ultimasNotasNoBacklog).toHaveBeenCalledWith(10, quando, ["amil"]);
   });
 
   it("quem nunca limpou vê as últimas, como antes", async () => {
