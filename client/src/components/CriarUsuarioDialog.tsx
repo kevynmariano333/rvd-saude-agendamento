@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { roleLabel, type PortalRole } from "@/lib/portal";
+import { cargoExisteNaEmpresa, ehCargoDeMesa, EMPRESAS, type CodigoDaEmpresa } from "@shared/empresas";
 import { trpc } from "@/lib/trpc";
 import { UserPlus } from "lucide-react";
 import { FormEvent, useState } from "react";
@@ -21,6 +22,14 @@ const PERFIS: PortalRole[] = ["supplier", "operator", "planejador", "planejador_
  */
 export default function CriarUsuarioDialog({ open, onOpenChange, onCriado }: { open: boolean; onOpenChange: (open: boolean) => void; onCriado: () => void }) {
   const [role, setRole] = useState<PortalRole>("supplier");
+  // Para quem trabalha na mesa: qual empresa a conta atende. Quem escolhe um
+  // cargo que a empresa não tem — planejador na RVD — volta para a Amil, em vez
+  // de ficar com uma combinação que o servidor recusa.
+  const [empresa, setEmpresa] = useState<CodigoDaEmpresa>("amil");
+  const escolherPerfil = (perfil: PortalRole) => {
+    setRole(perfil);
+    if (!cargoExisteNaEmpresa(perfil, empresa)) setEmpresa("amil");
+  };
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -40,13 +49,14 @@ export default function CriarUsuarioDialog({ open, onOpenChange, onCriado }: { o
   });
 
   const ehFornecedor = role === "supplier";
+  const temEmpresa = ehCargoDeMesa(role);
   const enviar = (evento: FormEvent) => {
     evento.preventDefault();
     if (nome.trim().length < 2) return toast.error("Informe o nome.");
     if (!email.includes("@")) return toast.error("Informe um e-mail válido.");
     if (senha.length < 6) return toast.error("A senha deve ter pelo menos 6 caracteres.");
     if (ehFornecedor && cnpj.replace(/\D/g, "").length !== 14) return toast.error("Informe o CNPJ do fornecedor com 14 dígitos.");
-    criar.mutate({ nome: nome.trim(), email: email.trim(), senha, role, razaoSocial: razaoSocial.trim() || undefined, cnpj: cnpj || undefined });
+    criar.mutate({ nome: nome.trim(), email: email.trim(), senha, role, empresa: temEmpresa ? empresa : undefined, razaoSocial: razaoSocial.trim() || undefined, cnpj: cnpj || undefined });
   };
 
   return (
@@ -66,12 +76,30 @@ export default function CriarUsuarioDialog({ open, onOpenChange, onCriado }: { o
             <Label className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Tipo de perfil *</Label>
             <div className="mt-2 flex flex-wrap gap-2">
               {PERFIS.map(perfil => (
-                <button key={perfil} type="button" onClick={() => setRole(perfil)} aria-pressed={role === perfil} className={`rounded-xl px-3 py-2 text-xs font-bold transition ${role === perfil ? "bg-brand text-white" : "bg-sunken text-rvd-plum hover:bg-rvd-plum-pale"}`}>
+                <button key={perfil} type="button" onClick={() => escolherPerfil(perfil)} aria-pressed={role === perfil} className={`rounded-xl px-3 py-2 text-xs font-bold transition ${role === perfil ? "bg-brand text-white" : "bg-sunken text-rvd-plum hover:bg-rvd-plum-pale"}`}>
                   {roleLabel[perfil]}
                 </button>
               ))}
             </div>
           </div>
+          {/* A empresa decide quais notas a pessoa enxerga: o operador da RVD não
+              lê o que vai para o Hospital, e o da Amil não lê o da LLT. */}
+          {temEmpresa && (
+            <div>
+              <Label className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Empresa que atende *</Label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {EMPRESAS.map(item => {
+                  const existe = cargoExisteNaEmpresa(role, item.codigo);
+                  return (
+                    <button key={item.codigo} type="button" disabled={!existe} onClick={() => setEmpresa(item.codigo)} aria-pressed={empresa === item.codigo} title={existe ? undefined : "Esta empresa ainda não tem planejador"} className={`rounded-xl px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${empresa === item.codigo ? "bg-brand text-white" : "bg-sunken text-rvd-plum hover:bg-rvd-plum-pale"}`}>
+                      {item.nome}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] leading-4 text-ink-soft">A conta só enxerga as notas desta empresa. O administrador é o único que vê as três.</p>
+            </div>
+          )}
           <div>
             <Label htmlFor="novo-nome" className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Nome completo *</Label>
             <Input id="novo-nome" value={nome} onChange={evento => setNome(evento.target.value)} maxLength={255} placeholder="Nome de quem vai usar a conta" className="mt-2 h-11 border-line bg-surface text-rvd-plum" />

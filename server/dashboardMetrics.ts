@@ -1,6 +1,7 @@
 import { ranquearFornecedores, recortarRanking } from "../shared/qualificacaoDoFornecedor";
 import type { AppointmentStatus } from "../drizzle/schema";
 import { UNIDADES, unidadePorCnpj } from "../shared/recipients";
+import { notaNoEscopo, type CodigoDaEmpresa } from "../shared/empresas";
 
 export type DashboardAppointment = {
   status: AppointmentStatus;
@@ -39,14 +40,27 @@ export function siglaDaUnidade(recipientCnpj: string | null): string {
   return unidadePorCnpj(recipientCnpj)?.sigla ?? OUTROS;
 }
 
-/** As colunas da barra empilhada, na ordem fixa em que a operação as lê. */
-export const SIGLAS_DAS_UNIDADES = [...UNIDADES.map(unidade => unidade.sigla), OUTROS];
+/**
+ * As colunas da barra empilhada, na ordem fixa em que a operação as lê.
+ *
+ * Só as unidades da empresa que está olhando: o painel da Amil não ganha uma
+ * coluna "LLT" zerada, que seria dizer a ela que existe outro cliente. "Outros"
+ * fica só onde cabe — o acervo antigo sem destinatário é da Amil, e as outras
+ * empresas não têm nota sem unidade.
+ */
+export function siglasDoEscopo(empresa: CodigoDaEmpresa | null): string[] {
+  const unidades = UNIDADES.filter(unidade => !empresa || unidade.empresa === empresa).map(unidade => unidade.sigla);
+  return !empresa || empresa === "amil" ? [...unidades, OUTROS] : unidades;
+}
+
+/** Todas as colunas, para quem enxerga tudo. */
+export const SIGLAS_DAS_UNIDADES = siglasDoEscopo(null);
 
 type BarraDoGrafico = { label: string; total: number; volumes: number } & Record<string, number | string>;
 
-function barraVazia(label: string): BarraDoGrafico {
+function barraVazia(label: string, siglas: string[]): BarraDoGrafico {
   const barra = { label, total: 0, volumes: 0 } as BarraDoGrafico;
-  for (const sigla of SIGLAS_DAS_UNIDADES) barra[sigla] = 0;
+  for (const sigla of siglas) barra[sigla] = 0;
   return barra;
 }
 
@@ -56,6 +70,11 @@ export type DashboardPeriod = {
   /** Um dia do mês, quando o painel olha para uma data só. */
   day?: number | null;
   now?: Date;
+  /**
+   * De qual empresa é o painel. Sem isto, o painel é de todas — só o
+   * administrador chega a ele assim.
+   */
+  empresa?: CodigoDaEmpresa | null;
 };
 
 /** Os rótulos do gráfico por mês, curtos porque são doze numa linha só. */
@@ -78,7 +97,14 @@ function supplierLabel(item: DashboardAppointment) {
   return item.invoiceSupplierName?.trim() || item.supplierName?.trim() || "Fornecedor não informado";
 }
 
-export function buildDashboardMetrics(items: DashboardAppointment[], period: DashboardPeriod) {
+export function buildDashboardMetrics(todas: DashboardAppointment[], period: DashboardPeriod) {
+  // O corte é feito aqui, antes de qualquer conta, e não no fim: o ranking de
+  // fornecedores, o tempo de espera e os totais saem todos do mesmo conjunto.
+  // Filtrar só o gráfico deixaria o nome de um fornecedor da LLT no ranking da
+  // Amil.
+  const empresa = period.empresa ?? null;
+  const items = todas.filter(item => notaNoEscopo(empresa, item.recipientCnpj));
+  const siglas = siglasDoEscopo(empresa);
   const daysInMonth = new Date(period.year, period.month, 0).getDate();
   // Um dia que não existe no mês escolhido — 31 em setembro, 30 em fevereiro —
   // não pode virar um período vazio: aí o painel mostra o mês inteiro.
@@ -88,11 +114,11 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
   const now = period.now ?? new Date();
   const dailyReceived: (BarraDoGrafico & { day: number })[] = Array.from({ length: daysInMonth }, (_, index) => ({
     day: index + 1,
-    ...barraVazia(`${String(index + 1).padStart(2, "0")}/${String(period.month).padStart(2, "0")}`),
+    ...barraVazia(`${String(index + 1).padStart(2, "0")}/${String(period.month).padStart(2, "0")}`, siglas),
   }));
   const monthlyReceived: (BarraDoGrafico & { month: number })[] = MONTH_LABELS.map((label, index) => ({
     month: index + 1,
-    ...barraVazia(label),
+    ...barraVazia(label, siglas),
   }));
   const receivedBySupplier = new Map<string, number>();
   const pending = items.filter(item => item.status === "pending");
@@ -143,7 +169,7 @@ export function buildDashboardMetrics(items: DashboardAppointment[], period: Das
     // Volumes e a divisão por unidade no período escolhido: é o que o gráfico
     // mostra dia a dia, somado, para quem quer o número e não a forma.
     receivedVolumes: received.reduce((sum, item) => sum + (item.invoiceVolumeCount ?? 0), 0),
-    receivedPorUnidade: SIGLAS_DAS_UNIDADES.map(sigla => ({
+    receivedPorUnidade: siglas.map(sigla => ({
       sigla,
       notas: received.filter(item => siglaDaUnidade(item.recipientCnpj) === sigla).length,
       volumes: received

@@ -115,6 +115,17 @@ export const users = mysqlTable(
     loginMethod: varchar("loginMethod", { length: 64 }),
     passwordHash: varchar("passwordHash", { length: 255 }),
     role: mysqlEnum("role", userRoles).default("supplier").notNull(),
+    /**
+     * Para qual empresa da operação esta conta trabalha: "amil", "rvd" ou "llt".
+     *
+     * Não é a empresa do fornecedor (`companyId`): é o cliente que o operador
+     * ou o planejador atende, e é por ele que se decide quais notas a pessoa
+     * enxerga. O cargo diz o que ela faz; este campo diz onde.
+     *
+     * Vazio vale "todas" só para o administrador. Para qualquer outro cargo
+     * vazio é lido como Amil, porque o portal nasceu só com ela.
+     */
+    empresaOperada: varchar("empresaOperada", { length: 10 }),
     accessStatus: mysqlEnum("accessStatus", userAccessStatuses).default("approved").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

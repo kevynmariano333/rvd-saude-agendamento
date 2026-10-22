@@ -3,7 +3,8 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 import { precisaGravarSinal } from "../../shared/presenca";
-import { gravarSinalDePresenca } from "../db";
+import { getAppointmentById, gravarSinalDePresenca } from "../db";
+import { empresaDoUsuario, usuarioAtendeANota } from "../escopoDeEmpresa";
 import { podeExecutar } from "../permissions";
 import type { TrpcContext } from "./context";
 
@@ -91,6 +92,24 @@ const requireUser = t.middleware(async opts => {
   // um acesso comum sem ninguém decidir isso.
   if (opts.type === "mutation" && !podeExecutar(ctx.user.role, opts.path)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Este acesso é só de consulta: dá para acompanhar a operação, mas não para alterar nada." });
+  }
+
+  // Quem trabalha para uma empresa só enxerga as notas dela. A trava fica aqui
+  // pelo mesmo motivo da de cima: quase toda rota que mexe numa nota recebe o
+  // `appointmentId`, e conferir aqui cobre a rota que alguém escrever amanhã
+  // sem lembrar de olhar de quem é a nota.
+  //
+  // Recusa como "não encontrado", e não como "proibido": dizer que a nota
+  // existe mas é de outra empresa já seria contar o que não se deve.
+  if (empresaDoUsuario(ctx.user)) {
+    const entrada = await opts.getRawInput();
+    const id = (entrada as { appointmentId?: unknown } | null | undefined)?.appointmentId;
+    if (typeof id === "number" && Number.isInteger(id) && id > 0) {
+      const nota = await getAppointmentById(id);
+      if (nota && !usuarioAtendeANota(ctx.user, nota.recipientCnpj)) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+      }
+    }
   }
 
   marcarPresenca(ctx.user.id);

@@ -100,8 +100,11 @@ export function avisoDaParada(parada: ParadaDoEstoque): string {
   const unidade = unidadePorCnpj(parada.cnpj);
   const dela = unidade ? daUnidade(unidade) : "da unidade";
   // Quem continua recebendo sai da lista de unidades, e não escrito à mão: no
-  // dia em que entrar uma terceira unidade, o aviso já a inclui.
-  const seguem = UNIDADES.filter(outra => outra.cnpj !== parada.cnpj);
+  // dia em que entrar uma terceira unidade, o aviso já a inclui. Só as da mesma
+  // empresa: o inventário do Hospital não é assunto de quem entrega para a LLT,
+  // e dizer "a LLT recebe normalmente" na tela de um fornecedor da Amil seria
+  // contar a ele que existe outro cliente.
+  const seguem = UNIDADES.filter(outra => outra.cnpj !== parada.cnpj && outra.empresa === unidade?.empresa);
   const quemRecebe = seguem.length
     ? ` ${seguem.map(comArtigo).join(" e ")} recebe${seguem.length > 1 ? "m" : ""} normalmente.`
     : "";

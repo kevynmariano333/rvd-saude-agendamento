@@ -109,6 +109,15 @@ describe("como a parada é dita", () => {
     expect(motivoDaRecusa(naMaternidade, new Date("2026-11-11T13:00:00.000-03:00"))).toContain("recebimento na Maternidade");
   });
 
+  it("o aviso não cita as unidades de outra empresa", () => {
+    // O inventário do Hospital é assunto da Amil. Um fornecedor da Amil que
+    // lesse "a LLT recebe normalmente" ficaria sabendo que existe outro cliente.
+    const aviso = avisoDaParada(inventario);
+    expect(aviso).not.toContain("LLT");
+    expect(aviso).not.toContain("RVD");
+    expect(aviso).toContain("A Maternidade recebe normalmente");
+  });
+
   it("o aviso diz a unidade, os dias e o que fazer", () => {
     const aviso = avisoDaParada(inventario);
     expect(aviso).toContain("Hospital");

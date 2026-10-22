@@ -344,6 +344,13 @@
       "when": 1792171777283,
       "tag": "0048_perfil_de_consulta",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "5",
+      "when": 1792696682416,
+      "tag": "0049_empresa_operada",
+      "breakpoints": true
     }
   ]
 }

@@ -53,9 +53,10 @@ describe("filtro de destinatário", () => {
 describe("seletor de destinatário por grupo", () => {
   it("junta as unidades do mesmo cliente em um grupo só", () => {
     const grupos = gruposDeUnidades();
-    expect(grupos).toHaveLength(1);
-    expect(grupos[0].grupo).toBe("Amil");
+    expect(grupos.map(item => item.grupo)).toEqual(["Amil", "RVD Saúde", "LLT Saúde"]);
     expect(grupos[0].unidades.map(unidade => unidade.sigla)).toEqual(["HSH", "MSH"]);
+    expect(grupos[1].unidades.map(unidade => unidade.sigla)).toEqual(["RVD"]);
+    expect(grupos[2].unidades.map(unidade => unidade.sigla)).toEqual(["LLT"]);
   });
 
   it("escolher o grupo filtra por todas as unidades dele", () => {

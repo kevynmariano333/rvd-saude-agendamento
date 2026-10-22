@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import PortalLayout from "./PortalLayout";
+import { useEmpresaDoUsuario } from "@/lib/empresaDoUsuario";
 
 const initialFilters: ReportFilters = { status: "all" };
 /** Quantas linhas a tela desenha, e quantas o Excel leva. */
@@ -25,6 +26,7 @@ const statusOptions = [
 export default function ReportsPage() {
   const [location, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
+  const { recursos } = useEmpresaDoUsuario();
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
   const [filters, setFilters] = useState<ReportFilters>(initialFilters);
   // A visão vem da rota: "Relatórios" é um menu com duas consultas, e cada uma
@@ -59,6 +61,7 @@ export default function ReportsPage() {
   const [exportando, setExportando] = useState(false);
   const utils = trpc.useUtils();
   const backlogReport = trpc.reports.backlog.useQuery(undefined, { enabled: ehBacklog });
+  useEffect(() => { if (ehBacklog && !recursos.temBacklog) setLocation("/operador/relatorios"); }, [ehBacklog, recursos.temBacklog, setLocation]);
   useEffect(() => { if (auth.data && !isPortalSchedulingDesk(auth.data.role as PortalRole)) setLocation(homePathFor(auth.data.role as PortalRole)); if (auth.data === null) setLocation("/"); }, [auth.data, setLocation]);
   // Já vem filtrado do banco; a tela só conta o que chegou e avisa quando o
   // teto cortou alguma coisa.
@@ -69,7 +72,12 @@ export default function ReportsPage() {
     if (view === "backlog") return toBacklogReportRows(backlogFiltrado);
     return view === "detailed" ? toDetailedReportRows(filtered) : toConsolidatedReportRows(filtered);
   }, [backlogFiltrado, filtered, view]);
-  const colunas = useMemo(() => (view === "backlog" ? COLUNAS_DO_BACKLOG : reportColumns(view)), [view]);
+  // Quem atende a RVD ou a LLT não tem SAP: a coluna do MIRO seria uma linha de
+  // "—" em todas as notas, e na planilha baixada também.
+  const colunas = useMemo(() => {
+    const todas = view === "backlog" ? COLUNAS_DO_BACKLOG : reportColumns(view);
+    return recursos.temMiro ? todas : todas.filter(coluna => coluna !== "Número MIRO" && coluna !== "Cód. SAP");
+  }, [view, recursos.temMiro]);
   const tituloDaVisao = view === "backlog" ? "Backlog" : view === "detailed" ? "Detalhado" : "Consolidado";
   const carregando = view === "backlog" ? backlogReport.isLoading : appointments.isFetching && !appointments.data;
   const setFilter = <K extends keyof ReportFilters>(key: K, value: ReportFilters[K]) => setFilters(current => ({ ...current, [key]: value }));

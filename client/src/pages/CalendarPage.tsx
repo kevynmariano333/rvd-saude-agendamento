@@ -11,6 +11,7 @@ import AppointmentDetailsDialog, { type AppointmentDetail } from "../components/
 import AppointmentDateHistoryDialog from "../components/AppointmentDateHistoryDialog";
 import LoadingTruck from "../components/LoadingTruck";
 import PortalLayout from "./PortalLayout";
+import { useEmpresaDoUsuario } from "@/lib/empresaDoUsuario";
 
 const statusStyle: Record<PortalStatus, string> = { pending: "bg-rvd-blue-pale text-rvd-plum", scheduled: "bg-rvd-plum-pale text-rvd-plum", received: "bg-rvd-lilac-blue text-rvd-plum", completed: "bg-rvd-blue text-rvd-plum", backlog: "bg-rvd-plum-pale text-rvd-plum", rejected: "bg-rvd-lilac-blue text-rvd-plum" };
 const DIAS_DA_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -64,6 +65,8 @@ type NotaDoCalendario = AppointmentDetail & { dataDoCalendario: Date | string };
 export default function CalendarPage() {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery();
+  // Quem atende uma empresa só vê as unidades dela nos chips e na contagem do dia.
+  const { unidades: unidadesDaPessoa } = useEmpresaDoUsuario();
   const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
   const [mes, setMes] = useState(() => primeiroDoMes(new Date()));
   /** "todas" ou o CNPJ de uma unidade. */
@@ -124,7 +127,7 @@ export default function CalendarPage() {
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="mr-2 font-display text-lg font-extrabold capitalize text-ink">{nomeDoMes}</h2>
           <ChipDeUnidade ativo={unidade === "todas"} onClick={() => setUnidade("todas")}>Todas</ChipDeUnidade>
-          {UNIDADES.map(item => <ChipDeUnidade key={item.cnpj} ativo={unidade === item.cnpj} cor={corDaUnidade(item.cnpj)} onClick={() => setUnidade(item.cnpj)}>{item.sigla}</ChipDeUnidade>)}
+          {unidadesDaPessoa.map(item => <ChipDeUnidade key={item.cnpj} ativo={unidade === item.cnpj} cor={corDaUnidade(item.cnpj)} onClick={() => setUnidade(item.cnpj)}>{item.sigla}</ChipDeUnidade>)}
         </div>
         <div className="flex flex-wrap items-center gap-4 text-xs text-ink-soft">
           <span>
@@ -150,7 +153,7 @@ export default function CalendarPage() {
               const doDia = porDia.get(chave) ?? [];
               const doMes = dia.getMonth() === mes.getMonth();
               const urgente = doDia.some(nota => pedidosDaNota(nota.purchaseOrder).some(pedidoEhUrgente));
-              const porUnidade = UNIDADES.map(item => ({ ...item, total: doDia.filter(nota => nota.recipientCnpj === item.cnpj).length })).filter(item => item.total > 0);
+              const porUnidade = unidadesDaPessoa.map(item => ({ ...item, total: doDia.filter(nota => nota.recipientCnpj === item.cnpj).length })).filter(item => item.total > 0);
               const outras = doDia.length - porUnidade.reduce((soma, item) => soma + item.total, 0);
               // O número de notas não diz o tamanho do dia: cinco notas de uma
               // caixa cada ocupam vinte minutos da doca, e uma de trezentos

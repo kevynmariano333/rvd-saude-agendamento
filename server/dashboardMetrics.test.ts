@@ -118,7 +118,7 @@ describe("a divisão por unidade e os volumes", () => {
   it("soma os volumes do período, e nota sem volume informado conta como zero", () => {
     const metrics = buildDashboardMetrics(
       [recebida(2, HSH, 12), recebida(2, MSH, null)],
-      { month: 8, year: 2026, now: new Date("2026-08-20T10:00:00") },
+      { month: 8, year: 2026, now: new Date("2026-08-20T10:00:00"), empresa: "amil" },
     );
     expect(metrics.receivedVolumes).toBe(12);
     expect(metrics.receivedPorUnidade).toEqual([
@@ -126,6 +126,56 @@ describe("a divisão por unidade e os volumes", () => {
       { sigla: "MSH", notas: 1, volumes: 0 },
       { sigla: "Outros", notas: 0, volumes: 0 },
     ]);
+  });
+
+  describe("o painel de cada empresa", () => {
+    const RVD = "39283469000110";
+    const LLT = "45295469000133";
+    const periodo = { month: 8, year: 2026, now: new Date("2026-08-20T10:00:00") } as const;
+    const nota = (cnpj: string | null, fornecedor: string) => ({
+      ...recebida(2, cnpj, 5),
+      invoiceSupplierName: fornecedor,
+    });
+    const notas = [nota(HSH, "Cremer"), nota(RVD, "Fornecedor da RVD"), nota(LLT, "Fornecedor da LLT"), nota(null, "Acervo antigo")];
+
+    it("o administrador vê as três empresas juntas", () => {
+      const metrics = buildDashboardMetrics(notas, periodo);
+      expect(metrics.receivedCount).toBe(4);
+      expect(metrics.receivedPorUnidade.map(item => item.sigla)).toEqual(["HSH", "MSH", "RVD", "LLT", "Outros"]);
+    });
+
+    it("a Amil não vê nota nem fornecedor da RVD e da LLT", () => {
+      // O corte vale para tudo que o painel conta: o ranking também sai desse
+      // conjunto. Filtrar só o gráfico deixaria o nome de um fornecedor da LLT
+      // na lista da Amil.
+      const metrics = buildDashboardMetrics(notas, { ...periodo, empresa: "amil" });
+      expect(metrics.receivedCount).toBe(2);
+      const nomes = metrics.topSuppliers.map(item => item.name);
+      expect(nomes).toContain("Cremer");
+      expect(nomes).not.toContain("Fornecedor da RVD");
+      expect(nomes).not.toContain("Fornecedor da LLT");
+      expect(metrics.receivedPorUnidade.map(item => item.sigla)).toEqual(["HSH", "MSH", "Outros"]);
+    });
+
+    it("o acervo sem destinatário continua sendo da Amil", () => {
+      // O portal nasceu só com a Amil: o que não se reconhece não pode sumir da
+      // mesa dela.
+      const metrics = buildDashboardMetrics(notas, { ...periodo, empresa: "amil" });
+      expect(metrics.receivedPorUnidade.find(item => item.sigla === "Outros")?.notas).toBe(1);
+    });
+
+    it("a RVD vê só as notas da RVD, e sem a coluna Outros", () => {
+      const metrics = buildDashboardMetrics(notas, { ...periodo, empresa: "rvd" });
+      expect(metrics.receivedCount).toBe(1);
+      expect(metrics.topSuppliers.map(item => item.name)).toEqual(["Fornecedor da RVD"]);
+      expect(metrics.receivedPorUnidade.map(item => item.sigla)).toEqual(["RVD"]);
+    });
+
+    it("a LLT vê só as da LLT", () => {
+      const metrics = buildDashboardMetrics(notas, { ...periodo, empresa: "llt" });
+      expect(metrics.receivedCount).toBe(1);
+      expect(metrics.topSuppliers.map(item => item.name)).toEqual(["Fornecedor da LLT"]);
+    });
   });
 
   it("reconhece a unidade pelo CNPJ do destinatário", () => {

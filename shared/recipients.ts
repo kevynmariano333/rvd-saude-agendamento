@@ -7,6 +7,12 @@
 //
 // Uma unidade nova entra aqui. Enquanto não entrar, o CNPJ aparece formatado,
 // que é pior de ler mas nunca é mentira.
+//
+// Cada unidade pertence a uma empresa (shared/empresas.ts), e é por ela que o
+// portal decide quem enxerga a nota: o operador da RVD não lê o que vai para o
+// Hospital, e o da Amil não lê o que vai para a LLT.
+
+import type { CodigoDaEmpresa } from "./empresas";
 
 export type Unidade = {
   /** Só dígitos, como o XML e o banco guardam. */
@@ -24,11 +30,16 @@ export type Unidade = {
   artigo: "o" | "a";
   /** O cliente dono da unidade. As unidades de um grupo são filtradas juntas. */
   grupo: string;
+  /** A empresa a que a unidade pertence: é dela que vem o corte de quem enxerga. */
+  empresa: CodigoDaEmpresa;
 };
 
 export const UNIDADES: Unidade[] = [
-  { cnpj: "06033403000113", sigla: "HSH", nome: "Hospital", curto: "HOSPITAL", artigo: "o", grupo: "Amil" },
-  { cnpj: "43293604002120", sigla: "MSH", nome: "Maternidade", curto: "MATERN.", artigo: "a", grupo: "Amil" },
+  { cnpj: "06033403000113", sigla: "HSH", nome: "Hospital", curto: "HOSPITAL", artigo: "o", grupo: "Amil", empresa: "amil" },
+  { cnpj: "43293604002120", sigla: "MSH", nome: "Maternidade", curto: "MATERN.", artigo: "a", grupo: "Amil", empresa: "amil" },
+  // A RVD e a LLT recebem em unidade única, e a unidade é a própria empresa.
+  { cnpj: "39283469000110", sigla: "RVD", nome: "RVD Saúde", curto: "SAÚDE", artigo: "a", grupo: "RVD Saúde", empresa: "rvd" },
+  { cnpj: "45295469000133", sigla: "LLT", nome: "LLT Saúde", curto: "SAÚDE", artigo: "a", grupo: "LLT Saúde", empresa: "llt" },
 ];
 
 /** Os grupos na ordem em que apareceram, cada um com as suas unidades. */

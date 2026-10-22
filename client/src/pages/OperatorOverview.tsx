@@ -40,8 +40,8 @@ export default function OperatorOverview() {
    * um resto, não uma terceira unidade, e por isso fica em cinza.
    */
   const coresDasUnidades: Record<string, string> = theme === "dark"
-    ? { HSH: "#3FA47D", MSH: "#4A87C9", Outros: "#6B7280" }
-    : { HSH: "#12805C", MSH: "#2C6FBA", Outros: "#9AA1AE" };
+    ? { HSH: "#3FA47D", MSH: "#4A87C9", RVD: "#B07CD8", LLT: "#D9A441", Outros: "#6B7280" }
+    : { HSH: "#12805C", MSH: "#2C6FBA", RVD: "#7B3FA8", LLT: "#B07A12", Outros: "#9AA1AE" };
   const chartInk = theme === "dark"
     ? { grid: "#2A303D", axis: "#A6AEC1", axisFaint: "#7C8497", bar: "#3FA47D", barMuted: "#22382F", label: "#58BE97", cursor: "#1E222C", tooltipBg: "#191D27", tooltipLine: "#2A303D" }
     : { grid: "#E5E8EF", axis: "#5A6275", axisFaint: "#8B93A6", bar: "#39c99b", barMuted: "#cfe9dd", label: "#169b75", cursor: "#F6F7FA", tooltipBg: "#FFFFFF", tooltipLine: "#E5E8EF" };

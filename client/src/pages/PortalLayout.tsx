@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { canSeeGateHistory, canTreatBacklogPortal, ehSomenteConsulta, isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalSchedulingDesk, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
+import { rotuloDoCargo, canSeeGateHistory, canTreatBacklogPortal, ehSomenteConsulta, isPortalAdmin, isPortalGate, isPortalOperator, isPortalPlanner, isPortalSchedulingDesk, isPortalYard, roleLabel, type PortalRole } from "@/lib/portal";
 import { serviceTypeCopy } from "@/lib/attendance";
 import { rotuloDoMotivo } from "@shared/backlogReasons";
 import { ehSituacao, ROTULO_DA_SITUACAO, SITUACAO_PADRAO, SITUACOES } from "@shared/presenca";
@@ -43,6 +43,7 @@ import ChangeNameDialog from "../components/ChangeNameDialog";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import { useLocation } from "wouter";
 import { MARCA } from "@shared/marca";
+import { useEmpresaDoUsuario } from "@/lib/empresaDoUsuario";
 
 /** Claro, escuro, ou acompanhar o aparelho. */
 const themeOptions: { value: ThemeChoice; label: string; icon: LucideIcon }[] = [
@@ -51,7 +52,7 @@ const themeOptions: { value: ThemeChoice; label: string; icon: LucideIcon }[] = 
   { value: "sistema", label: "Sistema", icon: MonitorSmartphone },
 ];
 
-type PortalUser = { id: number; name: string | null; email: string | null; role: string; situacao?: string | null };
+type PortalUser = { id: number; name: string | null; email: string | null; role: string; situacao?: string | null; empresaOperada?: string | null };
 
 /** Item da barra de navegação. O badge é a contagem que pede atenção agora. */
 type NavItem = {
@@ -88,6 +89,7 @@ export default function PortalLayout({
   const [sugestaoAberta, setSugestaoAberta] = useState(false);
   const [location, setLocation] = useLocation();
   const role = user.role as PortalRole;
+  const empresaOperada = user.empresaOperada ?? null;
   const isOperator = isPortalOperator(role);
   const isAdmin = isPortalAdmin(role);
   const notifications = trpc.messages.notifications.useQuery(undefined, { refetchInterval: 15_000 });
@@ -121,7 +123,9 @@ export default function PortalLayout({
   );
   const pendingReleases = canApproveEntries ? (releaseRequests.data ?? []) : [];
   // Quem trata o backlog precisa saber que ele encheu sem abrir a tela.
-  const podeTratarBacklog = canTreatBacklogPortal(role);
+  // A RVD e a LLT não têm backlog: o menu, o contador e o aviso saem junto.
+  const { recursos: recursosDaEmpresa } = useEmpresaDoUsuario();
+  const podeTratarBacklog = canTreatBacklogPortal(role) && recursosDaEmpresa.temBacklog;
   // Só o número, não a fila.
   //
   // O menu mostra quantas notas estão em backlog, e para isso baixava as notas
@@ -176,7 +180,7 @@ export default function PortalLayout({
       grupo: "Movimentação",
       filhos: [
         { label: "Notas lançadas", path: "/operador/relatorios" },
-        { label: "Backlog", path: "/operador/relatorios/backlog" },
+        ...(recursosDaEmpresa.temBacklog ? [{ label: "Backlog", path: "/operador/relatorios/backlog" }] : []),
         // Cadastro de parceiros, e não movimento do dia: fica com o administrador.
         ...(isAdmin ? [{ label: "Fornecedores cadastrados", path: "/operador/relatorios/fornecedores" }] : []),
       ],
@@ -422,10 +426,10 @@ export default function PortalLayout({
                   className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-surface ${CORES_DA_SITUACAO[situacao]}`}
                 />
               </span>
-              <span className="hidden max-w-24 sm:block 2xl:max-w-36">
+              <span className="hidden max-w-28 sm:block 2xl:max-w-40">
                 <span className="block truncate text-sm font-bold text-ink">{user.name || "Acesso RVD"}</span>
-                <span className="block text-[10px] font-bold uppercase tracking-wide text-ink-faint">
-                  {roleLabel[role]}
+                <span title={rotuloDoCargo(role, empresaOperada)} className="block truncate text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                  {rotuloDoCargo(role, empresaOperada)}
                 </span>
               </span>
               <ChevronDown className="mr-1 hidden size-4 text-ink-faint sm:block" />
@@ -657,7 +661,7 @@ export default function PortalLayout({
               </div>
             </div>
             <p className="mt-3 inline-flex rounded-full bg-rvd-plum-pale/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-rvd-plum">
-              {roleLabel[role]}
+              {rotuloDoCargo(role, empresaOperada)}
             </p>
             {adminNav.length > 0 && (
               <div className="mt-4 border-t border-line pt-3">

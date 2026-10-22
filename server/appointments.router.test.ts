@@ -736,7 +736,7 @@ describe("procedures de agendamento", () => {
     await caller.messages.list({ appointmentId: 1 });
     await caller.messages.notifications();
     expect(mocks.markAppointmentMessagesRead).toHaveBeenCalledWith({ appointmentId: 1, userId: 24, isOperator: true });
-    expect(mocks.listUnreadAppointmentMessages).toHaveBeenCalledWith({ userId: 24, isOperator: true });
+    expect(mocks.listUnreadAppointmentMessages).toHaveBeenCalledWith({ userId: 24, isOperator: true, empresa: "amil" });
   });
 });
 
@@ -1177,12 +1177,13 @@ describe("o aviso de nota caindo no backlog", () => {
     const ctx = context("planejador");
     (ctx.user as unknown as { avisosDoBacklogVistosEm: Date }).avisosDoBacklogVistosEm = quando;
     await appRouter.createCaller(ctx).appointments.novosNoBacklog();
-    expect(mocks.ultimasNotasNoBacklog).toHaveBeenCalledWith(10, quando);
+    expect(mocks.ultimasNotasNoBacklog).toHaveBeenCalledWith(10, quando, "amil");
   });
 
   it("quem nunca limpou vê as últimas, como antes", async () => {
     await appRouter.createCaller(context("admin")).appointments.novosNoBacklog();
-    expect(mocks.ultimasNotasNoBacklog).toHaveBeenCalledWith(10, null);
+    // O administrador cuida das três empresas: sem corte.
+    expect(mocks.ultimasNotasNoBacklog).toHaveBeenCalledWith(10, null, null);
   });
 
   it("o operador não recebe este aviso: quem trata o backlog é o planejamento", async () => {

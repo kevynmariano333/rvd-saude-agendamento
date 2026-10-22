@@ -10,10 +10,11 @@
 
 import type { UserRole } from "../drizzle/schema";
 import { listApprovedCompanyUserIds, listarIdsDaEmpresa, notaPelaChaveDoArquivo } from "./db";
+import { usuarioAtendeANota } from "./escopoDeEmpresa";
 import { isSchedulingDesk } from "./permissions";
 import { buildScopeIds, companyKey, isWithinScope } from "./supplierScope";
 
-export type UsuarioComEscopo = { id: number; role: UserRole; companyCnpj?: string | null; companyId?: number | null };
+export type UsuarioComEscopo = { id: number; role: UserRole; companyCnpj?: string | null; companyId?: number | null; empresaOperada?: string | null };
 
 /**
  * Os logins de fornecedor cujas notas este usuário pode ler.
@@ -31,9 +32,18 @@ export async function idsNoEscopo(user: UsuarioComEscopo): Promise<number[]> {
   return buildScopeIds(user.id, await listApprovedCompanyUserIds(chave));
 }
 
-/** A mesa de agendamentos lê a agenda inteira; o fornecedor, só o que é dele. */
-export async function podeVerNota(user: UsuarioComEscopo, supplierId: number | null | undefined): Promise<boolean> {
-  if (isSchedulingDesk(user.role)) return true;
+/**
+ * A mesa lê a agenda da empresa que atende; o fornecedor, só o que é dele.
+ *
+ * `recipientCnpj` é o destinatário da nota, que diz de qual empresa ela é. Sem
+ * ele a mesa passa — quem chama sem a nota na mão confere a empresa por fora.
+ */
+export async function podeVerNota(
+  user: UsuarioComEscopo,
+  supplierId: number | null | undefined,
+  recipientCnpj?: string | null,
+): Promise<boolean> {
+  if (isSchedulingDesk(user.role)) return recipientCnpj === undefined ? true : usuarioAtendeANota(user, recipientCnpj);
   return isWithinScope(await idsNoEscopo(user), supplierId);
 }
 
@@ -47,5 +57,5 @@ export async function podeVerNota(user: UsuarioComEscopo, supplierId: number | n
 export async function podeBaixarArquivo(user: UsuarioComEscopo, chave: string): Promise<boolean> {
   const nota = await notaPelaChaveDoArquivo(chave);
   if (!nota) return false;
-  return podeVerNota(user, nota.supplierId);
+  return podeVerNota(user, nota.supplierId, nota.recipientCnpj ?? null);
 }

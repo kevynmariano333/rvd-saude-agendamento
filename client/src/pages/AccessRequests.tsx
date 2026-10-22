@@ -20,6 +20,7 @@ import LinkDeSenhaDialog, { type LinkDeSenha } from "../components/LinkDeSenhaDi
 import AvatarDaConta from "../components/AvatarDaConta";
 import CriarUsuarioDialog from "../components/CriarUsuarioDialog";
 import CaixaDeEntradaDeSugestoes from "../components/CaixaDeEntradaDeSugestoes";
+import { cargoExisteNaEmpresa, ehCargoDeMesa, ehCodigoDeEmpresa, EMPRESAS } from "@shared/empresas";
 
 type PendingRequest = {
   id: number;
@@ -171,6 +172,14 @@ export default function AccessRequests() {
   const setRole = trpc.staff.setRole.useMutation({
     onSuccess: () => {
       toast.success("Perfil atualizado.");
+      utils.staff.list.invalidate();
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  const setEmpresa = trpc.staff.setEmpresa.useMutation({
+    onSuccess: () => {
+      toast.success("Empresa atualizada. A conta passa a ver só as notas dela.");
       utils.staff.list.invalidate();
     },
     onError: error => toast.error(error.message),
@@ -382,6 +391,29 @@ export default function AccessRequests() {
                         );
                       })}
                     </div>
+                    {/* A empresa decide quais notas a conta enxerga. Só quem
+                        trabalha na mesa tem uma: o administrador vê as três. */}
+                    {ehCargoDeMesa(member.role) && (
+                      <div className="flex flex-wrap gap-1 rounded-xl bg-canvas p-1" title="Empresa que a conta atende">
+                        {EMPRESAS.map(empresa => {
+                          const atual = (ehCodigoDeEmpresa(member.empresaOperada) ? member.empresaOperada : "amil") === empresa.codigo;
+                          const existe = cargoExisteNaEmpresa(member.role, empresa.codigo);
+                          return (
+                            <button
+                              key={empresa.codigo}
+                              onClick={() => setEmpresa.mutate({ userId: member.id, empresa: empresa.codigo })}
+                              disabled={setEmpresa.isPending || atual || !existe}
+                              title={existe ? undefined : "Esta empresa ainda não tem planejador"}
+                              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed ${
+                                atual ? "bg-surface text-rvd-plum shadow-sm" : "text-ink-soft hover:text-ink disabled:opacity-40"
+                              }`}
+                            >
+                              {empresa.nome}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     <Button
                       onClick={() => gerarLinkDeSenha.mutate({ userId: member.id })}
                       disabled={gerarLinkDeSenha.isPending}

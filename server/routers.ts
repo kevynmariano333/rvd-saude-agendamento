@@ -97,6 +97,7 @@ import {
   situacaoDosPedidos,
   itensDoPedido,
   setUserRole,
+  setUserEmpresa,
 } from "./db";
 import { supplierNameRule } from "../shared/attendanceFields";
 import { canApplySuggestion, canMoveAppointmentStatus, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, canTreatBacklog, isOperator, isSchedulingDesk } from "./permissions";
@@ -130,6 +131,8 @@ import { conteudoDoAgendamento } from "./emailDeAgendamento";
 import { conteudoDaRecusa } from "./emailDeRecusa";
 import { isWithinScope } from "./supplierScope";
 import { idsNoEscopo, podeVerNota, type UsuarioComEscopo } from "./escopoDeNotas";
+import { empresaDoUsuario, usuarioAtendeANota } from "./escopoDeEmpresa";
+import { cargoExisteNaEmpresa, ehCargoDeMesa, EMPRESAS, recursosDaNota, type CodigoDaEmpresa } from "../shared/empresas";
 import { contarAgendamentos } from "./db";
 import { apagarNotaRegistrando, backupConhecido, backupsDisponiveis, excluirNotaRepetida, limparAvisos, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
 import { chaveDeDuplicidade } from "../shared/duplicidadeDeNota";
@@ -225,11 +228,13 @@ function passwordMatches(password: string, storedHash: string) {
   return timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(candidate, "hex"));
 }
 
-function publicUser(user: { id: number; name: string | null; email: string | null; role: string; situacao?: string | null }) {
+function publicUser(user: { id: number; name: string | null; email: string | null; role: string; situacao?: string | null; empresaOperada?: string | null }) {
   // A situação vem junto porque é o menu da própria conta que a mostra e a
   // troca: sem ela, abrir o portal exibiria sempre "Disponível" até alguém
   // clicar, mesmo para quem tinha deixado "Ocupado" marcado.
-  return { id: user.id, name: user.name, email: user.email, role: user.role, situacao: ehSituacao(user.situacao) ? user.situacao : SITUACAO_PADRAO };
+  // A empresa vem junto porque é ela que decide o que o portal mostra: o menu
+  // sem Backlog para quem atende a RVD, o painel só com as unidades dela.
+  return { id: user.id, name: user.name, email: user.email, role: user.role, empresaOperada: user.empresaOperada ?? null, situacao: ehSituacao(user.situacao) ? user.situacao : SITUACAO_PADRAO };
 }
 
 function assertOperator(role: UserRole) {
@@ -267,6 +272,19 @@ function assertEstoqueAberto(recipientCnpj: string | null | undefined, quando: D
   if (!quando) return;
   const parada = paradaNoDia(recipientCnpj, quando);
   if (parada) throw new TRPCError({ code: "BAD_REQUEST", message: motivoDaRecusa(parada, quando) });
+}
+
+/**
+ * Esta nota pode ir ao backlog?
+ *
+ * Só a da Amil: é dela a mesa que trata divergência com o SAP. Para a RVD e a
+ * LLT a nota fecha direto, e a fila de uma empresa que não tem quem a trate
+ * seria só um lugar onde as notas ficam esquecidas.
+ */
+function assertNotaTemBacklog(recipientCnpj: string | null | undefined) {
+  if (!recursosDaNota(recipientCnpj).temBacklog) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Esta empresa não usa o backlog: a nota segue direto até a conclusão." });
+  }
 }
 
 /**
@@ -348,6 +366,11 @@ const supplierScopeIds = idsNoEscopo;
 async function getAccessibleAppointment(user: ScopedUser, appointmentId: number) {
   const appointment = await getAppointmentById(appointmentId);
   if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+  // "Não encontrado", e não "proibido": nota de outra empresa não existe para
+  // quem não a atende. É a mesma resposta que o middleware dá.
+  if (isSchedulingDesk(user.role) && !usuarioAtendeANota(user, appointment.recipientCnpj)) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+  }
   if (!isSchedulingDesk(user.role) && !isWithinScope(await supplierScopeIds(user), appointment.supplierId)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode acessar as mensagens deste agendamento." });
   }
@@ -857,6 +880,7 @@ export const appRouter = router({
           itemCountOperator: input?.itemCountOperator, itemCount: input?.itemCount,
           dateStart: input?.dateStart, dateEnd: input?.dateEnd, busca: input?.busca, ordenarPor: input?.ordenarPor, ordem: input?.ordem, backlogStart: input?.backlogStart, backlogEnd: input?.backlogEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote, excludeBacklog: input?.excludeBacklog, excluirServico: input?.excluirServico };
         if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
+        filters.empresa = empresaDoUsuario(ctx.user);
         return listAppointments(filters);
       }),
     /**
@@ -875,7 +899,7 @@ export const appRouter = router({
      */
     novosNoBacklog: protectedProcedure.query(async ({ ctx }) => {
       if (!canTreatBacklog(ctx.user.role)) return [];
-      return ultimasNotasNoBacklog(10, ctx.user.avisosDoBacklogVistosEm ?? null);
+      return ultimasNotasNoBacklog(10, ctx.user.avisosDoBacklogVistosEm ?? null, empresaDoUsuario(ctx.user));
     }),
     /**
      * As últimas falas da conversa das notas em backlog.
@@ -887,7 +911,7 @@ export const appRouter = router({
      */
     conversaDoBacklog: protectedProcedure.query(async ({ ctx }) => {
       if (!isSchedulingDesk(ctx.user.role)) return [];
-      return conversasRecentesDoBacklog({ exceptoAutorId: ctx.user.id, limite: 10 });
+      return conversasRecentesDoBacklog({ exceptoAutorId: ctx.user.id, limite: 10, empresa: empresaDoUsuario(ctx.user) });
     }),
     total: protectedProcedure
       .input(filtrosDaLista)
@@ -899,6 +923,7 @@ export const appRouter = router({
           itemCountOperator: input?.itemCountOperator, itemCount: input?.itemCount,
           dateStart: input?.dateStart, dateEnd: input?.dateEnd, busca: input?.busca, ordenarPor: input?.ordenarPor, ordem: input?.ordem, backlogStart: input?.backlogStart, backlogEnd: input?.backlogEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote, excludeBacklog: input?.excludeBacklog, excluirServico: input?.excluirServico };
         if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
+        filters.empresa = empresaDoUsuario(ctx.user);
         return countAppointments(filters);
       }),
     /**
@@ -1041,6 +1066,7 @@ export const appRouter = router({
           itemCountOperator: input?.itemCountOperator, itemCount: input?.itemCount,
           dateStart: input?.dateStart, dateEnd: input?.dateEnd, busca: input?.busca, ordenarPor: input?.ordenarPor, ordem: input?.ordem, backlogStart: input?.backlogStart, backlogEnd: input?.backlogEnd, onlyUrgent: input?.onlyUrgent, preNote: input?.preNote, excluirServico: input?.excluirServico };
         if (!isSchedulingDesk(ctx.user.role)) filters.supplierIds = await supplierScopeIds(ctx.user);
+        filters.empresa = empresaDoUsuario(ctx.user);
         return countAppointmentsByStatus(filters);
       }),
     history: protectedProcedure
@@ -1144,6 +1170,7 @@ export const appRouter = router({
         }
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
+        assertNotaTemBacklog(appointment.recipientCnpj);
         if (appointment.status !== "completed") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Somente notas concluídas voltam para o backlog por aqui." });
         }
@@ -1348,11 +1375,19 @@ export const appRouter = router({
         if (!canTransitionAppointment(appointment.status, input.status)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Essa alteração de status não é permitida." });
         }
+        // Backlog e MIRO são da Amil. A nota da RVD e da LLT fecha sem eles, e
+        // aceitar o pedido de backlog aqui criaria uma fila de divergência que
+        // ninguém daquela empresa tem como tratar.
+        const recursos = recursosDaNota(appointment.recipientCnpj);
+        if (input.status === "backlog" && !recursos.temBacklog) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Esta empresa não usa o backlog: a nota segue direto até a conclusão." });
+        }
         // Concluir é o passo que fecha a nota contra o SAP, e o MIRO é o que
         // liga um ao outro. Cobrado aqui porque depois ninguém volta para
-        // preencher: a nota sai da tela e o número se perde.
+        // preencher: a nota sai da tela e o número se perde. Onde não há SAP
+        // não há número a cobrar.
         let miroNumber: string | undefined;
-        if (input.status === "completed") {
+        if (input.status === "completed" && recursos.temMiro) {
           const numero = normalizeMiroNumber(input.miroNumber);
           if (!numero) throw new TRPCError({ code: "BAD_REQUEST", message: `Informe o número MIRO com exatamente ${MIRO_DIGITS} dígitos.` });
           miroNumber = numero;
@@ -1519,7 +1554,12 @@ export const appRouter = router({
           const dono = await getUserById(appointment.supplierId);
           if (dono) doFornecedor = dono;
         }
-        const entregas = await entregasMarcadasNoDia(input.data);
+        // A doca é uma só: o horário tomado por outra empresa continua tomado
+        // para todos. O que não atravessa é o nome — a mesa da RVD vê que as
+        // 10h estão ocupadas, mas não por quem, se quem ocupa é da Amil.
+        const entregas = (await entregasMarcadasNoDia(input.data)).map(entrega =>
+          usuarioAtendeANota(ctx.user, entrega.recipientCnpj) ? entrega : { ...entrega, fornecedor: null },
+        );
         const horarios = horariosDoDia({ entregas, supplierIds: await supplierScopeIds(doFornecedor) });
         // O fornecedor não precisa saber quem é o concorrente que pegou as
         // 10h — só que as 10h não estão disponíveis. Para a mesa o nome é o
@@ -1564,6 +1604,7 @@ export const appRouter = router({
         }
         const appointment = await getAppointmentById(input.appointmentId);
         if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+        assertNotaTemBacklog(appointment.recipientCnpj);
         if (appointment.status !== "backlog") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Só notas em Backlog entram em tratativa." });
         }
@@ -1593,7 +1634,7 @@ export const appRouter = router({
     /** A data proposta em cada nota que ainda espera resposta, para a lista. */
     pendentesPorNota: protectedProcedure.query(async ({ ctx }) => {
       assertSchedulingDesk(ctx.user.role);
-      return sugestoesPendentesPorNota();
+      return sugestoesPendentesPorNota(empresaDoUsuario(ctx.user));
     }),
     list: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive().optional(), status: z.enum(["pending", "accepted", "declined"]).optional() }).optional())
@@ -1602,7 +1643,7 @@ export const appRouter = router({
           const appointment = await getAppointmentById(input.appointmentId);
           if (!appointment || !isWithinScope(await supplierScopeIds(ctx.user), appointment.supplierId)) throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode consultar sugestões deste agendamento." });
         }
-        return listAppointmentSuggestions({ appointmentId: input?.appointmentId, status: input?.status, supplierIds: isSchedulingDesk(ctx.user.role) ? undefined : await supplierScopeIds(ctx.user) });
+        return listAppointmentSuggestions({ appointmentId: input?.appointmentId, status: input?.status, supplierIds: isSchedulingDesk(ctx.user.role) ? undefined : await supplierScopeIds(ctx.user), empresa: empresaDoUsuario(ctx.user) });
       }),
     create: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), suggestedFor: z.string().datetime(), notes: z.string().max(1000).optional() }))
@@ -1631,7 +1672,9 @@ export const appRouter = router({
       .input(z.object({ suggestionId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         assertOperator(ctx.user.role);
-        const suggestions = await listAppointmentSuggestions({ status: "pending" });
+        // Só as sugestões das notas da empresa: um id de outra empresa responde
+        // "não encontrada", como se não existisse.
+        const suggestions = await listAppointmentSuggestions({ status: "pending", empresa: empresaDoUsuario(ctx.user) });
         const suggestion = suggestions.find(item => item.id === input.suggestionId);
         if (!suggestion) throw new TRPCError({ code: "NOT_FOUND", message: "Sugestão pendente não encontrada." });
         if (!canApplySuggestion(suggestion.appointmentStatus)) throw new TRPCError({ code: "BAD_REQUEST", message: "O agendamento não pode receber esta sugestão." });
@@ -2022,7 +2065,7 @@ export const appRouter = router({
         if (mensagem.apagadaEm) return [];
         return versoesDaMensagem(input.messageId);
       }),
-    notifications: protectedProcedure.query(({ ctx }) => listUnreadAppointmentMessages({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
+    notifications: protectedProcedure.query(({ ctx }) => listUnreadAppointmentMessages({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role), empresa: empresaDoUsuario(ctx.user) })),
     /**
      * O botão "Limpar" do sino: dar por visto tudo o que está nele.
      *
@@ -2040,7 +2083,7 @@ export const appRouter = router({
       return { ok: true };
     }),
     /** Quantas mensagens cada nota tem, e quantas são novas, para marcar a conversa certa. */
-    porNota: protectedProcedure.query(({ ctx }) => contarMensagensPorNota({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) })),
+    porNota: protectedProcedure.query(({ ctx }) => contarMensagensPorNota({ userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role), empresa: empresaDoUsuario(ctx.user) })),
   }),
   reports: router({
     /**
@@ -2086,6 +2129,7 @@ export const appRouter = router({
           supplier: input?.supplier,
           recipientCnpj: input?.recipientCnpj,
           recipientCnpjs: input?.recipientCnpjs,
+          empresa: empresaDoUsuario(ctx.user),
           limite: input?.limite ?? 3000,
         });
       }),
@@ -2094,7 +2138,7 @@ export const appRouter = router({
     // Por isso é montado aqui, e não a partir da lista de agendamentos.
     backlog: protectedProcedure.query(async ({ ctx }) => {
       assertSchedulingDesk(ctx.user.role);
-      return listBacklogReportRows();
+      return listBacklogReportRows(empresaDoUsuario(ctx.user));
     }),
   }),
   internalNotes: router({
@@ -2120,7 +2164,7 @@ export const appRouter = router({
     /** Quantas observações cada nota tem, e quantas ainda não foram lidas. */
     porNota: protectedProcedure.query(({ ctx }) => {
       assertSchedulingDesk(ctx.user.role);
-      return contarTratativasPorNota({ userId: ctx.user.id });
+      return contarTratativasPorNota({ userId: ctx.user.id, empresa: empresaDoUsuario(ctx.user) });
     }),
     create: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive(), body: z.string().trim().min(1, "Escreva a observação.").max(2000) }))
@@ -2146,7 +2190,7 @@ export const appRouter = router({
         // chegou, concluída já foi lançada e recusada não vem — deixá-las no
         // quadro faz o número do dia contar trabalho que não existe mais. O
         // histórico delas continua na lista e no relatório.
-        return listCalendarAppointments(start, end);
+        return listCalendarAppointments(start, end, empresaDoUsuario(ctx.user));
       }),
   }),
   attendances: router({
@@ -2405,11 +2449,20 @@ export const appRouter = router({
         email: z.string().trim().email("Informe um e-mail válido.").max(320),
         senha: z.string().min(6, "A senha deve ter pelo menos 6 caracteres.").max(200),
         role: z.enum(userRoles),
+        /** Para quem trabalha na mesa: qual empresa a conta atende. */
+        empresa: z.enum(EMPRESAS.map(item => item.codigo) as [CodigoDaEmpresa, ...CodigoDaEmpresa[]]).optional(),
         razaoSocial: z.string().trim().max(255).optional(),
         cnpj: z.string().trim().max(20).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const email = input.email.toLowerCase();
+        // Quem trabalha na mesa atende uma empresa — a Amil, se ninguém disse
+        // outra. Os demais cargos não têm empresa: o administrador vê as três e
+        // o fornecedor, a portaria e a operação têm outros limites.
+        const empresa = ehCargoDeMesa(input.role) ? (input.empresa ?? "amil") : null;
+        if (empresa && !cargoExisteNaEmpresa(input.role, empresa)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Esta empresa ainda não tem planejador: por enquanto só há operador." });
+        }
         if (await getUserByEmail(email)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe uma conta com esse e-mail." });
         }
@@ -2427,6 +2480,7 @@ export const appRouter = router({
           companyName: input.razaoSocial || undefined,
           companyCnpj: cnpj || undefined,
           accessStatus: "approved",
+          empresaOperada: empresa,
         });
         // A conta nasce valendo; quem vai usá-la precisa saber disso e com que
         // login entra — senão o administrador vira o canal de recado.
@@ -2442,7 +2496,39 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode alterar o seu próprio perfil." });
         }
         await assertAnotherAdminRemains(input.userId, input.role !== "admin");
+        const alvo = await getUserById(input.userId);
+        // A conta que vira cargo de mesa e ainda não tem empresa passa a atender
+        // a Amil, como todas faziam. Quem já tem empresa e vira planejador
+        // numa que não tem planejamento é recusado, em vez de ficar com um
+        // cargo que a empresa dela não usa.
+        const empresaDaConta = ehCargoDeMesa(input.role) ? (alvo?.empresaOperada as CodigoDaEmpresa | null | undefined) ?? "amil" : null;
+        if (empresaDaConta && !cargoExisteNaEmpresa(input.role, empresaDaConta)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Esta empresa ainda não tem planejador: por enquanto só há operador." });
+        }
         await setUserRole({ userId: input.userId, role: input.role });
+        if (empresaDaConta && !alvo?.empresaOperada) await setUserEmpresa({ userId: input.userId, empresa: empresaDaConta });
+        return { success: true } as const;
+      }),
+
+    /**
+     * Muda a empresa que uma conta de mesa atende.
+     *
+     * Só o administrador: é ele quem decide quem enxerga o quê. A conta que
+     * vira RVD ou LLT deixa de ver as notas da Amil na hora, e por isso o
+     * planejador — que só existe na Amil — não pode ser movido para elas.
+     */
+    setEmpresa: adminProcedure
+      .input(z.object({ userId: z.number().int().positive(), empresa: z.enum(EMPRESAS.map(item => item.codigo) as [CodigoDaEmpresa, ...CodigoDaEmpresa[]]) }))
+      .mutation(async ({ input }) => {
+        const alvo = await getUserById(input.userId);
+        if (!alvo) throw new TRPCError({ code: "NOT_FOUND", message: "Usuário não encontrado." });
+        if (!ehCargoDeMesa(alvo.role)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Só operador e planejador têm empresa: os demais perfis não são separados por ela." });
+        }
+        if (!cargoExisteNaEmpresa(alvo.role, input.empresa)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Esta empresa ainda não tem planejador: por enquanto só há operador." });
+        }
+        await setUserEmpresa({ userId: input.userId, empresa: input.empresa });
         return { success: true } as const;
       }),
 
@@ -2466,11 +2552,15 @@ export const appRouter = router({
   analytics: router({
     dashboard: protectedProcedure.input(z.object({ month: z.number().int().min(1).max(12), year: z.number().int().min(2020).max(2100), day: z.number().int().min(1).max(31).optional() })).query(async ({ ctx, input }) => {
       assertSchedulingDesk(ctx.user.role);
-      const [todas, furadas] = await Promise.all([listAppointments(), datasFuradasPorNota()]);
+      // O painel é da empresa que a pessoa atende: ela não lê o volume, o
+      // ranking nem o tempo de espera de outra. O corte vale na consulta e de
+      // novo na conta — a segunda é a que garante, se a primeira mudar.
+      const empresa = empresaDoUsuario(ctx.user);
+      const [todas, furadas] = await Promise.all([listAppointments({ empresa }), datasFuradasPorNota()]);
       const items = todas
         .filter(item => item.status !== "backlog")
         .map(item => ({ ...item, datasFuradas: furadas.get(item.id) ?? [] }));
-      return buildDashboardMetrics(items, input);
+      return buildDashboardMetrics(items, { ...input, empresa });
     }),
   }),
 });
