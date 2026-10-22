@@ -2102,6 +2102,7 @@ export const appRouter = router({
         userId: ctx.user.id,
         isOperator: isSchedulingDesk(ctx.user.role),
         trataBacklog: canTreatBacklog(ctx.user.role),
+        empresas: empresasDoUsuario(ctx.user),
       });
       return { ok: true };
     }),

@@ -2187,10 +2187,15 @@ export async function marcarConversaDaTratativaLida(input: { userId: number; app
  * que aconteceu — é caminhão parado esperando alguém decidir, e sumir da tela
  * não faz o caminhão ir embora.
  */
-export async function limparAvisos(input: { userId: number; isOperator: boolean; trataBacklog: boolean }) {
+export async function limparAvisos(input: { userId: number; isOperator: boolean; trataBacklog: boolean; empresas?: EscopoDeEmpresas }) {
   const db = await getDb();
   if (!db) return;
   const agora = new Date();
+  // As notas das empresas que esta pessoa atende. A leitura da mesa é uma só,
+  // compartilhada por todos os operadores: quem limpa os avisos da RVD não pode
+  // dar por lida a mensagem da Amil, que o operador dela ainda não viu.
+  const daEmpresa = condicaoDaEmpresa(input.empresas);
+  const notasDaEmpresa = daEmpresa ? db.select({ id: appointments.id }).from(appointments).where(daEmpresa) : null;
 
   // As mensagens das notas, que são as do sino: as mesmas que
   // listUnreadAppointmentMessages devolveria.
@@ -2199,7 +2204,7 @@ export async function limparAvisos(input: { userId: number; isOperator: boolean;
   // porque um UPDATE não junta tabela: comparar com `appointments.id` aqui
   // marcaria mensagem de nota de outra empresa como lida.
   const escopo = input.isOperator
-    ? []
+    ? (notasDaEmpresa ? [inArray(appointmentMessages.appointmentId, notasDaEmpresa)] : [])
     : [inArray(appointmentMessages.appointmentId, db.select({ id: appointments.id }).from(appointments).where(eq(appointments.supplierId, input.userId)))];
   await db
     .update(appointmentMessages)
@@ -2224,6 +2229,7 @@ export async function limparAvisos(input: { userId: number; isOperator: boolean;
       .where(
         and(
           ne(appointmentInternalNotes.authorId, input.userId),
+          ...(notasDaEmpresa ? [inArray(appointmentInternalNotes.appointmentId, notasDaEmpresa)] : []),
           or(isNull(appointmentInternalNoteReads.lastReadAt), gt(appointmentInternalNotes.createdAt, appointmentInternalNoteReads.lastReadAt)),
         ),
       );

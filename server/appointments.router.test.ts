@@ -1149,19 +1149,19 @@ describe("limpar os avisos do sino", () => {
   it("o operador limpa mensagem e tratativa, mas não o backlog: ele não trata backlog", async () => {
     const caller = appRouter.createCaller(context("operator"));
     await expect(caller.messages.limparAvisos()).resolves.toEqual({ ok: true });
-    expect(mocks.limparAvisos).toHaveBeenCalledWith({ userId: 24, isOperator: true, trataBacklog: false });
+    expect(mocks.limparAvisos).toHaveBeenCalledWith({ userId: 24, isOperator: true, trataBacklog: false, empresas: ["amil"] });
   });
 
   it("o planejador limpa também o backlog, que é a fila dele", async () => {
     const caller = appRouter.createCaller(context("planejador"));
     await caller.messages.limparAvisos();
-    expect(mocks.limparAvisos).toHaveBeenCalledWith({ userId: 24, isOperator: true, trataBacklog: true });
+    expect(mocks.limparAvisos).toHaveBeenCalledWith({ userId: 24, isOperator: true, trataBacklog: true, empresas: ["amil"] });
   });
 
   it("o fornecedor limpa só as mensagens dele, e nada de backlog", async () => {
     const caller = appRouter.createCaller(context("supplier"));
     await caller.messages.limparAvisos();
-    expect(mocks.limparAvisos).toHaveBeenCalledWith({ userId: 12, isOperator: false, trataBacklog: false });
+    expect(mocks.limparAvisos).toHaveBeenCalledWith({ userId: 12, isOperator: false, trataBacklog: false, empresas: null });
   });
 });
 

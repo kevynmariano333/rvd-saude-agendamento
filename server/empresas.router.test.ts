@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => ({
   notaPelaChaveDoArquivo: vi.fn(),
   listAppointmentHistory: vi.fn(),
   updateAppointmentStatus: vi.fn(),
+  limparAvisos: vi.fn(),
+  conversasRecentesDoBacklog: vi.fn(),
+  ultimasNotasNoBacklog: vi.fn(),
   listSupplierOptions: vi.fn(),
   createServiceNoteAppointment: vi.fn(),
   getUserById: vi.fn(),
@@ -85,6 +88,8 @@ beforeEach(() => {
   mocks.listarIdsDaEmpresa.mockResolvedValue([]);
   mocks.listAppointmentHistory.mockResolvedValue([]);
   mocks.updateAppointmentStatus.mockResolvedValue({ id: 1 });
+  mocks.conversasRecentesDoBacklog.mockResolvedValue([]);
+  mocks.ultimasNotasNoBacklog.mockResolvedValue([]);
   mocks.listSupplierOptions.mockResolvedValue([{ id: 50, name: "Fornecedor da Amil" }]);
   mocks.createServiceNoteAppointment.mockResolvedValue({ id: 9 });
   mocks.getUserByEmail.mockResolvedValue(undefined);
@@ -449,5 +454,54 @@ describe("a nota de serviço é só da Amil", () => {
   it("a Amil registra para o Hospital", async () => {
     await como(usuario("operator", "amil")).appointments.createServiceNote(servico(HOSPITAL));
     expect(mocks.createServiceNoteAppointment).toHaveBeenCalledWith(expect.objectContaining({ recipientCnpj: HOSPITAL }));
+  });
+});
+
+describe("os avisos chegam só a quem atende a empresa", () => {
+  it("o sino de cada um toca só pelas notas da empresa dele", async () => {
+    await como(usuario("operator", "llt")).messages.notifications();
+    expect(mocks.listUnreadAppointmentMessages).toHaveBeenLastCalledWith(expect.objectContaining({ empresas: ["llt"], isOperator: true }));
+    await como(usuario("operator", "rvd")).messages.notifications();
+    expect(mocks.listUnreadAppointmentMessages).toHaveBeenLastCalledWith(expect.objectContaining({ empresas: ["rvd"] }));
+    await como(usuario("operator", "amil")).messages.notifications();
+    expect(mocks.listUnreadAppointmentMessages).toHaveBeenLastCalledWith(expect.objectContaining({ empresas: ["amil"] }));
+  });
+
+  it("quem atende a RVD e a LLT recebe as duas, e não a da Amil", async () => {
+    await como(usuario("operator", "rvd,llt")).messages.notifications();
+    expect(mocks.listUnreadAppointmentMessages).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["rvd", "llt"] }));
+  });
+
+  it("limpar os avisos leva o corte: a leitura da mesa é compartilhada", async () => {
+    // A leitura da mensagem é uma só para todos os operadores. Limpar sem o
+    // corte daria por lida, para a Amil inteira, a mensagem que só ela viu.
+    await como(usuario("operator", "rvd")).messages.limparAvisos();
+    expect(mocks.limparAvisos).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["rvd"], isOperator: true }));
+    await como(usuario("operator", "llt")).messages.limparAvisos();
+    expect(mocks.limparAvisos).toHaveBeenLastCalledWith(expect.objectContaining({ empresas: ["llt"] }));
+  });
+
+  it("o administrador limpa todas, que é o que ele vê", async () => {
+    await como(usuario("admin")).messages.limparAvisos();
+    expect(mocks.limparAvisos).toHaveBeenCalledWith(expect.objectContaining({ empresas: null }));
+  });
+
+  it("o aviso de backlog não chega a quem não trata backlog", async () => {
+    // Operador — e portanto quem atende a RVD ou a LLT — nunca trata backlog.
+    await expect(como(usuario("operator", "rvd")).appointments.novosNoBacklog()).resolves.toEqual([]);
+    await expect(como(usuario("operator", "llt")).appointments.novosNoBacklog()).resolves.toEqual([]);
+    expect(mocks.ultimasNotasNoBacklog).not.toHaveBeenCalled();
+  });
+
+  it("o aviso de backlog de quem trata leva o corte da empresa", async () => {
+    await como(usuario("planejador", "amil")).appointments.novosNoBacklog();
+    expect(mocks.ultimasNotasNoBacklog).toHaveBeenCalledWith(10, null, ["amil"]);
+  });
+
+  it("a conversa do backlog leva o corte: a RVD e a LLT não leem a tratativa da Amil", async () => {
+    await como(usuario("operator", "rvd")).appointments.conversaDoBacklog();
+    expect(mocks.conversasRecentesDoBacklog).toHaveBeenCalledWith(expect.objectContaining({ empresas: ["rvd"] }));
+    await como(usuario("operator", "llt")).appointments.conversaDoBacklog();
+    expect(mocks.conversasRecentesDoBacklog).toHaveBeenLastCalledWith(expect.objectContaining({ empresas: ["llt"] }));
   });
 });
