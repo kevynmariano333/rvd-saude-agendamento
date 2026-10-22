@@ -1,4 +1,4 @@
-import { CAMPOS_DO_OPERADOR, OPERADOR_LOGISTICO } from "@shared/operadorLogistico";
+import { avisoDaEntrega, CAMPOS_DO_OPERADOR, OPERADOR_LOGISTICO } from "@shared/operadorLogistico";
 import { MARCA } from "@shared/marca";
 
 /**
@@ -123,7 +123,7 @@ export async function generateReceiptCertificatePdf(data: ReceiptCertificateData
 
   // Para onde a carga vai. Fica antes dos dados da nota porque é o que o
   // motorista precisa ler primeiro — endereço errado custa a viagem inteira.
-  const avisoLinhas = doc.splitTextToSize(OPERADOR_LOGISTICO.aviso, 168);
+  const avisoLinhas = doc.splitTextToSize(avisoDaEntrega(data.recipientCnpj), 168);
   const entregaY = 84;
   const alturaDaEntrega = alturaDoBlocoDeEntrega(avisoLinhas.length, CAMPOS_DO_OPERADOR.length);
   doc.setFillColor(247, 242, 247); doc.roundedRect(16, entregaY, 178, alturaDaEntrega, 4, 4, "F");

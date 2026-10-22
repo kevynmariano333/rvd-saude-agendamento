@@ -20,7 +20,7 @@ import LinkDeSenhaDialog, { type LinkDeSenha } from "../components/LinkDeSenhaDi
 import AvatarDaConta from "../components/AvatarDaConta";
 import CriarUsuarioDialog from "../components/CriarUsuarioDialog";
 import CaixaDeEntradaDeSugestoes from "../components/CaixaDeEntradaDeSugestoes";
-import { cargoExisteNaEmpresa, ehCargoDeMesa, EMPRESAS, lerEmpresas } from "@shared/empresas";
+import { cargoExisteNaEmpresa, ehCargoDeMesa, EMPRESAS, lerEmpresas, nomeCurtoDaEmpresa } from "@shared/empresas";
 
 type PendingRequest = {
   id: number;
@@ -500,6 +500,17 @@ export default function AccessRequests() {
                         {conta.companyCnpj ? formatarCnpj(conta.companyCnpj) : "Sem CNPJ — não enxerga nota nenhuma"}
                         {conta.lastSignedIn ? ` · último acesso em ${new Date(conta.lastSignedIn).toLocaleDateString("pt-BR")}` : ""}
                       </p>
+                      {/* Para quem o fornecedor entrega, lido das notas dele. Um login
+                          só serve a mais de uma empresa — e quem opera cada uma só
+                          vê as notas da sua. */}
+                      {conta.empresas.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5" title="Empresas para as quais este fornecedor já entregou">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">Entrega para</span>
+                          {conta.empresas.map(codigo => (
+                            <span key={codigo} className="rounded-full bg-rvd-plum-pale px-2.5 py-0.5 text-[11px] font-bold text-rvd-plum">{nomeCurtoDaEmpresa(codigo)}</span>
+                          ))}
+                        </div>
+                      )}
                       {conta.accessStatus !== "approved" && (
                         <span className={`mt-1.5 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${bloqueado ? "bg-state-stop-bg text-state-stop" : "bg-state-wait-bg text-state-wait"}`}>
                           {conta.accessStatus === "pending" ? "Aguardando aprovação" : "Bloqueado — não entra no sistema"}

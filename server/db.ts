@@ -38,7 +38,7 @@ import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 import { getReceiptTimestampForStatus } from "./receiptStatus";
 import { getSaoPauloDayRange } from "../shared/dateFilters";
 import { condicaoDaEmpresa } from "./condicaoDeEmpresa";
-import { gravarEmpresas, type EscopoDeEmpresas } from "../shared/empresas";
+import { empresaDoCnpj, EMPRESAS, gravarEmpresas, type CodigoDaEmpresa, type EscopoDeEmpresas } from "../shared/empresas";
 import type { ChaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 import { copiaQueFica, copiasQueSaem } from "../shared/copiaQueFica";
 import { notasDoCalendario, propostasNoPeriodo } from "../shared/dataDoCalendario";
@@ -1912,7 +1912,20 @@ export async function razaoSocialConhecida(cnpj: string): Promise<string | null>
 export async function listSupplierAccounts() {
   const db = await getDb();
   if (!db) return [];
-  return db
+  // Para quais empresas cada conta já entregou, lido das próprias notas. Não é
+  // um cadastro a manter: o fornecedor que entrega para a Amil e para a RVD é um
+  // login só, e o que diz isso é o destinatário de cada nota dele.
+  const destinos = await db
+    .select({ supplierId: appointments.supplierId, recipientCnpj: appointments.recipientCnpj })
+    .from(appointments)
+    .groupBy(appointments.supplierId, appointments.recipientCnpj);
+  const empresasPorConta = new Map<number, Set<CodigoDaEmpresa>>();
+  for (const destino of destinos) {
+    const conjunto = empresasPorConta.get(destino.supplierId) ?? new Set<CodigoDaEmpresa>();
+    conjunto.add(empresaDoCnpj(destino.recipientCnpj));
+    empresasPorConta.set(destino.supplierId, conjunto);
+  }
+  const contas = await db
     .select({
       id: users.id,
       name: users.name,
@@ -1930,6 +1943,11 @@ export async function listSupplierAccounts() {
     .from(users)
     .where(eq(users.role, "supplier"))
     .orderBy(desc(users.lastSignedIn));
+  return contas.map(conta => ({
+    ...conta,
+    // Na ordem do cadastro, para a mesma combinação aparecer sempre igual.
+    empresas: EMPRESAS.map(empresa => empresa.codigo).filter(codigo => empresasPorConta.get(conta.id)?.has(codigo)),
+  }));
 }
 
 /**
