@@ -100,18 +100,29 @@ describe("o cadastro das empresas", () => {
 
 describe("o que cada empresa usa", () => {
   it("a Amil usa tudo", () => {
-    expect(recursosDaEmpresa("amil")).toEqual({ temMiro: true, temBacklog: true, temPlanejador: true });
+    expect(recursosDaEmpresa("amil")).toEqual({ temMiro: true, temBacklog: true, temPlanejador: true, temNotaDeServico: true });
   });
 
   it("a RVD e a LLT não têm MIRO, backlog nem planejador", () => {
     for (const empresa of ["rvd", "llt"]) {
-      expect(recursosDaEmpresa(empresa)).toEqual({ temMiro: false, temBacklog: false, temPlanejador: false });
+      expect(recursosDaEmpresa(empresa)).toEqual({ temMiro: false, temBacklog: false, temPlanejador: false, temNotaDeServico: false });
     }
   });
 
   it("empresa desconhecida ganha o mais restrito", () => {
-    expect(recursosDaEmpresa("outra")).toEqual({ temMiro: false, temBacklog: false, temPlanejador: false });
-    expect(recursosDaEmpresa(null)).toEqual({ temMiro: false, temBacklog: false, temPlanejador: false });
+    expect(recursosDaEmpresa("outra")).toEqual({ temMiro: false, temBacklog: false, temPlanejador: false, temNotaDeServico: false });
+    expect(recursosDaEmpresa(null)).toEqual({ temMiro: false, temBacklog: false, temPlanejador: false, temNotaDeServico: false });
+  });
+
+  it("a nota de serviço é só da Amil", () => {
+    expect(recursosDaEmpresa("amil").temNotaDeServico).toBe(true);
+    expect(recursosDaEmpresa("rvd").temNotaDeServico).toBe(false);
+    expect(recursosDaEmpresa("llt").temNotaDeServico).toBe(false);
+    expect(recursosDaNota(RVD).temNotaDeServico).toBe(false);
+    expect(recursosDaNota(HOSPITAL).temNotaDeServico).toBe(true);
+    // Quem atende a Amil e a RVD tem a nota de serviço: a Amil a usa.
+    expect(recursosDasEmpresas(["amil", "rvd"]).temNotaDeServico).toBe(true);
+    expect(recursosDasEmpresas(["rvd", "llt"]).temNotaDeServico).toBe(false);
   });
 
   it("os recursos de uma nota saem do destinatário dela", () => {
@@ -189,8 +200,8 @@ describe("quem atende mais de uma empresa", () => {
   it("os recursos são os que qualquer uma das empresas tem", () => {
     // Quem cuida da Amil e da RVD precisa do Backlog: a Amil o usa.
     expect(recursosDasEmpresas(["amil", "rvd"]).temBacklog).toBe(true);
-    expect(recursosDasEmpresas(["rvd", "llt"])).toEqual({ temMiro: false, temBacklog: false, temPlanejador: false });
-    expect(recursosDasEmpresas(null)).toEqual({ temMiro: true, temBacklog: true, temPlanejador: true });
+    expect(recursosDasEmpresas(["rvd", "llt"])).toEqual({ temMiro: false, temBacklog: false, temPlanejador: false, temNotaDeServico: false });
+    expect(recursosDasEmpresas(null)).toEqual({ temMiro: true, temBacklog: true, temPlanejador: true, temNotaDeServico: true });
   });
 
   it("o planejador pede que todas as empresas da conta o tenham", () => {

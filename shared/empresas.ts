@@ -29,12 +29,14 @@ export type Empresa = {
   temBacklog: boolean;
   /** O planejamento que propõe datas antes do operador confirmar. */
   temPlanejador: boolean;
+  /** A nota de serviço: registrada à mão, sem XML, para o que não vem como produto. */
+  temNotaDeServico: boolean;
 };
 
 export const EMPRESAS: Empresa[] = [
-  { codigo: "amil", nome: "Amil", temMiro: true, temBacklog: true, temPlanejador: true },
-  { codigo: "rvd", nome: "RVD Saúde", temMiro: false, temBacklog: false, temPlanejador: false },
-  { codigo: "llt", nome: "LLT Saúde", temMiro: false, temBacklog: false, temPlanejador: false },
+  { codigo: "amil", nome: "Amil", temMiro: true, temBacklog: true, temPlanejador: true, temNotaDeServico: true },
+  { codigo: "rvd", nome: "RVD Saúde", temMiro: false, temBacklog: false, temPlanejador: false, temNotaDeServico: false },
+  { codigo: "llt", nome: "LLT Saúde", temMiro: false, temBacklog: false, temPlanejador: false, temNotaDeServico: false },
 ];
 
 export function empresaPorCodigo(codigo: string | null | undefined): Empresa | null {
@@ -57,10 +59,12 @@ export function ehCodigoDeEmpresa(valor: string | null | undefined): valor is Co
  * resposta certa: na dúvida sobre de quem é a nota, não oferecer o que é de
  * uma empresa específica.
  */
-export function recursosDaEmpresa(codigo: string | null | undefined): Pick<Empresa, "temMiro" | "temBacklog" | "temPlanejador"> {
+export type RecursosDaEmpresa = Pick<Empresa, "temMiro" | "temBacklog" | "temPlanejador" | "temNotaDeServico">;
+
+export function recursosDaEmpresa(codigo: string | null | undefined): RecursosDaEmpresa {
   const empresa = empresaPorCodigo(codigo);
-  if (empresa) return { temMiro: empresa.temMiro, temBacklog: empresa.temBacklog, temPlanejador: empresa.temPlanejador };
-  return { temMiro: false, temBacklog: false, temPlanejador: false };
+  if (empresa) return { temMiro: empresa.temMiro, temBacklog: empresa.temBacklog, temPlanejador: empresa.temPlanejador, temNotaDeServico: empresa.temNotaDeServico };
+  return { temMiro: false, temBacklog: false, temPlanejador: false, temNotaDeServico: false };
 }
 
 /** Os CNPJs de destinatário que pertencem a esta empresa. */
@@ -127,13 +131,14 @@ export function notaNoEscopo(escopo: EscopoDeEmpresas, cnpjDoDestinatario: strin
  * as notas da RVD não passem por ele. A decisão de cada nota continua sendo da
  * empresa dela (`recursosDaNota`).
  */
-export function recursosDasEmpresas(empresas: EscopoDeEmpresas) {
-  if (!empresas) return { temMiro: true, temBacklog: true, temPlanejador: true };
+export function recursosDasEmpresas(empresas: EscopoDeEmpresas): RecursosDaEmpresa {
+  if (!empresas) return { temMiro: true, temBacklog: true, temPlanejador: true, temNotaDeServico: true };
   const cada = empresas.map(recursosDaEmpresa);
   return {
     temMiro: cada.some(item => item.temMiro),
     temBacklog: cada.some(item => item.temBacklog),
     temPlanejador: cada.some(item => item.temPlanejador),
+    temNotaDeServico: cada.some(item => item.temNotaDeServico),
   };
 }
 

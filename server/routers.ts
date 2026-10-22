@@ -132,7 +132,7 @@ import { conteudoDaRecusa } from "./emailDeRecusa";
 import { isWithinScope } from "./supplierScope";
 import { idsNoEscopo, podeVerNota, type UsuarioComEscopo } from "./escopoDeNotas";
 import { empresasDoUsuario, usuarioAtendeANota } from "./escopoDeEmpresa";
-import { cargoExisteNasEmpresas, ehCargoDeMesa, EMPRESAS, lerEmpresas, recursosDaNota, type CodigoDaEmpresa } from "../shared/empresas";
+import { cargoExisteNasEmpresas, ehCargoDeMesa, EMPRESAS, lerEmpresas, recursosDaNota, recursosDasEmpresas, type CodigoDaEmpresa } from "../shared/empresas";
 import { contarAgendamentos } from "./db";
 import { apagarNotaRegistrando, backupConhecido, backupsDisponiveis, excluirNotaRepetida, limparAvisos, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
 import { chaveDeDuplicidade } from "../shared/duplicidadeDeNota";
@@ -272,6 +272,19 @@ function assertEstoqueAberto(recipientCnpj: string | null | undefined, quando: D
   if (!quando) return;
   const parada = paradaNoDia(recipientCnpj, quando);
   if (parada) throw new TRPCError({ code: "BAD_REQUEST", message: motivoDaRecusa(parada, quando) });
+}
+
+/**
+ * Esta conta usa a nota de serviço?
+ *
+ * Só a Amil tem. Quem atende só a RVD e a LLT não registra nota de serviço nem
+ * lê a lista de fornecedores que ela usa; o administrador, que atende todas,
+ * passa.
+ */
+function assertServicoDaMesa(user: { role: UserRole; empresasOperadas?: string | null }) {
+  if (!recursosDasEmpresas(empresasDoUsuario(user)).temNotaDeServico) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Nota de serviço só existe para a Amil." });
+  }
 }
 
 /**
@@ -992,6 +1005,10 @@ export const appRouter = router({
     /** Os fornecedores já cadastrados, para escolher ao registrar uma nota de serviço. */
     fornecedores: protectedProcedure.query(async ({ ctx }) => {
       assertSchedulingDesk(ctx.user.role);
+      // A lista existe para a nota de serviço, e traz o nome de todos os
+      // fornecedores cadastrados — de todas as empresas. Quem não registra nota
+      // de serviço não tem por que lê-la.
+      assertServicoDaMesa(ctx.user);
       return listSupplierOptions();
     }),
     /**
@@ -1016,6 +1033,12 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         assertSchedulingDesk(ctx.user.role);
+        assertServicoDaMesa(ctx.user);
+        // A nota é da empresa do destinatário, e só a Amil tem nota de serviço:
+        // nem o administrador registra uma para a RVD ou para a LLT.
+        if (!recursosDaNota(input.recipientCnpj).temNotaDeServico) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Nota de serviço só existe para a Amil." });
+        }
         const pedidos = input.purchaseOrders.map(pedido => pedido.replace(/\D/g, "")).filter(Boolean);
         if (!pedidos.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe ao menos um pedido de compra." });
         // Dez dígitos é o formato do pedido no ERP; um número curto aqui vira

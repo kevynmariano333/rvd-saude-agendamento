@@ -27,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   notaPelaChaveDoArquivo: vi.fn(),
   listAppointmentHistory: vi.fn(),
   updateAppointmentStatus: vi.fn(),
+  listSupplierOptions: vi.fn(),
+  createServiceNoteAppointment: vi.fn(),
   getUserById: vi.fn(),
   getUserByEmail: vi.fn(),
   createLocalUser: vi.fn(),
@@ -83,6 +85,8 @@ beforeEach(() => {
   mocks.listarIdsDaEmpresa.mockResolvedValue([]);
   mocks.listAppointmentHistory.mockResolvedValue([]);
   mocks.updateAppointmentStatus.mockResolvedValue({ id: 1 });
+  mocks.listSupplierOptions.mockResolvedValue([{ id: 50, name: "Fornecedor da Amil" }]);
+  mocks.createServiceNoteAppointment.mockResolvedValue({ id: 9 });
   mocks.getUserByEmail.mockResolvedValue(undefined);
   mocks.createLocalUser.mockImplementation(async (dados: Record<string, unknown>) => ({ id: 99, name: "Novo", email: dados.email, role: dados.role, empresasOperadas: dados.empresasOperadas ?? null }));
   mocks.countActiveAdmins.mockResolvedValue(2);
@@ -400,5 +404,50 @@ describe("quem atende a RVD e a LLT ao mesmo tempo", () => {
   it("um valor ilegível cai na Amil, e nunca abre as outras", async () => {
     mocks.getAppointmentById.mockResolvedValue(notaDa(RVD));
     await expect(como(usuario("operator", "rvd;llt")).appointments.byId({ appointmentId: 1 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("a nota de serviço é só da Amil", () => {
+  const servico = (cnpj: string) => ({
+    supplierId: 50,
+    recipientCnpj: cnpj,
+    invoiceNumber: "777",
+    scheduledFor: "2026-11-20T13:00:00.000Z",
+    purchaseOrders: ["4504748409"],
+  });
+
+  it("quem atende a RVD ou a LLT não lê a lista de fornecedores", async () => {
+    // A lista traz o nome de todos os fornecedores cadastrados, de todas as
+    // empresas: era o vazamento que sobrava entre elas.
+    for (const empresa of ["rvd", "llt", "rvd,llt"]) {
+      await expect(como(usuario("operator", empresa)).appointments.fornecedores()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    expect(mocks.listSupplierOptions).not.toHaveBeenCalled();
+  });
+
+  it("quem atende a Amil lê, e o administrador também", async () => {
+    await expect(como(usuario("operator", "amil")).appointments.fornecedores()).resolves.toHaveLength(1);
+    await expect(como(usuario("admin")).appointments.fornecedores()).resolves.toHaveLength(1);
+  });
+
+  it("quem atende a Amil e a RVD lê: a Amil a usa", async () => {
+    await expect(como(usuario("operator", "amil,rvd")).appointments.fornecedores()).resolves.toHaveLength(1);
+  });
+
+  it("a RVD não registra nota de serviço", async () => {
+    await expect(como(usuario("operator", "rvd")).appointments.createServiceNote(servico(HOSPITAL))).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.createServiceNoteAppointment).not.toHaveBeenCalled();
+  });
+
+  it("nem o administrador registra uma para a RVD ou para a LLT", async () => {
+    for (const cnpj of [RVD, LLT]) {
+      await expect(como(usuario("admin")).appointments.createServiceNote(servico(cnpj))).rejects.toThrow(/só existe para a Amil/);
+    }
+    expect(mocks.createServiceNoteAppointment).not.toHaveBeenCalled();
+  });
+
+  it("a Amil registra para o Hospital", async () => {
+    await como(usuario("operator", "amil")).appointments.createServiceNote(servico(HOSPITAL));
+    expect(mocks.createServiceNoteAppointment).toHaveBeenCalledWith(expect.objectContaining({ recipientCnpj: HOSPITAL }));
   });
 });
