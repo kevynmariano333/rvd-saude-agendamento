@@ -156,9 +156,11 @@ import {
   horaEmSaoPaulo,
   horarioDaJanela,
   horariosDoDia,
+  horariosDoProprio,
   janelaDoDia,
   JANELA_POR_EXTENSO,
   motivoDoHorarioOcupado,
+  motivoDoOutroHorario,
 } from "../shared/horariosDaAgenda";
 import { ehSomenteLeitura } from "./permissions";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
@@ -319,6 +321,8 @@ async function assertHorarioLivre(input: {
   quando: Date | null | undefined;
   role: UserRole;
   supplierIds: number[];
+  /** A nota que recebe a data, para o horário dela não contar contra quem a move. */
+  appointmentId?: number;
 }) {
   if (!input.quando || isSchedulingDesk(input.role)) return;
   const hora = horaEmSaoPaulo(input.quando);
@@ -333,9 +337,14 @@ async function assertHorarioLivre(input: {
     });
   }
   const entregas = await entregasMarcadasNoDia(dia);
-  const escolhido = horariosDoDia({ dia, entregas, supplierIds: input.supplierIds }).find(horario => horario.hora === hora);
+  const agenda = horariosDoDia({ dia, entregas, supplierIds: input.supplierIds, soNoHorarioDele: true, ignorar: input.appointmentId });
+  const escolhido = agenda.find(horario => horario.hora === hora);
   if (escolhido?.situacao === "ocupado") {
     throw new TRPCError({ code: "BAD_REQUEST", message: motivoDoHorarioOcupado(hora) });
+  }
+  // O fornecedor que já tem horário no dia fica nele — ou escolhe outro dia.
+  if (escolhido?.situacao === "outro_horario") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: motivoDoOutroHorario(horariosDoProprio(agenda)) });
   }
 }
 
@@ -1589,7 +1598,16 @@ export const appRouter = router({
         const entregas = (await entregasMarcadasNoDia(input.data)).map(entrega =>
           usuarioAtendeANota(ctx.user, entrega.recipientCnpj) ? entrega : { ...entrega, fornecedor: null },
         );
-        const horarios = horariosDoDia({ dia: input.data, entregas, supplierIds: await supplierScopeIds(doFornecedor) });
+        // A regra de ficar no horário que já tem vale para o fornecedor. A mesa vê
+        // a agenda inteira e decide: ela pode abrir um segundo horário do mesmo
+        // fornecedor, e a tela só a avisa.
+        const horarios = horariosDoDia({
+          dia: input.data,
+          entregas,
+          supplierIds: await supplierScopeIds(doFornecedor),
+          soNoHorarioDele: !isSchedulingDesk(ctx.user.role),
+          ignorar: input.appointmentId,
+        });
         // O fornecedor não precisa saber quem é o concorrente que pegou as
         // 10h — só que as 10h não estão disponíveis. Para a mesa o nome é o
         // que torna o aviso útil na hora de decidir.
@@ -1690,7 +1708,7 @@ export const appRouter = router({
         const suggestedFor = new Date(input.suggestedFor);
         if (Number.isNaN(suggestedFor.getTime()) || suggestedFor.getTime() <= Date.now()) throw new TRPCError({ code: "BAD_REQUEST", message: "Sugira uma data e horário futuros." });
         assertEstoqueAberto(appointment.recipientCnpj, suggestedFor);
-        await assertHorarioLivre({ quando: suggestedFor, role: ctx.user.role, supplierIds: await supplierScopeIds(ctx.user) });
+        await assertHorarioLivre({ quando: suggestedFor, role: ctx.user.role, supplierIds: await supplierScopeIds(ctx.user), appointmentId: appointment.id });
         // `supplierId` sempre guardou quem escreveu a sugestão, e continua
         // assim com o planejador. O efeito colateral é bem-vindo: a proposta
         // dele fica fora do recorte do fornecedor, que não precisa acompanhar

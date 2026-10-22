@@ -875,6 +875,7 @@ export async function entregasMarcadasNoDia(dateKey: string) {
   if (!range) return [];
   return db
     .select({
+      appointmentId: appointments.id,
       quando: appointments.scheduledFor,
       supplierId: appointments.supplierId,
       fornecedor: appointments.invoiceSupplierName,

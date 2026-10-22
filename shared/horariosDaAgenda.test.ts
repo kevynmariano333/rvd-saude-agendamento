@@ -6,6 +6,7 @@ import {
   horarioDaJanela,
   horariosDaJanela,
   janelaDoDia,
+  motivoDoOutroHorario,
   horariosDoDia,
   temVaga,
   type EntregaMarcada,
@@ -183,5 +184,79 @@ describe("a agenda de sexta, sábado e domingo", () => {
   it("no fim de semana não há horário para escolher", () => {
     expect(horariosDoDia({ dia: SABADO, entregas: [], supplierIds: [AMIL] })).toEqual([]);
     expect(horariosDoDia({ dia: DOMINGO, entregas: [], supplierIds: [AMIL] })).toEqual([]);
+  });
+});
+
+describe("o fornecedor que já tem horário no dia", () => {
+  const dele = (hora: string, appointmentId = 5) => ({ ...as(hora, AMIL, "CM Hospitalar"), appointmentId });
+  const agenda = (entregas: EntregaMarcada[], extra: object = {}) =>
+    horariosDoDia({ dia: QUINTA, entregas, supplierIds: [AMIL], soNoHorarioDele: true, ...extra });
+  const situacao = (dia: ReturnType<typeof agenda>, hora: string) => dia.find(horario => horario.hora === hora)?.situacao;
+
+  it("só pode pedir esse mesmo horário", () => {
+    const dia = agenda([dele("10:00")]);
+    expect(situacao(dia, "10:00")).toBe("proprio");
+    expect(situacao(dia, "10:30")).toBe("outro_horario");
+    expect(situacao(dia, "08:00")).toBe("outro_horario");
+  });
+
+  it("outro dia continua livre", () => {
+    // As entregas dele são de quinta; na sexta ele não tem nada.
+    const sexta = horariosDoDia({ dia: SEXTA, entregas: [], supplierIds: [AMIL], soNoHorarioDele: true });
+    expect(sexta.every(horario => horario.situacao === "livre")).toBe(true);
+  });
+
+  it("com duas entregas no dia, as duas horas são dele", () => {
+    const dia = agenda([dele("10:00", 5), dele("14:30", 6)]);
+    expect(situacao(dia, "10:00")).toBe("proprio");
+    expect(situacao(dia, "14:30")).toBe("proprio");
+    expect(situacao(dia, "11:00")).toBe("outro_horario");
+  });
+
+  it("o que é de outro fornecedor continua ocupado, e não \"outro horário\"", () => {
+    const dia = agenda([dele("10:00"), as("13:00", OUTRO, "Cremer")]);
+    expect(situacao(dia, "13:00")).toBe("ocupado");
+  });
+
+  it("mover a própria nota não conta como um segundo horário", () => {
+    // A nota 5 está às 10h. Quem a move para as 11h está trocando o único
+    // horário que tem, e o dia inteiro fica livre para ele.
+    const dia = agenda([dele("10:00", 5)], { ignorar: 5 });
+    expect(situacao(dia, "10:00")).toBe("livre");
+    expect(situacao(dia, "11:00")).toBe("livre");
+  });
+
+  it("mas outra nota dele no mesmo dia continua prendendo o horário", () => {
+    const dia = agenda([dele("10:00", 5), dele("14:00", 6)], { ignorar: 5 });
+    expect(situacao(dia, "14:00")).toBe("proprio");
+    expect(situacao(dia, "11:00")).toBe("outro_horario");
+    expect(situacao(dia, "10:00")).toBe("outro_horario");
+  });
+
+  it("a mesa não é presa: abre outro horário, e vê o mesmo como livre", () => {
+    const dia = horariosDoDia({ dia: QUINTA, entregas: [dele("10:00")], supplierIds: [AMIL] });
+    expect(situacao(dia, "10:30")).toBe("livre");
+  });
+
+  it("as contas da mesma empresa dividem o horário: é o mesmo caminhão", () => {
+    const irmao = 11;
+    const dia = horariosDoDia({ dia: QUINTA, entregas: [{ ...as("10:00", irmao), appointmentId: 7 }], supplierIds: [AMIL, irmao], soNoHorarioDele: true });
+    expect(situacao(dia, "10:00")).toBe("proprio");
+    expect(situacao(dia, "10:30")).toBe("outro_horario");
+  });
+
+  it("o dia com horário dele ainda tem vaga, mesmo com o resto fechado para ele", () => {
+    expect(temVaga(agenda([dele("10:00")]))).toBe(true);
+  });
+
+  it("sem nenhuma vaga livre nem dele, o dia está cheio", () => {
+    const outros = horariosDaJanela(QUINTA).map(hora => as(hora, OUTRO, "Cremer"));
+    expect(temVaga(agenda(outros))).toBe(false);
+  });
+
+  it("diz as horas dele na frase", () => {
+    expect(motivoDoOutroHorario(["10:00"])).toContain("às 10:00");
+    expect(motivoDoOutroHorario(["10:00", "14:30"])).toContain("às 10:00 e 14:30");
+    expect(motivoDoOutroHorario(["10:00"])).toContain("outro dia");
   });
 });

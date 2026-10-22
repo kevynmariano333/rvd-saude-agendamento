@@ -345,6 +345,69 @@ describe("procedures de agendamento", () => {
     await expect(caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-02T13:05:00.000Z" })).rejects.toThrow(/horários de recebimento/);
   });
 
+  it("o fornecedor que já tem horário no dia só pede esse mesmo horário", async () => {
+    // 2030-09-02 é segunda. Ele já tem a nota 5 às 10:00 (13:00Z) e pede a 1.
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.createAppointmentSuggestion.mockResolvedValue({ id: 20, status: "pending" });
+    mocks.entregasMarcadasNoDia.mockResolvedValue([
+      { appointmentId: 5, quando: new Date("2030-09-02T13:00:00.000Z"), supplierId: 12, fornecedor: "Fornecedor Exemplo" },
+    ]);
+    const caller = appRouter.createCaller(context("supplier"));
+    // Outro horário no mesmo dia: 11:00 (14:00Z) é recusado.
+    await expect(caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-02T14:00:00.000Z" })).rejects.toThrow(/Junte a carga nesse horário ou escolha outro dia/);
+    expect(mocks.createAppointmentSuggestion).not.toHaveBeenCalled();
+    // O mesmo horário dele: junta a carga.
+    await caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-02T13:00:00.000Z" });
+    expect(mocks.createAppointmentSuggestion).toHaveBeenCalledTimes(1);
+  });
+
+  it("e pode escolher outro dia", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.createAppointmentSuggestion.mockResolvedValue({ id: 21, status: "pending" });
+    // Só a segunda tem entrega dele; a terça (03) vem vazia.
+    mocks.entregasMarcadasNoDia.mockImplementation(async (dia: string) =>
+      dia === "2030-09-02" ? [{ appointmentId: 5, quando: new Date("2030-09-02T13:00:00.000Z"), supplierId: 12, fornecedor: "Fornecedor Exemplo" }] : [],
+    );
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-03T14:00:00.000Z" });
+    expect(mocks.createAppointmentSuggestion).toHaveBeenCalledTimes(1);
+  });
+
+  it("mover a própria nota para outro horário do mesmo dia é permitido", async () => {
+    // A nota 5 é a que ele está movendo: o horário dela não o prende.
+    mocks.getAppointmentById.mockResolvedValue({ id: 5, supplierId: 12, status: "scheduled" });
+    mocks.createAppointmentSuggestion.mockResolvedValue({ id: 22, status: "pending" });
+    mocks.entregasMarcadasNoDia.mockResolvedValue([
+      { appointmentId: 5, quando: new Date("2030-09-02T13:00:00.000Z"), supplierId: 12, fornecedor: "Fornecedor Exemplo" },
+    ]);
+    const caller = appRouter.createCaller(context("supplier"));
+    await caller.suggestions.create({ appointmentId: 5, suggestedFor: "2030-09-02T14:00:00.000Z" });
+    expect(mocks.createAppointmentSuggestion).toHaveBeenCalledTimes(1);
+  });
+
+  it("mas outra nota dele no dia continua prendendo o horário", async () => {
+    mocks.getAppointmentById.mockResolvedValue({ id: 5, supplierId: 12, status: "scheduled" });
+    mocks.entregasMarcadasNoDia.mockResolvedValue([
+      { appointmentId: 5, quando: new Date("2030-09-02T13:00:00.000Z"), supplierId: 12, fornecedor: "Fornecedor Exemplo" },
+      { appointmentId: 6, quando: new Date("2030-09-02T17:00:00.000Z"), supplierId: 12, fornecedor: "Fornecedor Exemplo" },
+    ]);
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.suggestions.create({ appointmentId: 5, suggestedFor: "2030-09-02T14:00:00.000Z" })).rejects.toThrow(/às 14:00/);
+  });
+
+  it("a mesa abre um segundo horário do mesmo fornecedor", async () => {
+    // A regra de ficar no horário que já tem é do fornecedor; quem agenda pela
+    // mesa decide com o aviso na mão.
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
+    mocks.createAppointmentSuggestion.mockResolvedValue({ id: 23, status: "pending" });
+    mocks.entregasMarcadasNoDia.mockResolvedValue([
+      { appointmentId: 5, quando: new Date("2030-09-02T13:00:00.000Z"), supplierId: 12, fornecedor: "Fornecedor Exemplo" },
+    ]);
+    const caller = appRouter.createCaller(context("admin"));
+    await caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-02T14:00:00.000Z" });
+    expect(mocks.createAppointmentSuggestion).toHaveBeenCalledTimes(1);
+  });
+
   it("a mesa de agendamentos marca por cima, porque ela vê o aviso antes", async () => {
     // O balcão às vezes precisa de dois caminhões na mesma hora. O servidor
     // não o impede; a tela é que pergunta se é mesmo isso.

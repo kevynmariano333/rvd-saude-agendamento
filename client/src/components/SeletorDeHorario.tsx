@@ -3,8 +3,10 @@ import {
   avisoDeHorarioOcupado,
   DIA_SEM_RECEBIMENTO,
   DIA_SEM_VAGA,
+  horariosDoProprio,
   janelaDoDia,
   JANELA_POR_EXTENSO,
+  motivoDoOutroHorario,
   temVaga,
   type HorarioDaAgenda,
 } from "@shared/horariosDaAgenda";
@@ -63,7 +65,9 @@ export default function SeletorDeHorario({
   // parecendo dela. Quem pode marcar por cima mantém a escolha: para a mesa
   // não é erro, é decisão.
   const escolhidoAgora = agenda.data?.find(horario => horario.hora === valor);
-  const perdeuAVaga = Boolean(valor) && !podeOcupar && escolhidoAgora?.situacao === "ocupado";
+  // "Outro horário" também: trocar para um dia em que ele já tem entrega às 10h
+  // não pode deixar o 11h que tinha escolhido pintado de escolhido.
+  const perdeuAVaga = Boolean(valor) && !podeOcupar && (escolhidoAgora?.situacao === "ocupado" || escolhidoAgora?.situacao === "outro_horario");
   useEffect(() => {
     if (perdeuAVaga) onEscolher("");
   }, [perdeuAVaga, onEscolher]);
@@ -116,6 +120,11 @@ export default function SeletorDeHorario({
 
   return (
     <div className={className}>
+      {horarios.some(horario => horario.situacao === "outro_horario") && (
+        <p className={`mb-2 rounded-xl px-3 py-2.5 text-xs font-bold leading-5 ${naCapa ? "bg-white/15 text-white" : "bg-rvd-plum-pale text-rvd-plum"}`}>
+          {motivoDoOutroHorario(horariosDoProprio(horarios))}
+        </p>
+      )}
       {lotado && (
         <p className={`mb-2 rounded-xl px-3 py-2.5 text-xs font-bold leading-5 ${naCapa ? "bg-state-stop text-white" : "bg-state-stop-bg text-state-stop"}`}>
           {DIA_SEM_VAGA}
@@ -124,8 +133,12 @@ export default function SeletorDeHorario({
       <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
         {horarios.map(horario => {
           const escolhido = horario.hora === valor;
-          const bloqueado = horario.situacao === "ocupado" && !podeOcupar;
-          const titulo = horario.situacao === "ocupado"
+          // Ocupado por outro só a mesa abre. "Outro horário" só existe para o
+          // fornecedor, e para ele não abre: ele fica no que já tem ou muda de dia.
+          const bloqueado = (horario.situacao === "ocupado" && !podeOcupar) || horario.situacao === "outro_horario";
+          const titulo = horario.situacao === "outro_horario"
+            ? `Você já tem entrega neste dia às ${horariosDoProprio(horarios).join(" e ")}: a carga vai nesse horário. Para outro, escolha outro dia.`
+            : horario.situacao === "ocupado"
             ? horario.fornecedores.length
               ? `Ocupado — ${horario.fornecedores.join(", ")}`
               : "Ocupado por outro fornecedor"
@@ -144,6 +157,10 @@ export default function SeletorDeHorario({
                   ? naCapa
                     ? "border-white bg-rvd-blue text-rvd-plum"
                     : "border-rvd-plum bg-brand text-white"
+                  : horario.situacao === "outro_horario"
+                    ? naCapa
+                      ? "border-white/20 bg-white/5 text-white/45"
+                      : "border-line bg-sunken text-ink-faint"
                   : horario.situacao === "ocupado"
                     ? naCapa
                       ? "border-white/25 bg-white/10 text-white/60 line-through"
