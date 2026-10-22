@@ -5,13 +5,15 @@
 // juntos, um esperava na rua, e a portaria descobria o choque com a carga no
 // pátio. A agenda sabia do conflito desde o começo e não contava para ninguém.
 //
-// A lista é fechada porque a doca é uma só: um fornecedor por horário. O mesmo
+// A lista é fechada porque cada doca recebe um fornecedor por horário. O mesmo
 // fornecedor pode juntar quantas notas quiser na mesma hora — é um caminhão só,
 // e separar as notas dele em horários diferentes só faria o motorista esperar.
 //
 // O cálculo mora aqui, e não na tela, porque as duas pontas precisam da mesma
 // resposta: a tela, para mostrar o que dá para escolher; o servidor, para
 // recusar o que não dá. Tela que decide sozinha é tela que pode ser contornada.
+
+import { empresaDoCnpj, type CodigoDaEmpresa } from "./empresas";
 
 /** Quando a doca abre e fecha num dia, em horas de São Paulo. */
 export type JanelaDoDia = { abre: number; fecha: number };
@@ -38,7 +40,13 @@ const JANELA_DA_SEMANA: Record<number, JanelaDoDia | null> = {
 };
 /** De quanto em quanto tempo um caminhão entra. */
 export const PASSO_EM_MINUTOS = 30;
-/** Quantos fornecedores diferentes cabem no mesmo horário. */
+/**
+ * Quantos fornecedores diferentes cabem no mesmo horário, em cada doca.
+ *
+ * Cada empresa tem a sua doca: a Amil, a RVD e a LLT podem receber ao mesmo
+ * tempo, cada uma com o seu fornecedor. O horário ocupado na doca da Amil
+ * continua livre na da RVD.
+ */
 export const CABEM_POR_HORARIO = 1;
 
 export type SituacaoDoHorario =
@@ -67,6 +75,8 @@ export type HorarioDaAgenda = {
 export type EntregaMarcada = {
   /** A nota. Serve para não contar contra o fornecedor a que ele está movendo. */
   appointmentId?: number;
+  /** Para quem a carga vai: é o que diz em qual doca ela entra. */
+  recipientCnpj?: string | null;
   /** O instante combinado. */
   quando: Date | string;
   supplierId: number;
@@ -169,6 +179,16 @@ export function horariosDoDia(input: {
    * trocando o único que tem.
    */
   ignorar?: number;
+  /**
+   * A doca que está sendo consultada — a empresa da nota. Só as entregas dela
+   * ocupam o horário. Sem ela, vale a regra conservadora: qualquer entrega
+   * ocupa, em qualquer doca.
+   *
+   * As entregas do próprio fornecedor valem em qualquer doca, de propósito: o
+   * mesmo caminhão que leva a carga da Amil leva a da RVD, e o horário que ele
+   * já tem no dia é o dele para todas.
+   */
+  doca?: CodigoDaEmpresa | null;
 }): HorarioDaAgenda[] {
   const proprios = new Set(input.supplierIds ?? []);
   const doDia = input.ignorar === undefined ? input.entregas : input.entregas.filter(entrega => entrega.appointmentId !== input.ignorar);
@@ -188,8 +208,11 @@ export function horariosDoDia(input: {
 
   return horariosDaJanela(input.dia).map(hora => {
     const marcadas = porHorario.get(hora) ?? [];
-    const deOutros = marcadas.filter(entrega => !proprios.has(entrega.supplierId));
-    const temOProprio = marcadas.length > deOutros.length;
+    // Ocupa a doca quem entra nela. O próprio fornecedor, de qualquer doca, não
+    // ocupa nada contra ele: é o mesmo caminhão.
+    const naDoca = (entrega: EntregaMarcada) => !input.doca || empresaDoCnpj(entrega.recipientCnpj) === input.doca;
+    const deOutros = marcadas.filter(entrega => !proprios.has(entrega.supplierId) && naDoca(entrega));
+    const temOProprio = marcadas.some(entrega => proprios.has(entrega.supplierId));
     const situacao: SituacaoDoHorario = deOutros.length >= CABEM_POR_HORARIO
       ? "ocupado"
       : temOProprio
@@ -198,7 +221,9 @@ export function horariosDoDia(input: {
           ? "outro_horario"
           : "livre";
     // Nome repetido é a mesma empresa com duas notas: a tela diria "Amil, Amil".
-    const fornecedores = Array.from(new Set(marcadas.map(entrega => entrega.fornecedor?.trim()).filter((nome): nome is string => Boolean(nome))));
+    // Só de quem está na doca consultada: o nome de quem entrega em outra empresa
+    // não atravessa.
+    const fornecedores = Array.from(new Set(marcadas.filter(naDoca).map(entrega => entrega.fornecedor?.trim()).filter((nome): nome is string => Boolean(nome))));
     return { hora, situacao, fornecedores };
   });
 }

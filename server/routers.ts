@@ -132,7 +132,7 @@ import { conteudoDaRecusa } from "./emailDeRecusa";
 import { isWithinScope } from "./supplierScope";
 import { idsNoEscopo, podeVerNota, type UsuarioComEscopo } from "./escopoDeNotas";
 import { empresasDoUsuario, usuarioAtendeANota } from "./escopoDeEmpresa";
-import { cargoExisteNasEmpresas, ehCargoDeMesa, EMPRESAS, lerEmpresas, recursosDaNota, recursosDasEmpresas, type CodigoDaEmpresa } from "../shared/empresas";
+import { cargoExisteNasEmpresas, ehCargoDeMesa, empresaDoCnpj, EMPRESAS, lerEmpresas, recursosDaNota, recursosDasEmpresas, type CodigoDaEmpresa } from "../shared/empresas";
 import { contarAgendamentos } from "./db";
 import { apagarNotaRegistrando, backupConhecido, backupsDisponiveis, excluirNotaRepetida, limparAvisos, limparCopiasRepetidas, notaJaRegistrada, notasRepetidas, ultimasTentativasDeBackup, ultimoBackupConcluido } from "./db";
 import { chaveDeDuplicidade } from "../shared/duplicidadeDeNota";
@@ -323,6 +323,8 @@ async function assertHorarioLivre(input: {
   supplierIds: number[];
   /** A nota que recebe a data, para o horário dela não contar contra quem a move. */
   appointmentId?: number;
+  /** Para quem a carga vai: diz em qual doca ela entra. */
+  recipientCnpj?: string | null;
 }) {
   if (!input.quando || isSchedulingDesk(input.role)) return;
   const hora = horaEmSaoPaulo(input.quando);
@@ -337,7 +339,9 @@ async function assertHorarioLivre(input: {
     });
   }
   const entregas = await entregasMarcadasNoDia(dia);
-  const agenda = horariosDoDia({ dia, entregas, supplierIds: input.supplierIds, soNoHorarioDele: true, ignorar: input.appointmentId });
+  // A nota entra na doca da empresa dela. O horário ocupado na da Amil continua
+  // livre na da RVD e na da LLT: elas recebem ao mesmo tempo.
+  const agenda = horariosDoDia({ dia, entregas, supplierIds: input.supplierIds, soNoHorarioDele: true, ignorar: input.appointmentId, doca: empresaDoCnpj(input.recipientCnpj) });
   const escolhido = agenda.find(horario => horario.hora === hora);
   if (escolhido?.situacao === "ocupado") {
     throw new TRPCError({ code: "BAD_REQUEST", message: motivoDoHorarioOcupado(hora) });
@@ -1359,7 +1363,7 @@ export const appRouter = router({
         // O destinatário sai do XML, e não do que o fornecedor digitou: é a
         // nota que diz para qual unidade a carga vai.
         assertEstoqueAberto(invoice.recipientCnpj, suggestedFor);
-        await assertHorarioLivre({ quando: suggestedFor, role: ctx.user.role, supplierIds: await supplierScopeIds(ctx.user) });
+        await assertHorarioLivre({ quando: suggestedFor, role: ctx.user.role, supplierIds: await supplierScopeIds(ctx.user), recipientCnpj: invoice.recipientCnpj });
         const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
         const stored = await storagePut(`agendamentos-xml/${ctx.user.id}/${safeName}`, content, "application/xml");
         return createManualXmlAppointment({
@@ -1580,9 +1584,18 @@ export const appRouter = router({
      * fornecedor já está nesse horário" em vez de um bloqueio que não existe.
      */
     horariosDoDia: protectedProcedure
-      .input(z.object({ data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida."), appointmentId: z.number().int().positive().optional() }))
+      .input(z.object({
+        data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida."),
+        appointmentId: z.number().int().positive().optional(),
+        /** Para a nota que ainda não existe — o fornecedor escolhendo o horário do XML. */
+        recipientCnpj: z.string().max(20).optional(),
+      }))
       .query(async ({ ctx, input }) => {
         let doFornecedor = ctx.user;
+        // A doca é a da empresa da nota. Para nota que já existe, vem dela; para a
+        // que está nascendo, do destinatário do XML. Sem nenhum dos dois não há
+        // doca: vale a conta conservadora, de qualquer entrega ocupar.
+        let recipientCnpj: string | null = input.recipientCnpj ?? null;
         if (input.appointmentId) {
           const appointment = await getAppointmentById(input.appointmentId);
           if (!appointment) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
@@ -1591,10 +1604,11 @@ export const appRouter = router({
           }
           const dono = await getUserById(appointment.supplierId);
           if (dono) doFornecedor = dono;
+          recipientCnpj = appointment.recipientCnpj ?? null;
         }
-        // A doca é uma só: o horário tomado por outra empresa continua tomado
-        // para todos. O que não atravessa é o nome — a mesa da RVD vê que as
-        // 10h estão ocupadas, mas não por quem, se quem ocupa é da Amil.
+        // Cada empresa tem a sua doca: o horário ocupado na da Amil continua livre
+        // na da RVD. O nome de quem ocupa não atravessa de uma empresa para
+        // outra de qualquer jeito — a mesa da RVD não lê fornecedor da Amil.
         const entregas = (await entregasMarcadasNoDia(input.data)).map(entrega =>
           usuarioAtendeANota(ctx.user, entrega.recipientCnpj) ? entrega : { ...entrega, fornecedor: null },
         );
@@ -1607,6 +1621,7 @@ export const appRouter = router({
           supplierIds: await supplierScopeIds(doFornecedor),
           soNoHorarioDele: !isSchedulingDesk(ctx.user.role),
           ignorar: input.appointmentId,
+          doca: recipientCnpj ? empresaDoCnpj(recipientCnpj) : null,
         });
         // O fornecedor não precisa saber quem é o concorrente que pegou as
         // 10h — só que as 10h não estão disponíveis. Para a mesa o nome é o
@@ -1708,7 +1723,7 @@ export const appRouter = router({
         const suggestedFor = new Date(input.suggestedFor);
         if (Number.isNaN(suggestedFor.getTime()) || suggestedFor.getTime() <= Date.now()) throw new TRPCError({ code: "BAD_REQUEST", message: "Sugira uma data e horário futuros." });
         assertEstoqueAberto(appointment.recipientCnpj, suggestedFor);
-        await assertHorarioLivre({ quando: suggestedFor, role: ctx.user.role, supplierIds: await supplierScopeIds(ctx.user), appointmentId: appointment.id });
+        await assertHorarioLivre({ quando: suggestedFor, role: ctx.user.role, supplierIds: await supplierScopeIds(ctx.user), appointmentId: appointment.id, recipientCnpj: appointment.recipientCnpj });
         // `supplierId` sempre guardou quem escreveu a sugestão, e continua
         // assim com o planejador. O efeito colateral é bem-vindo: a proposta
         // dele fica fora do recorte do fornecedor, que não precisa acompanhar

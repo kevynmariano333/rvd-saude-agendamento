@@ -260,3 +260,72 @@ describe("o fornecedor que já tem horário no dia", () => {
     expect(motivoDoOutroHorario(["10:00"])).toContain("outro dia");
   });
 });
+
+describe("uma doca por empresa", () => {
+  const HOSPITAL = "06033403000113";
+  const RVD = "39283469000110";
+  const LLT = "45295469000133";
+  const naDoca = (hora: string, supplierId: number, cnpj: string, fornecedor = "Fornecedor") => ({
+    ...as(hora, supplierId, fornecedor),
+    recipientCnpj: cnpj,
+  });
+  const situacao = (dia: { hora: string; situacao: string }[], hora: string) => dia.find(horario => horario.hora === hora)?.situacao;
+
+  it("o horário ocupado na doca da Amil continua livre na da RVD", () => {
+    // Amil, RVD e LLT recebem ao mesmo tempo, cada uma com o seu fornecedor.
+    const entregas = [naDoca("10:00", OUTRO, HOSPITAL, "Cremer")];
+    expect(situacao(horariosDoDia({ dia: QUINTA, entregas, supplierIds: [AMIL], doca: "amil" }), "10:00")).toBe("ocupado");
+    expect(situacao(horariosDoDia({ dia: QUINTA, entregas, supplierIds: [AMIL], doca: "rvd" }), "10:00")).toBe("livre");
+    expect(situacao(horariosDoDia({ dia: QUINTA, entregas, supplierIds: [AMIL], doca: "llt" }), "10:00")).toBe("livre");
+  });
+
+  it("as três docks recebem no mesmo horário, cada uma com um fornecedor", () => {
+    const entregas = [naDoca("10:00", 21, HOSPITAL), naDoca("10:00", 22, RVD), naDoca("10:00", 23, LLT)];
+    for (const doca of ["amil", "rvd", "llt"] as const) {
+      expect(situacao(horariosDoDia({ dia: QUINTA, entregas, supplierIds: [AMIL], doca }), "10:00")).toBe("ocupado");
+    }
+    // E um quarto fornecedor da RVD não entra: a doca dela já tem um.
+    const rvd = horariosDoDia({ dia: QUINTA, entregas: [naDoca("10:00", 22, RVD)], supplierIds: [AMIL], doca: "rvd" });
+    expect(situacao(rvd, "10:00")).toBe("ocupado");
+    expect(situacao(rvd, "10:30")).toBe("livre");
+  });
+
+  it("sem saber a doca, qualquer entrega ocupa: a conta conservadora", () => {
+    const entregas = [naDoca("10:00", OUTRO, HOSPITAL, "Cremer")];
+    expect(situacao(horariosDoDia({ dia: QUINTA, entregas, supplierIds: [AMIL] }), "10:00")).toBe("ocupado");
+  });
+
+  it("o fornecedor com entrega da Amil fica no mesmo horário para a RVD", () => {
+    // É o mesmo caminhão: o horário que ele já tem no dia é o dele para todas as docas.
+    const entregas = [{ ...naDoca("10:00", AMIL, HOSPITAL, "CM Hospitalar"), appointmentId: 5 }];
+    const dia = horariosDoDia({ dia: QUINTA, entregas, supplierIds: [AMIL], soNoHorarioDele: true, doca: "rvd" });
+    expect(situacao(dia, "10:00")).toBe("proprio");
+    expect(situacao(dia, "10:30")).toBe("outro_horario");
+    expect(situacao(dia, "08:00")).toBe("outro_horario");
+  });
+
+  it("e o contrário: a entrega da RVD o prende também na Amil", () => {
+    const entregas = [{ ...naDoca("14:00", AMIL, RVD, "CM Hospitalar"), appointmentId: 5 }];
+    const dia = horariosDoDia({ dia: QUINTA, entregas, supplierIds: [AMIL], soNoHorarioDele: true, doca: "amil" });
+    expect(situacao(dia, "14:00")).toBe("proprio");
+    expect(situacao(dia, "15:00")).toBe("outro_horario");
+  });
+
+  it("o próprio fornecedor não ocupa a doca contra si mesmo", () => {
+    const entregas = [naDoca("10:00", AMIL, HOSPITAL, "CM Hospitalar")];
+    const dia = horariosDoDia({ dia: QUINTA, entregas, supplierIds: [AMIL], doca: "rvd" });
+    expect(situacao(dia, "10:00")).toBe("proprio");
+  });
+
+  it("o nome de quem entrega em outra doca não aparece", () => {
+    const entregas = [naDoca("10:00", OUTRO, HOSPITAL, "Fornecedor da Amil"), naDoca("10:00", 22, RVD, "Fornecedor da RVD")];
+    const dia = horariosDoDia({ dia: QUINTA, entregas, supplierIds: [AMIL], doca: "rvd" });
+    expect(dia.find(horario => horario.hora === "10:00")?.fornecedores).toEqual(["Fornecedor da RVD"]);
+  });
+
+  it("a nota sem destinatário é da doca da Amil, como o acervo antigo", () => {
+    const entregas = [naDoca("10:00", OUTRO, "", "Cremer")];
+    expect(situacao(horariosDoDia({ dia: QUINTA, entregas: [{ ...entregas[0], recipientCnpj: null }], supplierIds: [AMIL], doca: "amil" }), "10:00")).toBe("ocupado");
+    expect(situacao(horariosDoDia({ dia: QUINTA, entregas: [{ ...entregas[0], recipientCnpj: null }], supplierIds: [AMIL], doca: "rvd" }), "10:00")).toBe("livre");
+  });
+});

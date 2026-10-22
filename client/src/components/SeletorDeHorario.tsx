@@ -31,6 +31,7 @@ export default function SeletorDeHorario({
   valor,
   onEscolher,
   appointmentId,
+  destinatario,
   podeOcupar = false,
   somenteLeitura = false,
   tom = "painel",
@@ -42,6 +43,11 @@ export default function SeletorDeHorario({
   onEscolher: (hora: string) => void;
   /** A nota que vai receber a data, para a agenda do fornecedor dela valer. */
   appointmentId?: number;
+  /**
+   * Para quem a carga vai, quando a nota ainda não existe (o XML recém-escolhido).
+   * É o que diz em qual doca ela entra: cada empresa tem a sua.
+   */
+  destinatario?: string | null;
   /** A mesa pode marcar por cima de outro fornecedor; o fornecedor, não. */
   podeOcupar?: boolean;
   somenteLeitura?: boolean;
@@ -55,7 +61,7 @@ export default function SeletorDeHorario({
   // que simplesmente não existe como dia de entrega faria a pessoa tentar de novo.
   const fechado = Boolean(data) && !janelaDoDia(data);
   const agenda = trpc.appointments.horariosDoDia.useQuery(
-    { data, appointmentId },
+    { data, appointmentId, recipientCnpj: destinatario ? destinatario.replace(/\D/g, "") || undefined : undefined },
     { enabled: Boolean(data) && !fechado },
   );
 
