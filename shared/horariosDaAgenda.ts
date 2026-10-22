@@ -13,9 +13,29 @@
 // resposta: a tela, para mostrar o que dá para escolher; o servidor, para
 // recusar o que não dá. Tela que decide sozinha é tela que pode ser contornada.
 
-/** A janela de recebimento, em horas de São Paulo. */
-export const ABRE_AS = 8;
-export const FECHA_AS = 17;
+/** Quando a doca abre e fecha num dia, em horas de São Paulo. */
+export type JanelaDoDia = { abre: number; fecha: number };
+
+/**
+ * A janela de recebimento de cada dia da semana (0 = domingo).
+ *
+ * De segunda a quinta a doca recebe das 8 às 17; na sexta fecha uma hora mais
+ * cedo, às 16; sábado e domingo não há recebimento. O último horário é o do
+ * fechamento: quem marca as 17:00 chega na hora de fechar, e é assim que a
+ * operação conta.
+ *
+ * Feriado não está aqui: ele não tem regra fixa, e a parada de um dia avulso
+ * já tem o seu lugar (shared/paradaDoEstoque.ts).
+ */
+const JANELA_DA_SEMANA: Record<number, JanelaDoDia | null> = {
+  0: null,
+  1: { abre: 8, fecha: 17 },
+  2: { abre: 8, fecha: 17 },
+  3: { abre: 8, fecha: 17 },
+  4: { abre: 8, fecha: 17 },
+  5: { abre: 8, fecha: 16 },
+  6: null,
+};
 /** De quanto em quanto tempo um caminhão entra. */
 export const PASSO_EM_MINUTOS = 30;
 /** Quantos fornecedores diferentes cabem no mesmo horário. */
@@ -58,19 +78,46 @@ function comoTexto(h: number, m: number) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/** Os horários da janela, do primeiro ao último, sem olhar a agenda. */
-export function horariosDaJanela(): string[] {
+/**
+ * O dia da semana de uma data "2026-11-05", sem passar por fuso.
+ *
+ * A data já é a de São Paulo; levá-la a um instante e lê-la de volta no fuso do
+ * servidor poderia empurrá-la para o dia anterior.
+ */
+export function diaDaSemana(dia: string): number | null {
+  const casou = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dia);
+  if (!casou) return null;
+  const data = new Date(Date.UTC(Number(casou[1]), Number(casou[2]) - 1, Number(casou[3])));
+  return Number.isNaN(data.getTime()) ? null : data.getUTCDay();
+}
+
+/** A doca recebe neste dia? E até que horas? Nulo é dia sem recebimento. */
+export function janelaDoDia(dia: string): JanelaDoDia | null {
+  const semana = diaDaSemana(dia);
+  return semana === null ? null : JANELA_DA_SEMANA[semana] ?? null;
+}
+
+/** Os horários do dia, do primeiro ao último, sem olhar a agenda. Vazio quando não há recebimento. */
+export function horariosDaJanela(dia: string): string[] {
+  const janela = janelaDoDia(dia);
+  if (!janela) return [];
   const horarios: string[] = [];
-  for (let minuto = ABRE_AS * 60; minuto <= FECHA_AS * 60; minuto += PASSO_EM_MINUTOS) {
+  for (let minuto = janela.abre * 60; minuto <= janela.fecha * 60; minuto += PASSO_EM_MINUTOS) {
     horarios.push(comoTexto(Math.floor(minuto / 60), minuto % 60));
   }
   return horarios;
 }
 
-/** Este horário existe na janela de recebimento? */
-export function horarioDaJanela(hora: string): boolean {
-  return horariosDaJanela().includes(hora);
+/** Este horário existe na janela deste dia? */
+export function horarioDaJanela(hora: string, dia: string): boolean {
+  return horariosDaJanela(dia).includes(hora);
 }
+
+/** O que a pessoa lê quando escolhe um dia sem recebimento. */
+export const DIA_SEM_RECEBIMENTO = "Não recebemos aos sábados e domingos. Escolha um dia de segunda a sexta.";
+
+/** A regra dita em uma frase, para quem erra o horário. */
+export const JANELA_POR_EXTENSO = "de segunda a quinta das 08:00 às 17:00 e na sexta das 08:00 às 16:00";
 
 /**
  * A hora de São Paulo de um instante, como "08:30".
@@ -99,6 +146,8 @@ export function horaEmSaoPaulo(quando: Date | string): string {
  * mesa olhando a agenda do dia — qualquer ocupação é "ocupado".
  */
 export function horariosDoDia(input: {
+  /** O dia, "2026-11-05": é ele que diz até que horas a doca recebe. */
+  dia: string;
   entregas: EntregaMarcada[];
   supplierIds?: number[] | null;
 }): HorarioDaAgenda[] {
@@ -112,7 +161,7 @@ export function horariosDoDia(input: {
     else porHorario.set(hora, [entrega]);
   }
 
-  return horariosDaJanela().map(hora => {
+  return horariosDaJanela(input.dia).map(hora => {
     const marcadas = porHorario.get(hora) ?? [];
     const deOutros = marcadas.filter(entrega => !proprios.has(entrega.supplierId));
     const temOProprio = marcadas.length > deOutros.length;

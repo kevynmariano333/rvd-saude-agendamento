@@ -1,7 +1,10 @@
 import { trpc } from "@/lib/trpc";
 import {
   avisoDeHorarioOcupado,
+  DIA_SEM_RECEBIMENTO,
   DIA_SEM_VAGA,
+  janelaDoDia,
+  JANELA_POR_EXTENSO,
   temVaga,
   type HorarioDaAgenda,
 } from "@shared/horariosDaAgenda";
@@ -45,9 +48,13 @@ export default function SeletorDeHorario({
   className?: string;
 }) {
   const naCapa = tom === "capa";
+  // Sábado e domingo não têm recebimento: a resposta é a mesma de sempre, e não
+  // vale ir ao servidor perguntar. Dizer "não foi possível ler a agenda" num dia
+  // que simplesmente não existe como dia de entrega faria a pessoa tentar de novo.
+  const fechado = Boolean(data) && !janelaDoDia(data);
   const agenda = trpc.appointments.horariosDoDia.useQuery(
     { data, appointmentId },
-    { enabled: Boolean(data) },
+    { enabled: Boolean(data) && !fechado },
   );
 
   // Trocar de dia pode tornar inválida a hora já escolhida: 10:00 estava livre
@@ -65,6 +72,14 @@ export default function SeletorDeHorario({
     return (
       <p className={`rounded-xl px-3 py-2.5 text-xs font-semibold ${naCapa ? "bg-white/10 text-white/85" : "bg-sunken text-ink-soft"} ${className}`}>
         Escolha a data para ver os horários livres.
+      </p>
+    );
+  }
+
+  if (fechado) {
+    return (
+      <p className={`rounded-xl px-3 py-2.5 text-xs font-bold leading-5 ${naCapa ? "bg-state-stop text-white" : "bg-state-stop-bg text-state-stop"} ${className}`}>
+        {DIA_SEM_RECEBIMENTO}
       </p>
     );
   }
@@ -149,9 +164,9 @@ export default function SeletorDeHorario({
         })}
       </div>
       <p className={`mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-semibold ${naCapa ? "text-white/85" : "text-ink-soft"}`}>
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-1.5" title={`Recebemos ${JANELA_POR_EXTENSO}`}>
           <Clock3 className="size-3" />
-          Das {horarios[0]?.hora} às {horarios[horarios.length - 1]?.hora}
+          Neste dia, das {horarios[0]?.hora} às {horarios[horarios.length - 1]?.hora}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className={`size-2.5 rounded border ${naCapa ? "border-white/30 bg-white/15" : "border-state-stop/40 bg-state-stop-bg"}`} />

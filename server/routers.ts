@@ -152,10 +152,12 @@ import { MIRO_DIGITS, normalizeMiroNumber } from "../shared/miro";
 import { buildDashboardMetrics } from "./dashboardMetrics";
 import { motivoDaRecusa, paradaNoDia } from "../shared/paradaDoEstoque";
 import {
+  DIA_SEM_RECEBIMENTO,
   horaEmSaoPaulo,
   horarioDaJanela,
-  horariosDaJanela,
   horariosDoDia,
+  janelaDoDia,
+  JANELA_POR_EXTENSO,
   motivoDoHorarioOcupado,
 } from "../shared/horariosDaAgenda";
 import { ehSomenteLeitura } from "./permissions";
@@ -320,14 +322,18 @@ async function assertHorarioLivre(input: {
 }) {
   if (!input.quando || isSchedulingDesk(input.role)) return;
   const hora = horaEmSaoPaulo(input.quando);
-  if (!horarioDaJanela(hora)) {
+  const dia = formatSaoPauloDateKey(input.quando);
+  if (!janelaDoDia(dia)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: DIA_SEM_RECEBIMENTO });
+  }
+  if (!horarioDaJanela(hora, dia)) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: `Escolha um dos horários de recebimento: das ${horariosDaJanela()[0]} às ${horariosDaJanela().at(-1)}, de meia em meia hora.`,
+      message: `Escolha um dos horários de recebimento: ${JANELA_POR_EXTENSO}, de meia em meia hora.`,
     });
   }
-  const entregas = await entregasMarcadasNoDia(formatSaoPauloDateKey(input.quando));
-  const escolhido = horariosDoDia({ entregas, supplierIds: input.supplierIds }).find(horario => horario.hora === hora);
+  const entregas = await entregasMarcadasNoDia(dia);
+  const escolhido = horariosDoDia({ dia, entregas, supplierIds: input.supplierIds }).find(horario => horario.hora === hora);
   if (escolhido?.situacao === "ocupado") {
     throw new TRPCError({ code: "BAD_REQUEST", message: motivoDoHorarioOcupado(hora) });
   }
@@ -1583,7 +1589,7 @@ export const appRouter = router({
         const entregas = (await entregasMarcadasNoDia(input.data)).map(entrega =>
           usuarioAtendeANota(ctx.user, entrega.recipientCnpj) ? entrega : { ...entrega, fornecedor: null },
         );
-        const horarios = horariosDoDia({ entregas, supplierIds: await supplierScopeIds(doFornecedor) });
+        const horarios = horariosDoDia({ dia: input.data, entregas, supplierIds: await supplierScopeIds(doFornecedor) });
         // O fornecedor não precisa saber quem é o concorrente que pegou as
         // 10h — só que as 10h não estão disponíveis. Para a mesa o nome é o
         // que torna o aviso útil na hora de decidir.
