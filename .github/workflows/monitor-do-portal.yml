@@ -31,13 +31,20 @@ jobs:
       - name: Perguntar ao portal se ele está de pé
         env:
           # Variável do repositório (Settings → Secrets and variables → Actions
-          # → Variables), por exemplo https://agendamento.rvdsaude.com.br
+          # → Variables), por exemplo https://agendamento.rvdsaude.com.br.
+          # Vale quando existe: é ela que acompanha a troca de endereço.
           PORTAL: ${{ vars.URL_DO_PORTAL }}
+          # Sem a variável, vale o endereço de hoje. Antes o vigia falhava por
+          # falta de configuração, e o e-mail dizia "o monitor quebrou" com as
+          # mesmas letras com que diria "o portal caiu" — quem recebe aprende a
+          # ignorar os dois. Um vigia que não vigia é pior que nenhum.
+          PORTAL_PADRAO: https://agendamentorvd.up.railway.app
         run: |
           set -u
           if [ -z "${PORTAL}" ]; then
-            echo "Falta a variável URL_DO_PORTAL no repositório — sem endereço, não há o que vigiar."
-            exit 1
+            PORTAL="${PORTAL_PADRAO}"
+            echo "Sem a variável URL_DO_PORTAL: vigiando ${PORTAL}."
+            echo "Para vigiar outro endereço, crie a variável em Settings → Secrets and variables → Actions → Variables."
           fi
 
           # Três tentativas antes de acusar queda. Um deploy reinicia o
