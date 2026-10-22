@@ -9,6 +9,7 @@ import {
   appointmentMessageVersions,
   appointmentStatusHistory,
   appointmentInternalNoteReads,
+  appointmentMessageReads,
   appointmentInternalNotes,
   appointmentSuggestions,
   attendanceEvents,
@@ -770,22 +771,64 @@ export async function apagarMensagem(input: { messageId: number; userId: number 
 export async function createAppointmentMessage(input: { appointmentId: number; senderId: number; body: string; senderIsOperator: boolean }) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
-  const now = new Date();
-  const result = await db.insert(appointmentMessages).values({ appointmentId: input.appointmentId, senderId: input.senderId, body: input.body, operatorReadAt: input.senderIsOperator ? now : null, supplierReadAt: input.senderIsOperator ? null : now });
+  // Quem escreve não precisa de leitura: a própria mensagem nunca é "não lida"
+  // para quem a enviou (ver naoLidaPara).
+  const result = await db.insert(appointmentMessages).values({ appointmentId: input.appointmentId, senderId: input.senderId, body: input.body });
   return Number(result[0].insertId);
 }
 
-export async function markAppointmentMessagesRead(input: { appointmentId: number; userId: number; isOperator: boolean }) {
+/**
+ * Uma mensagem é "não lida" para uma pessoa quando é de outra casa, não foi
+ * apagada, e chegou depois da última vez que essa pessoa abriu a conversa.
+ *
+ * A "outra casa" é o que separa os dois lados: para a mesa, é o fornecedor
+ * quem escreve; para o fornecedor, é a mesa. Quem escreve nunca vê o próprio
+ * texto como novidade.
+ */
+function naoLidaPara(input: { userId: number; isOperator: boolean }) {
+  const deOutraCasa = input.isOperator ? eq(users.role, "supplier") : ne(appointmentMessages.senderId, input.userId);
+  // Mensagem com número maior que a última lida: chegou depois da leitura.
+  return and(
+    deOutraCasa,
+    isNull(appointmentMessages.apagadaEm),
+    or(isNull(appointmentMessageReads.lastReadMessageId), gt(appointmentMessages.id, appointmentMessageReads.lastReadMessageId)),
+  );
+}
+
+/**
+ * Até qual mensagem a nota está, neste instante: o maior número de mensagem dela.
+ * Marcar como lido é guardar esse número, para esta pessoa.
+ */
+async function ultimaMensagemDaNota(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, appointmentId: number) {
+  const [linha] = await db
+    .select({ ultima: sql<number>`coalesce(max(${appointmentMessages.id}), 0)`.mapWith(Number) })
+    .from(appointmentMessages)
+    .where(eq(appointmentMessages.appointmentId, appointmentId));
+  return linha?.ultima ?? 0;
+}
+
+/** A leitura desta pessoa, por nota. Sem linha, nada foi lido ainda. */
+function juntarLeituraDe(userId: number) {
+  return and(eq(appointmentMessageReads.appointmentId, appointmentMessages.appointmentId), eq(appointmentMessageReads.userId, userId));
+}
+
+/**
+ * Abrir a conversa é ler. A marca é desta pessoa: o que ela leu não some para
+ * os colegas, que continuam vendo a mensagem como nova até abrirem também.
+ */
+export async function markAppointmentMessagesRead(input: { appointmentId: number; userId: number }) {
   const db = await getDb();
   if (!db) return;
-  const unreadColumn = input.isOperator ? appointmentMessages.operatorReadAt : appointmentMessages.supplierReadAt;
-  await db.update(appointmentMessages).set(input.isOperator ? { operatorReadAt: new Date() } : { supplierReadAt: new Date() }).where(and(eq(appointmentMessages.appointmentId, input.appointmentId), ne(appointmentMessages.senderId, input.userId), isNull(unreadColumn)));
+  const ultima = await ultimaMensagemDaNota(db, input.appointmentId);
+  await db
+    .insert(appointmentMessageReads)
+    .values({ userId: input.userId, appointmentId: input.appointmentId, lastReadMessageId: ultima })
+    .onDuplicateKeyUpdate({ set: { lastReadMessageId: ultima } });
 }
 
 export async function listUnreadAppointmentMessages(input: { userId: number; isOperator: boolean; empresas?: EscopoDeEmpresas }) {
   const db = await getDb();
   if (!db) return [];
-  const unreadColumn = input.isOperator ? appointmentMessages.operatorReadAt : appointmentMessages.supplierReadAt;
   // O sino da mesa só toca por nota da empresa dela: a mensagem de um
   // fornecedor da LLT não pode aparecer no sino de quem atende a Amil.
   const daEmpresa = condicaoDaEmpresa(input.empresas);
@@ -795,8 +838,8 @@ export async function listUnreadAppointmentMessages(input: { userId: number; isO
     .from(appointmentMessages)
     .innerJoin(appointments, eq(appointmentMessages.appointmentId, appointments.id))
     .innerJoin(users, eq(appointmentMessages.senderId, users.id))
-    // A apagada fica de fora: o sino anunciaria uma novidade que não existe mais.
-    .where(and(ne(appointmentMessages.senderId, input.userId), isNull(unreadColumn), isNull(appointmentMessages.apagadaEm), ...scope))
+    .leftJoin(appointmentMessageReads, juntarLeituraDe(input.userId))
+    .where(and(naoLidaPara(input), ...scope))
     .orderBy(desc(appointmentMessages.createdAt))
     .limit(8);
 }
@@ -2216,19 +2259,30 @@ export async function limparAvisos(input: { userId: number; isOperator: boolean;
   const daEmpresa = condicaoDaEmpresa(input.empresas);
   const notasDaEmpresa = daEmpresa ? db.select({ id: appointments.id }).from(appointments).where(daEmpresa) : null;
 
-  // As mensagens das notas, que são as do sino: as mesmas que
-  // listUnreadAppointmentMessages devolveria.
-  const colunaDeLeitura = input.isOperator ? appointmentMessages.operatorReadAt : appointmentMessages.supplierReadAt;
-  // O fornecedor só dá por lida a conversa das notas dele. Vai por subconsulta
-  // porque um UPDATE não junta tabela: comparar com `appointments.id` aqui
-  // marcaria mensagem de nota de outra empresa como lida.
-  const escopo = input.isOperator
-    ? (notasDaEmpresa ? [inArray(appointmentMessages.appointmentId, notasDaEmpresa)] : [])
-    : [inArray(appointmentMessages.appointmentId, db.select({ id: appointments.id }).from(appointments).where(eq(appointments.supplierId, input.userId)))];
-  await db
-    .update(appointmentMessages)
-    .set(input.isOperator ? { operatorReadAt: agora } : { supplierReadAt: agora })
-    .where(and(ne(appointmentMessages.senderId, input.userId), isNull(colunaDeLeitura), ...escopo));
+  // As mensagens das notas, que são as do sino: só as que esta pessoa ainda
+  // não leu, e só das notas da empresa dela. Limpar é ler, e a leitura é dela.
+  const daEmpresaDasMensagens = condicaoDaEmpresa(input.empresas);
+  const escopoDasMensagens = input.isOperator
+    ? (daEmpresaDasMensagens ? [daEmpresaDasMensagens] : [])
+    : [eq(appointments.supplierId, input.userId)];
+  const naoLidas = await db
+    .selectDistinct({ appointmentId: appointmentMessages.appointmentId })
+    .from(appointmentMessages)
+    .innerJoin(appointments, eq(appointmentMessages.appointmentId, appointments.id))
+    .innerJoin(users, eq(appointmentMessages.senderId, users.id))
+    .leftJoin(appointmentMessageReads, juntarLeituraDe(input.userId))
+    .where(and(naoLidaPara(input), ...escopoDasMensagens));
+  if (naoLidas.length) {
+    const ultimas = await db
+      .select({ appointmentId: appointmentMessages.appointmentId, ultima: sql<number>`max(${appointmentMessages.id})`.mapWith(Number) })
+      .from(appointmentMessages)
+      .where(inArray(appointmentMessages.appointmentId, naoLidas.map(linha => linha.appointmentId)))
+      .groupBy(appointmentMessages.appointmentId);
+    await db
+      .insert(appointmentMessageReads)
+      .values(ultimas.map(linha => ({ userId: input.userId, appointmentId: linha.appointmentId, lastReadMessageId: linha.ultima })))
+      .onDuplicateKeyUpdate({ set: { lastReadMessageId: sql`values(${appointmentMessageReads.lastReadMessageId})` } });
+  }
 
   if (!input.trataBacklog && !input.isOperator) return;
 
@@ -3176,7 +3230,6 @@ export async function limparCopiasRepetidas(input: { identidade: string; adminId
 export async function contarMensagensPorNota(input: { userId: number; isOperator: boolean; empresas?: EscopoDeEmpresas }) {
   const db = await getDb();
   if (!db) return [];
-  const colunaDeLeitura = input.isOperator ? appointmentMessages.operatorReadAt : appointmentMessages.supplierReadAt;
   // O fornecedor só conta o que está nas notas dele; quem cuida da agenda vê
   // as da empresa que atende, como já acontece no sino.
   const daEmpresa = condicaoDaEmpresa(input.empresas);
@@ -3185,12 +3238,14 @@ export async function contarMensagensPorNota(input: { userId: number; isOperator
     .select({
       appointmentId: appointmentMessages.appointmentId,
       total: count(),
-      // Mensagem apagada não conta: o sino apontaria para um "Mensagem
-      // apagada", e quem fosse olhar não encontraria novidade nenhuma.
-      naoLidas: sql<number>`sum(case when ${appointmentMessages.senderId} <> ${input.userId} and ${colunaDeLeitura} is null and ${appointmentMessages.apagadaEm} is null then 1 else 0 end)`.mapWith(Number),
+      // O número do vermelho é desta pessoa: o que um colega já leu continua
+      // contando para ela. Mensagem apagada não conta.
+      naoLidas: sql<number>`sum(case when ${naoLidaPara(input)} then 1 else 0 end)`.mapWith(Number),
     })
     .from(appointmentMessages)
     .innerJoin(appointments, eq(appointmentMessages.appointmentId, appointments.id))
+    .innerJoin(users, eq(appointmentMessages.senderId, users.id))
+    .leftJoin(appointmentMessageReads, juntarLeituraDe(input.userId))
     .where(and(...escopo))
     .groupBy(appointmentMessages.appointmentId);
 }

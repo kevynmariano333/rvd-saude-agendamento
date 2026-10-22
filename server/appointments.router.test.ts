@@ -869,7 +869,7 @@ describe("procedures de agendamento", () => {
     const caller = appRouter.createCaller(context("operator"));
     await caller.messages.list({ appointmentId: 1 });
     await caller.messages.notifications();
-    expect(mocks.markAppointmentMessagesRead).toHaveBeenCalledWith({ appointmentId: 1, userId: 24, isOperator: true });
+    expect(mocks.markAppointmentMessagesRead).toHaveBeenCalledWith({ appointmentId: 1, userId: 24 });
     expect(mocks.listUnreadAppointmentMessages).toHaveBeenCalledWith({ userId: 24, isOperator: true, empresas: ["amil"] });
   });
 });

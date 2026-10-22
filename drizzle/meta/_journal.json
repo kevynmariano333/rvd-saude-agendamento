@@ -351,6 +351,13 @@
       "when": 1792698466644,
       "tag": "0049_empresas_operadas",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "5",
+      "when": 1792704987189,
+      "tag": "0050_leitura_por_pessoa",
+      "breakpoints": true
     }
   ]
 }

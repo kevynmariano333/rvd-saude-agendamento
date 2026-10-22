@@ -2053,7 +2053,7 @@ export const appRouter = router({
       .input(z.object({ appointmentId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         await getAccessibleAppointment(ctx.user, input.appointmentId);
-        await markAppointmentMessagesRead({ appointmentId: input.appointmentId, userId: ctx.user.id, isOperator: isSchedulingDesk(ctx.user.role) });
+        await markAppointmentMessagesRead({ appointmentId: input.appointmentId, userId: ctx.user.id });
         return listAppointmentMessages(input.appointmentId);
       }),
     send: protectedProcedure

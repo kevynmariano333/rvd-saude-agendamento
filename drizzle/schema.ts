@@ -389,6 +389,31 @@ export const appointmentInternalNotes = mysqlTable(
  * ela seria lida por um e continuaria nova para os outros. Uma linha por pessoa
  * e por nota responde isso sem tocar no que já está gravado.
  */
+/**
+ * Até qual mensagem cada pessoa já leu numa nota.
+ *
+ * A leitura é de quem lê, e não da casa: quando um operador abre a conversa, o
+ * aviso some só para ele. Uma linha por pessoa e nota.
+ *
+ * Guarda o número da última mensagem lida, e não a hora. Hora tem precisão de
+ * segundo: uma mensagem que chega no mesmo segundo em que alguém leu parecia
+ * lida e nunca aparecia. O número da mensagem cresce sempre, sem empate.
+ */
+export const appointmentMessageReads = mysqlTable(
+  "appointmentMessageReads",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    appointmentId: int("appointmentId")
+      .notNull()
+      .references(() => appointments.id, { onDelete: "cascade" }),
+    lastReadMessageId: int("lastReadMessageId").notNull().default(0),
+  },
+  table => [uniqueIndex("appointment_message_reads_unq").on(table.userId, table.appointmentId)]
+);
+
 export const appointmentInternalNoteReads = mysqlTable(
   "appointmentInternalNoteReads",
   {
@@ -438,8 +463,6 @@ export const appointmentMessages = mysqlTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
-    operatorReadAt: datetime("operatorReadAt", { mode: "date" }),
-    supplierReadAt: datetime("supplierReadAt", { mode: "date" }),
     /**
      * Quando a mensagem foi apagada por quem a escreveu.
      *
