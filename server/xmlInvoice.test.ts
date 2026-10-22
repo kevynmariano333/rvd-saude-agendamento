@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { empresaDoCnpj } from "../shared/empresas";
 import { MAX_XML_BYTES, parseInvoiceXml } from "./xmlInvoice";
 
 describe("leitura de XML de nota fiscal", () => {
@@ -32,5 +33,22 @@ describe("CNPJ do remetente", () => {
   it("devolve nulo quando o XML não traz emitente identificado", () => {
     const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>1</nNF></ide></infNFe></NFe>');
     expect(parseInvoiceXml(xml).supplierCnpj).toBeNull();
+  });
+});
+
+describe("a nota cai na empresa do destinatário", () => {
+  const nota = (cnpjDest: string) => Buffer.from(`<?xml version="1.0"?><NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>1</nNF></ide><emit><CNPJ>98.765.432/0001-55</CNPJ><xNome>Fornecedor</xNome></emit><dest><CNPJ>${cnpjDest}</CNPJ></dest><det nItem="1"><prod><xProd>Item</xProd><xPed>4504748409</xPed><qCom>1</qCom><vUnCom>1.00</vUnCom><vProd>1.00</vProd></prod></det><total><ICMSTot><vNF>1.00</vNF></ICMSTot></total></infNFe></NFe>`);
+
+  it("a nota com o CNPJ da LLT como destinatário é da LLT", () => {
+    // É o caminho de verdade: o XML entra, o destinatário sai dele, e é ele que
+    // decide quem enxerga a nota.
+    const { recipientCnpj } = parseInvoiceXml(nota("45.295.469/0001-33"));
+    expect(recipientCnpj).toBe("45295469000133");
+    expect(empresaDoCnpj(recipientCnpj)).toBe("llt");
+  });
+
+  it("a da RVD é da RVD, e a do Hospital segue sendo da Amil", () => {
+    expect(empresaDoCnpj(parseInvoiceXml(nota("39.283.469/0001-10")).recipientCnpj)).toBe("rvd");
+    expect(empresaDoCnpj(parseInvoiceXml(nota("06.033.403/0001-13")).recipientCnpj)).toBe("amil");
   });
 });
