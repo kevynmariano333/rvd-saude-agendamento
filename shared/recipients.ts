@@ -40,8 +40,8 @@ export const UNIDADES: Unidade[] = [
   // A RVD e a LLT recebem em unidade única, e a unidade é a própria empresa.
   // O CNPJ da LLT é o da LLT Distribuição de Produtos: a nota que chega com
   // ele como destinatário cai na LLT, e é por esse número que a mesa dela a vê.
-  { cnpj: "39283469000110", sigla: "RVD", nome: "RVD Saúde", curto: "SAÚDE", artigo: "a", grupo: "RVD Saúde", empresa: "rvd" },
-  { cnpj: "45295469000133", sigla: "LLT", nome: "LLT Saúde", curto: "SAÚDE", artigo: "a", grupo: "LLT Saúde", empresa: "llt" },
+  { cnpj: "39283469000110", sigla: "RVD", nome: "RVD Distribuidora de Produtos", curto: "DISTRIB.", artigo: "a", grupo: "RVD Distribuidora de Produtos", empresa: "rvd" },
+  { cnpj: "45295469000133", sigla: "LLT", nome: "LLT Distribuição de Produtos", curto: "DISTRIB.", artigo: "a", grupo: "LLT Distribuição de Produtos", empresa: "llt" },
 ];
 
 /** Os grupos na ordem em que apareceram, cada um com as suas unidades. */

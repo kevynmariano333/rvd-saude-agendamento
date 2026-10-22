@@ -23,6 +23,11 @@ export type Empresa = {
   codigo: CodigoDaEmpresa;
   /** O nome como a operação fala dela. */
   nome: string;
+  /**
+   * O nome que cabe onde o espaço é pouco — o rótulo do cargo no menu. "LLT
+   * Distribuição de Produtos" cortado no meio diria menos que "LLT" inteiro.
+   */
+  curto: string;
   /** O número do SAP da Amil. Quem não é da Amil não tem. */
   temMiro: boolean;
   /** A mesa de divergências, com tratativa e motivo. */
@@ -34,9 +39,9 @@ export type Empresa = {
 };
 
 export const EMPRESAS: Empresa[] = [
-  { codigo: "amil", nome: "Amil", temMiro: true, temBacklog: true, temPlanejador: true, temNotaDeServico: true },
-  { codigo: "rvd", nome: "RVD Saúde", temMiro: false, temBacklog: false, temPlanejador: false, temNotaDeServico: false },
-  { codigo: "llt", nome: "LLT Saúde", temMiro: false, temBacklog: false, temPlanejador: false, temNotaDeServico: false },
+  { codigo: "amil", nome: "Amil", curto: "Amil", temMiro: true, temBacklog: true, temPlanejador: true, temNotaDeServico: true },
+  { codigo: "rvd", nome: "RVD Distribuidora de Produtos", curto: "RVD", temMiro: false, temBacklog: false, temPlanejador: false, temNotaDeServico: false },
+  { codigo: "llt", nome: "LLT Distribuição de Produtos", curto: "LLT", temMiro: false, temBacklog: false, temPlanejador: false, temNotaDeServico: false },
 ];
 
 export function empresaPorCodigo(codigo: string | null | undefined): Empresa | null {
@@ -46,6 +51,10 @@ export function empresaPorCodigo(codigo: string | null | undefined): Empresa | n
 
 export function nomeDaEmpresa(codigo: string | null | undefined): string {
   return empresaPorCodigo(codigo)?.nome ?? "Todas as empresas";
+}
+
+export function nomeCurtoDaEmpresa(codigo: string | null | undefined): string {
+  return empresaPorCodigo(codigo)?.curto ?? "Todas";
 }
 
 export function ehCodigoDeEmpresa(valor: string | null | undefined): valor is CodigoDaEmpresa {

@@ -9,6 +9,7 @@ import {
   EMPRESAS,
   empresaDoCnpj,
   ehCargoDeMesa,
+  nomeCurtoDaEmpresa,
   nomeDaEmpresa,
   notaNoEscopo,
   recursosDaEmpresa,
@@ -92,8 +93,10 @@ describe("o cadastro das empresas", () => {
   });
 
   it("diz o nome da empresa, e \"todas\" quando não há corte", () => {
-    expect(nomeDaEmpresa("rvd")).toBe("RVD Saúde");
-    expect(nomeDaEmpresa("llt")).toBe("LLT Saúde");
+    expect(nomeDaEmpresa("rvd")).toBe("RVD Distribuidora de Produtos");
+    expect(nomeCurtoDaEmpresa("rvd")).toBe("RVD");
+    expect(nomeDaEmpresa("llt")).toBe("LLT Distribuição de Produtos");
+    expect(nomeCurtoDaEmpresa("llt")).toBe("LLT");
     expect(nomeDaEmpresa(null)).toBe("Todas as empresas");
   });
 });

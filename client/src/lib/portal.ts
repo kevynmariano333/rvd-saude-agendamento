@@ -1,4 +1,4 @@
-import { ehCargoDeMesa, lerEmpresas, nomeDaEmpresa } from "@shared/empresas";
+import { ehCargoDeMesa, lerEmpresas, nomeCurtoDaEmpresa } from "@shared/empresas";
 
 export type PortalRole = "admin" | "operator" | "supplier" | "portaria" | "operacao" | "planejador" | "planejador_leitura";
 export type PortalStatus = "pending" | "scheduled" | "received" | "completed" | "backlog" | "rejected";
@@ -45,7 +45,7 @@ export const roleLabel: Record<PortalRole, string> = {
  */
 export function rotuloDoCargo(role: PortalRole, empresasOperadas?: string | null) {
   if (!ehCargoDeMesa(role)) return roleLabel[role];
-  return `${roleLabel[role]} · ${lerEmpresas(empresasOperadas).map(nomeDaEmpresa).join(" + ")}`;
+  return `${roleLabel[role]} · ${lerEmpresas(empresasOperadas).map(nomeCurtoDaEmpresa).join(" + ")}`;
 }
 
 export function isPortalOperator(role: PortalRole) {
