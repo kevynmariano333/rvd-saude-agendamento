@@ -148,7 +148,12 @@ describe("os cargos por empresa", () => {
   it("planejador só existe na Amil, por enquanto", () => {
     expect(cargoExisteNaEmpresa("planejador", "amil")).toBe(true);
     expect(cargoExisteNaEmpresa("planejador", "rvd")).toBe(false);
-    expect(cargoExisteNaEmpresa("planejador_leitura", "llt")).toBe(false);
+    expect(cargoExisteNaEmpresa("planejador", "llt")).toBe(false);
+  });
+
+  it("a consulta existe nas três: ela só olha", () => {
+    for (const empresa of ["amil", "rvd", "llt"]) expect(cargoExisteNaEmpresa("planejador_leitura", empresa)).toBe(true);
+    expect(cargoExisteNasEmpresas("planejador_leitura", ["rvd", "llt"])).toBe(true);
   });
 
   it("operador existe nas três", () => {

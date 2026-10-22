@@ -318,9 +318,15 @@ describe("a empresa de cada conta", () => {
   it("não existe planejador na RVD nem na LLT, por enquanto", async () => {
     for (const empresas of [["rvd"], ["llt"], ["rvd", "llt"]]) {
       await expect(como(usuario("admin")).staff.criarUsuario(nova("planejador", empresas))).rejects.toThrow(/ainda não tem planejador/);
-      await expect(como(usuario("admin")).staff.criarUsuario(nova("planejador_leitura", empresas))).rejects.toThrow(/ainda não tem planejador/);
     }
     expect(mocks.createLocalUser).not.toHaveBeenCalled();
+  });
+
+  it("mas a consulta existe na RVD, na LLT e nas duas juntas", async () => {
+    for (const empresas of [["rvd"], ["llt"], ["rvd", "llt"]]) {
+      await como(usuario("admin")).staff.criarUsuario({ ...nova("planejador_leitura", empresas), email: `consulta-${empresas.join("-")}@exemplo.com` });
+      expect(mocks.createLocalUser).toHaveBeenLastCalledWith(expect.objectContaining({ role: "planejador_leitura", empresasOperadas: empresas }));
+    }
   });
 
   it("nem junto com a Amil: uma empresa sem planejador basta para recusar", async () => {

@@ -34,7 +34,8 @@ export const roleLabel: Record<PortalRole, string> = {
   portaria: "Portaria",
   operacao: "Operação",
   planejador: "Planejador",
-  planejador_leitura: "Planejador (consulta)",
+  // Só olha, e vale em qualquer empresa: o nome não a prende ao planejador.
+  planejador_leitura: "Consulta",
 };
 
 /**

@@ -169,13 +169,17 @@ export function ehCargoDeMesa(cargo: string): boolean {
 /**
  * O cargo existe nesta empresa?
  *
- * O planejador, e o perfil de consulta que o acompanha, são da Amil: é dela a
- * mesa que propõe datas e trata divergência. Para a RVD e a LLT só há operador
- * — por enquanto. Quando houver planejamento nelas, é virar `temPlanejador`
- * para verdadeiro na lista de empresas, e esta regra acompanha.
+ * O planejador é da Amil: é dela a mesa que propõe datas e trata divergência.
+ * Para a RVD e a LLT só há operador — por enquanto. Quando houver planejamento
+ * nelas, é virar `temPlanejador` para verdadeiro na lista de empresas, e esta
+ * regra acompanha.
+ *
+ * A consulta existe em todas. Ela só olha, e não depende de a empresa ter ou
+ * não um planejamento para olhar: quem acompanha a RVD sem poder mexer em nada
+ * é uma necessidade da RVD, não da Amil.
  */
 export function cargoExisteNaEmpresa(cargo: string, empresa: string | null | undefined): boolean {
-  if (cargo === "planejador" || cargo === "planejador_leitura") return recursosDaEmpresa(empresa).temPlanejador;
+  if (cargo === "planejador") return recursosDaEmpresa(empresa).temPlanejador;
   return true;
 }
 
