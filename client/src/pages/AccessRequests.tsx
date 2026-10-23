@@ -352,7 +352,7 @@ export default function AccessRequests() {
                 ...grupo.contas.map(member => {
                 const blocked = member.accessStatus === "rejected";
                 return (
-                <li key={member.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                <li key={member.id} className="flex flex-col gap-3 px-5 py-4 sm:px-6">
                   <div className="flex min-w-0 items-start gap-3">
                     {/* De qual casa é a conta: a RVD opera o recebimento, a
                         Amil planeja. Antes as duas eram a mesma linha de
@@ -373,7 +373,7 @@ export default function AccessRequests() {
                     )}
                     </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <div className="flex flex-wrap gap-1 rounded-xl bg-canvas p-1">
                       {assignableRoles.map(option => {
                         const active = member.role === option;
