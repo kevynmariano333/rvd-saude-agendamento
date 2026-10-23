@@ -15,7 +15,9 @@ import type { AppointmentDetail } from "./AppointmentDetailsDialog";
  * isso que não dava para saber, olhando uma nota, quantas vezes o caminhão
  * tinha deixado a doca esperando.
  */
-type TimelineEntry = { id: string; profile: string; status: string; name: string; date: Date; detail?: string; faltou?: boolean; diaPerdido?: Date };
+// `date` é o que o cartão mostra: a hora em que o registro foi feito.
+// `registradoEm` é o que ordena: a mesma hora, sem a data nova do agendamento.
+type TimelineEntry = { id: string; profile: string; status: string; name: string; date: Date; registradoEm: Date; detail?: string; faltou?: boolean; diaPerdido?: Date };
 
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
@@ -38,9 +40,22 @@ export default function AppointmentDateHistoryDialog({ appointment, open, onOpen
   const history = trpc.appointments.history.useQuery({ appointmentId }, { enabled: open && appointmentId > 0 });
   const suggestions = trpc.suggestions.list.useQuery({ appointmentId }, { enabled: open && appointmentId > 0 });
   const entries: TimelineEntry[] = [
-    ...(suggestions.data ?? []).map(suggestion => ({ id: `suggestion-${suggestion.id}`, profile: "Fornecedor", status: suggestion.status === "accepted" ? "Sugestão aceita" : suggestion.status === "declined" ? "Sugestão recusada" : "Sugestão", name: suggestion.supplierName || appointment?.supplierName || "Fornecedor", date: new Date(suggestion.suggestedFor), detail: suggestion.notes || undefined })),
-    ...(history.data ?? []).map(event => ({ faltou: furouOCompromisso({ statusAnterior: event.previousStatus, dataAnterior: event.previousScheduledFor, dataNova: event.nextScheduledFor, trocadaEm: event.createdAt }), diaPerdido: event.previousScheduledFor ? new Date(event.previousScheduledFor) : undefined, id: `history-${event.id}`, profile: event.handlerName ? "Operador" : "Sistema", status: event.previousScheduledFor || event.nextScheduledFor ? (event.previousScheduledFor ? "Reagendamento" : "Agendamento") : statusCopy[event.nextStatus as PortalStatus], name: event.handlerName || event.handlerEmail || "Processo automático", date: new Date(event.nextScheduledFor || event.createdAt), detail: event.eventNote || (event.previousScheduledFor ? `Anterior: ${formatDate(new Date(event.previousScheduledFor))} às ${formatTime(new Date(event.previousScheduledFor))}` : undefined) })),
-  ].sort((left, right) => left.date.getTime() - right.date.getTime());
+    ...(suggestions.data ?? []).map(suggestion => ({ id: `suggestion-${suggestion.id}`, profile: "Fornecedor", status: suggestion.status === "accepted" ? "Sugestão aceita" : suggestion.status === "declined" ? "Sugestão recusada" : "Sugestão", name: suggestion.supplierName || appointment?.supplierName || "Fornecedor", date: new Date(suggestion.createdAt), registradoEm: new Date(suggestion.createdAt), detail: [`Data sugerida: ${formatDate(new Date(suggestion.suggestedFor))} às ${formatTime(new Date(suggestion.suggestedFor))}`, suggestion.notes].filter(Boolean).join(" · ") })),
+    ...(history.data ?? []).map(event => ({
+      faltou: furouOCompromisso({ statusAnterior: event.previousStatus, dataAnterior: event.previousScheduledFor, dataNova: event.nextScheduledFor, trocadaEm: event.createdAt }),
+      diaPerdido: event.previousScheduledFor ? new Date(event.previousScheduledFor) : undefined,
+      id: `history-${event.id}`,
+      profile: event.handlerName ? "Operador" : "Sistema",
+      // "Reagendamento" só quando a nota já estava agendada e trocou de horário.
+      // Agendar uma nota pendente também grava uma data anterior (a da emissão),
+      // e antes isso saía como reagendamento.
+      status: event.nextStatus === "scheduled" ? (event.previousStatus === "scheduled" ? "Reagendamento" : "Agendamento") : statusCopy[event.nextStatus as PortalStatus],
+      name: event.handlerName || event.handlerEmail || "Processo automático",
+      date: new Date(event.createdAt),
+      registradoEm: new Date(event.createdAt),
+      detail: [event.eventNote, event.nextScheduledFor && event.nextStatus === "scheduled" ? `Nova data: ${formatDate(new Date(event.nextScheduledFor))} às ${formatTime(new Date(event.nextScheduledFor))}` : null].filter(Boolean).join(" · ") || undefined,
+    })),
+  ].sort((left, right) => left.registradoEm.getTime() - right.registradoEm.getTime());
   // Os dias que a doca segurou e ninguém ocupou. É o que a operação precisa ter
   // na mão antes de aceitar a próxima remarcação do mesmo fornecedor.
   const faltas = entries.filter(entry => entry.faltou);
