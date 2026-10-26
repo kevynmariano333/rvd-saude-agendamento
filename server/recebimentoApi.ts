@@ -108,14 +108,28 @@ export function resumoDeRecebimento(linhas: LinhaDeRecebimento[], periodo: Perio
   };
 }
 
+/**
+ * Uma linha por chamada, no log do servidor (o "View logs" do Railway).
+ *
+ * Quem chamou (IP), quando, o que pediu e o que voltou. A chave nunca entra
+ * no log, nem a parcial: a linha diz só se ela conferiu ou não.
+ */
+function registrarAcesso(req: Request, status: number, detalhe: Record<string, unknown> = {}) {
+  console.log(
+    `[API recebimento] ${JSON.stringify({ em: new Date().toISOString(), ip: req.ip, status, desde: req.query.desde ?? null, ate: req.query.ate ?? null, ...detalhe })}`,
+  );
+}
+
 export function registrarApiDeRecebimento(app: Express, chave: () => string = () => (process.env.RECEBIMENTO_API_TOKEN ?? "").trim()) {
   app.get("/api/recebimento/resumo", async (req: Request, res: Response) => {
     const esperada = chave();
     if (!esperada) {
+      registrarAcesso(req, 503, { motivo: "sem RECEBIMENTO_API_TOKEN" });
       res.status(503).json({ error: "A API de recebimento está desligada: falta RECEBIMENTO_API_TOKEN no ambiente." });
       return;
     }
     if (!chaveConfere(req.get("authorization"), esperada)) {
+      registrarAcesso(req, 401, { motivo: "chave não confere" });
       res.status(401).json({ error: "Chave inválida." });
       return;
     }
@@ -123,17 +137,20 @@ export function registrarApiDeRecebimento(app: Express, chave: () => string = ()
     const ate = String(req.query.ate ?? "");
     const formato = /^\d{4}-\d{2}-\d{2}$/;
     if (!formato.test(desde) || !formato.test(ate)) {
+      registrarAcesso(req, 400, { motivo: "data mal formada" });
       res.status(400).json({ error: "Informe desde=AAAA-MM-DD e ate=AAAA-MM-DD." });
       return;
     }
     const periodo = { desde, ate };
     const dias = diasDoPeriodo(periodo);
     if (dias < 1 || dias > MAX_DIAS) {
+      registrarAcesso(req, 400, { motivo: "período fora do limite" });
       res.status(400).json({ error: `O período precisa ter de 1 a ${MAX_DIAS} dias, com ate depois de desde.` });
       return;
     }
     const db = await getDb();
     if (!db) {
+      registrarAcesso(req, 503, { motivo: "banco indisponível" });
       res.status(503).json({ error: "Banco de dados indisponível." });
       return;
     }
@@ -160,12 +177,15 @@ export function registrarApiDeRecebimento(app: Express, chave: () => string = ()
       )
       .limit(MAX_LINHAS);
 
+    const resumo = resumoDeRecebimento(linhas, periodo);
+    const cortado = linhas.length >= MAX_LINHAS;
+    registrarAcesso(req, 200, { recebidas: resumo.recebidas.total, agendadas: resumo.agendadas.total, cortado });
     res.json({
       periodo,
       unidades: [...SIGLAS_DA_AMIL],
-      ...resumoDeRecebimento(linhas, periodo),
+      ...resumo,
       geradoEm: new Date().toISOString(),
-      cortado: linhas.length >= MAX_LINHAS,
+      cortado,
     });
   });
 }

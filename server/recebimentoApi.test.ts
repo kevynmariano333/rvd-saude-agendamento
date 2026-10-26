@@ -105,6 +105,25 @@ describe("GET /api/recebimento/resumo", () => {
     expect(errada.status).toBe(401);
   });
 
+  it("registra cada chamada no log, sem nunca escrever a chave", async () => {
+    const linhas: string[] = [];
+    const original = console.log;
+    console.log = (...args: unknown[]) => {
+      linhas.push(args.map(String).join(" "));
+    };
+    try {
+      await fetch(`${base}/api/recebimento/resumo?desde=2026-10-20&ate=2026-10-23`, { headers: { authorization: "Bearer chave-errada-de-teste" } });
+      await fetch(`${base}/api/recebimento/resumo?desde=2026-10-20&ate=2026-10-23`, { headers: { authorization: `Bearer ${chaveFalsa}` } });
+    } finally {
+      console.log = original;
+    }
+    expect(linhas.length).toBeGreaterThanOrEqual(2);
+    expect(linhas.every(linha => linha.startsWith("[API recebimento] "))).toBe(true);
+    expect(linhas.join("\n")).toContain('"status":401');
+    expect(linhas.join("\n")).not.toContain(chaveFalsa);
+    expect(linhas.join("\n")).not.toContain("chave-errada-de-teste");
+  });
+
   it("recusa datas mal formadas e períodos longos demais", async () => {
     const cabecalho = { authorization: `Bearer ${chaveFalsa}` };
     const ruim = await fetch(`${base}/api/recebimento/resumo?desde=20-10-2026&ate=2026-10-23`, { headers: cabecalho });
