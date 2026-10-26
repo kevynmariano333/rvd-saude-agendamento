@@ -16,6 +16,7 @@ import { serveStatic, setupVite } from "./vite";
 import { ligarBackupAutomatico } from "../agendadorDeBackup";
 import { ajustarTemposDoServidor, desligarComCalma, limitarCorpoAnonimo, protegerProcesso, registrarSaude, tratadorDeErros } from "./resiliencia";
 import { registrarLeituraDoBi } from "../leituraDoBi";
+import { registrarApiDeRecebimento } from "../recebimentoApi";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -143,6 +144,8 @@ async function startServer() {
   registrarSaude(app);
   // A leitura do robô do BI Operacional (D+1 do recebimento), por chave fixa.
   registrarLeituraDoBi(app);
+  // A contagem de recebimento da Amil para sistemas externos, por chave própria.
+  registrarApiDeRecebimento(app);
   logStorageConfig();
   void probeStorage();
   registerStorageProxy(app);
