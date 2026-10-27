@@ -1010,6 +1010,27 @@ export async function getSuggestionById(id: number) {
  * aqui, e não no banco, porque é a mesma regra que a janela de agendamento
  * aplica: escrita duas vezes, ela divergiria no dia em que mudasse.
  */
+/** As sugestões em aberto no dia, para o horário de um fornecedor não cair em cima de outro. */
+export async function sugestoesPendentesNoDia(dateKey: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const range = getSaoPauloDayRange(dateKey);
+  if (!range) return [];
+  return db
+    .select({
+      supplierId: appointmentSuggestions.supplierId,
+      suggestedFor: appointmentSuggestions.suggestedFor,
+      recipientCnpj: appointments.recipientCnpj,
+    })
+    .from(appointmentSuggestions)
+    .innerJoin(appointments, eq(appointmentSuggestions.appointmentId, appointments.id))
+    .where(and(
+      eq(appointmentSuggestions.status, "pending"),
+      gte(appointmentSuggestions.suggestedFor, range.start),
+      lte(appointmentSuggestions.suggestedFor, range.end),
+    ));
+}
+
 export async function sugestoesPendentesPorNota(empresas?: EscopoDeEmpresas) {
   const db = await getDb();
   if (!db) return [];

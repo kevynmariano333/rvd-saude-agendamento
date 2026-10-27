@@ -26,6 +26,7 @@ import {
   acceptAppointmentSuggestion,
   getAppointmentById,
   entregasMarcadasNoDia,
+  sugestoesPendentesNoDia,
   getSuggestionById,
   getUserByCompanyCnpj,
   getUserByEmail,
@@ -164,6 +165,7 @@ import {
 } from "../shared/horariosDaAgenda";
 import { ehSomenteLeitura } from "./permissions";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
+import { horarioSugeridoPorOutro } from "../shared/sugestoesEmAberto";
 import { buildAttendanceMetrics } from "./attendanceMetrics";
 import {
   attendanceActionOwner,
@@ -1724,6 +1726,14 @@ export const appRouter = router({
         if (Number.isNaN(suggestedFor.getTime()) || suggestedFor.getTime() <= Date.now()) throw new TRPCError({ code: "BAD_REQUEST", message: "Sugira uma data e horário futuros." });
         assertEstoqueAberto(appointment.recipientCnpj, suggestedFor);
         await assertHorarioLivre({ quando: suggestedFor, role: ctx.user.role, supplierIds: await supplierScopeIds(ctx.user), appointmentId: appointment.id, recipientCnpj: appointment.recipientCnpj });
+        // Quem sugeriu primeiro fica com o horário: outro fornecedor da mesma
+        // empresa não sugere a mesma data e hora enquanto a sugestão estiver aberta.
+        if (!isSchedulingDesk(ctx.user.role)) {
+          const emAberto = await sugestoesPendentesNoDia(formatSaoPauloDateKey(suggestedFor));
+          if (horarioSugeridoPorOutro(suggestedFor, { supplierId: ctx.user.id, recipientCnpj: appointment.recipientCnpj }, emAberto)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Esse horário já foi sugerido por outro fornecedor. Escolha outro." });
+          }
+        }
         // `supplierId` sempre guardou quem escreveu a sugestão, e continua
         // assim com o planejador. O efeito colateral é bem-vindo: a proposta
         // dele fica fora do recorte do fornecedor, que não precisa acompanhar

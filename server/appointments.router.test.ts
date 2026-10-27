@@ -49,6 +49,7 @@ const mocks = vi.hoisted(() => ({
   notaJaRegistrada: vi.fn(),
   listApprovedCompanyUserIds: vi.fn(),
   entregasMarcadasNoDia: vi.fn(),
+  sugestoesPendentesNoDia: vi.fn(),
   listPendingAccessRequests: vi.fn(),
   setUserAccessStatus: vi.fn(),
   createPasswordResetToken: vi.fn(),
@@ -108,6 +109,7 @@ describe("procedures de agendamento", () => {
     mocks.listAppointmentSuggestions.mockResolvedValue([]);
     mocks.listApprovedCompanyUserIds.mockResolvedValue([]);
     mocks.entregasMarcadasNoDia.mockResolvedValue([]);
+    mocks.sugestoesPendentesNoDia.mockResolvedValue([]);
   });
 
   it("permite que o fornecedor crie uma solicitação própria", async () => {
@@ -284,6 +286,17 @@ describe("procedures de agendamento", () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
     mocks.entregasMarcadasNoDia.mockResolvedValue([
       { quando: new Date("2030-09-02T13:00:00.000Z"), supplierId: 99, fornecedor: "Cremer" },
+    ]);
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-02T13:00:00.000Z" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.createAppointmentSuggestion).not.toHaveBeenCalled();
+  });
+
+  it("recusa a sugestão do fornecedor num horário que outro fornecedor já sugeriu e não foi respondido", async () => {
+    // Quem sugeriu primeiro fica com o horário até a mesa responder.
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled", recipientCnpj: "06033403000113" });
+    mocks.sugestoesPendentesNoDia.mockResolvedValue([
+      { supplierId: 99, suggestedFor: new Date("2030-09-02T13:00:00.000Z"), recipientCnpj: "06033403000113" },
     ]);
     const caller = appRouter.createCaller(context("supplier"));
     await expect(caller.suggestions.create({ appointmentId: 1, suggestedFor: "2030-09-02T13:00:00.000Z" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
