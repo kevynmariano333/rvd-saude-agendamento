@@ -27,6 +27,7 @@ export const MOTIVOS_DE_RECUSA: MotivoDeRecusa[] = [
   { codigo: "CARGA_AVARIADA", rotulo: "Carga avariada", quando: "Mercadoria danificada, violada ou fora da temperatura." },
   { codigo: "DUPLICIDADE", rotulo: "Nota em duplicidade", quando: "A mesma nota já havia sido agendada ou recebida." },
   { codigo: "CANCELADA_FORNECEDOR", rotulo: "Cancelada pelo fornecedor", quando: "O próprio fornecedor desistiu da entrega." },
+  { codigo: "CANCELADA_AMIL", rotulo: "Cancelada pela Amil / planejamento", quando: "A recusa partiu do time da Amil ou do planejador, e não do fornecedor." },
   { codigo: "MEDICAMENTO_NA_UNIDADE", rotulo: "Medicamento do HSH: entregar direto na unidade", quando: "Medicamento do Hospital (HSH) que chegou ao recebimento. Ele não passa pela doca: a entrega é direto na unidade." },
   { codigo: "OUTRO", rotulo: "Outro motivo", quando: "Nenhum dos anteriores — descreva o que houve." },
 ];
