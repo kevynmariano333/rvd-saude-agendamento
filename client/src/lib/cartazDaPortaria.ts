@@ -61,7 +61,7 @@ export async function gerarCartazDaPortaria(enderecoDoPortal: string): Promise<j
   doc.setFont("helvetica", "normal");
   doc.setFontSize(13);
   doc.setTextColor(...TINTA);
-  doc.text("Entrega sem agendamento pode ficar esperando na fila.", 105, 84, { align: "center" });
+  doc.text("Entrega sem agendamento será recusada.", 105, 84, { align: "center" });
 
   // O QR, grande e com bastante folga em volta: leitor de celular ruim agradece.
   const qr = await QRCode.toDataURL(enderecoDoPortal, { errorCorrectionLevel: "M", margin: 1, width: 900, color: { dark: "#782078", light: "#ffffff" } });
