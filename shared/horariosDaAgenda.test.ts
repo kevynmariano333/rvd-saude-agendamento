@@ -328,4 +328,38 @@ describe("uma doca por empresa", () => {
     expect(situacao(horariosDoDia({ dia: QUINTA, entregas: [{ ...entregas[0], recipientCnpj: null }], supplierIds: [AMIL], doca: "amil" }), "10:00")).toBe("ocupado");
     expect(situacao(horariosDoDia({ dia: QUINTA, entregas: [{ ...entregas[0], recipientCnpj: null }], supplierIds: [AMIL], doca: "rvd" }), "10:00")).toBe("livre");
   });
+  describe("sugestão em aberto de outro fornecedor", () => {
+    const sugestao = (hora: string, supplierId: number, recipientCnpj: string | null = "06033403000113") => ({
+      supplierId,
+      quando: `${QUINTA}T${hora}:00-03:00`,
+      recipientCnpj,
+    });
+
+    it("tira da opção de quem pede o horário que outro fornecedor sugeriu", () => {
+      const dia = horariosDoDia({ dia: QUINTA, entregas: [], sugestoes: [sugestao("10:00", OUTRO)], supplierIds: [AMIL], doca: "amil" });
+      expect(situacao(dia, "10:00")).toBe("ocupado");
+      expect(situacao(dia, "10:30")).toBe("livre");
+    });
+
+    it("não prende quem sugeriu: o próprio horário sugerido segue livre para ele", () => {
+      const dia = horariosDoDia({ dia: QUINTA, entregas: [], sugestoes: [sugestao("10:00", AMIL)], supplierIds: [AMIL], doca: "amil" });
+      expect(situacao(dia, "10:00")).toBe("livre");
+    });
+
+    it("a sugestão de outra empresa não tira o horário da doca consultada", () => {
+      const dia = horariosDoDia({ dia: QUINTA, entregas: [], sugestoes: [sugestao("10:00", OUTRO, "39283469000110")], supplierIds: [AMIL], doca: "amil" });
+      expect(situacao(dia, "10:00")).toBe("livre");
+    });
+
+    it("não mostra o nome de quem sugeriu", () => {
+      const dia = horariosDoDia({ dia: QUINTA, entregas: [], sugestoes: [sugestao("10:00", OUTRO)], supplierIds: [AMIL], doca: "amil" });
+      expect(dia.find(horario => horario.hora === "10:00")?.fornecedores).toEqual([]);
+    });
+
+    it("não conta como entrega marcada: quem já tem horário no dia não fica preso à sugestão de outro", () => {
+      const dia = horariosDoDia({ dia: QUINTA, entregas: [as("11:00", AMIL, "Amil")], sugestoes: [sugestao("10:00", OUTRO)], supplierIds: [AMIL], soNoHorarioDele: true, doca: "amil" });
+      expect(situacao(dia, "10:00")).toBe("ocupado");
+      expect(situacao(dia, "11:00")).toBe("proprio");
+    });
+  });
 });

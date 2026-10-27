@@ -72,6 +72,13 @@ export type HorarioDaAgenda = {
 };
 
 /** Uma entrega já marcada, do jeito mínimo que o cálculo precisa. */
+/** Uma sugestão em aberto: quem sugeriu, o horário proposto e para qual empresa. */
+export type SugestaoDoDia = {
+  supplierId: number;
+  quando: Date | string;
+  recipientCnpj?: string | null;
+};
+
 export type EntregaMarcada = {
   /** A nota. Serve para não contar contra o fornecedor a que ele está movendo. */
   appointmentId?: number;
@@ -189,6 +196,12 @@ export function horariosDoDia(input: {
    * já tem no dia é o dele para todas.
    */
   doca?: CodigoDaEmpresa | null;
+  /**
+   * As sugestões ainda sem resposta. O horário que um fornecedor sugeriu sai das
+   * opções dos outros: quem sugeriu primeiro fica com ele. Não conta como
+   * entrega marcada, então não prende quem sugeriu a esse horário.
+   */
+  sugestoes?: SugestaoDoDia[];
 }): HorarioDaAgenda[] {
   const proprios = new Set(input.supplierIds ?? []);
   const doDia = input.ignorar === undefined ? input.entregas : input.entregas.filter(entrega => entrega.appointmentId !== input.ignorar);
@@ -205,6 +218,15 @@ export function horariosDoDia(input: {
     if (lista) lista.push(entrega);
     else porHorario.set(hora, [entrega]);
   }
+  // As sugestões de outros, por hora. A do próprio fornecedor não tira nada dele.
+  const sugeridosPorOutros = new Map<string, SugestaoDoDia[]>();
+  for (const sugestao of input.sugestoes ?? []) {
+    const hora = horaEmSaoPaulo(sugestao.quando);
+    if (!hora || proprios.has(sugestao.supplierId)) continue;
+    const lista = sugeridosPorOutros.get(hora);
+    if (lista) lista.push(sugestao);
+    else sugeridosPorOutros.set(hora, [sugestao]);
+  }
 
   return horariosDaJanela(input.dia).map(hora => {
     const marcadas = porHorario.get(hora) ?? [];
@@ -213,7 +235,8 @@ export function horariosDoDia(input: {
     const naDoca = (entrega: EntregaMarcada) => !input.doca || empresaDoCnpj(entrega.recipientCnpj) === input.doca;
     const deOutros = marcadas.filter(entrega => !proprios.has(entrega.supplierId) && naDoca(entrega));
     const temOProprio = marcadas.some(entrega => proprios.has(entrega.supplierId));
-    const situacao: SituacaoDoHorario = deOutros.length >= CABEM_POR_HORARIO
+    const sugeridoPorOutro = (sugeridosPorOutros.get(hora) ?? []).some(sugestao => !input.doca || empresaDoCnpj(sugestao.recipientCnpj) === input.doca);
+    const situacao: SituacaoDoHorario = deOutros.length >= CABEM_POR_HORARIO || (sugeridoPorOutro && !temOProprio)
       ? "ocupado"
       : temOProprio
         ? "proprio"

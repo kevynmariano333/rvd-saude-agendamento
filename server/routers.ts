@@ -1617,9 +1617,15 @@ export const appRouter = router({
         // A regra de ficar no horário que já tem vale para o fornecedor. A mesa vê
         // a agenda inteira e decide: ela pode abrir um segundo horário do mesmo
         // fornecedor, e a tela só a avisa.
+        // O horário que outro fornecedor já sugeriu sai da opção de quem pede. A
+        // mesa não tem esse bloqueio: ela decide com o aviso na mão.
+        const sugestoes = isSchedulingDesk(ctx.user.role)
+          ? []
+          : (await sugestoesPendentesNoDia(input.data)).map(sugestao => ({ supplierId: sugestao.supplierId, quando: sugestao.suggestedFor, recipientCnpj: sugestao.recipientCnpj }));
         const horarios = horariosDoDia({
           dia: input.data,
           entregas,
+          sugestoes,
           supplierIds: await supplierScopeIds(doFornecedor),
           soNoHorarioDele: !isSchedulingDesk(ctx.user.role),
           ignorar: input.appointmentId,
