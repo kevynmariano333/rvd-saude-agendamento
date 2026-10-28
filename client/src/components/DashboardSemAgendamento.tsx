@@ -1,4 +1,6 @@
 import { trpc } from "@/lib/trpc";
+import type React from "react";
+import { useState } from "react";
 import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { Building2, FileWarning } from "lucide-react";
 import { useLocation } from "wouter";
@@ -17,21 +19,24 @@ export function diasAtras(dias: number) {
 }
 
 /**
- * O painel de sem agendamento na tela inicial do operador: os últimos 30 dias,
- * com o dashboard e um atalho para o relatório completo.
+ * O painel de sem agendamento na tela do operador. Usa o mesmo mês, ano e dia
+ * que a visão geral mostra, para os dois falarem do mesmo período.
  */
-export function PainelDeSemAgendamento() {
+export function PainelDeSemAgendamento({ month, year, day }: { month: number; year: number; day: number }) {
   const [, setLocation] = useLocation();
-  const desde = diasAtras(DIAS_PADRAO - 1);
-  const ate = formatSaoPauloDateKey(new Date());
+  const mes = String(month).padStart(2, "0");
+  const ultimoDia = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const desde = day > 0 ? `${year}-${mes}-${String(day).padStart(2, "0")}` : `${year}-${mes}-01`;
+  const ate = day > 0 ? desde : `${year}-${mes}-${String(ultimoDia).padStart(2, "0")}`;
   const consulta = trpc.reports.semAgendamento.useQuery({ desde, ate });
+  const rotuloDoPeriodo = day > 0 ? `${String(day).padStart(2, "0")}/${mes}/${year}` : `${mes}/${year}`;
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-faint">Sem agendamento</p>
           <h2 className="mt-1 font-display text-2xl font-extrabold text-ink">Notas recebidas sem agendamento</h2>
-          <p className="mt-1 text-sm text-ink-soft">Últimos {DIAS_PADRAO} dias, de {desde} a {ate}.</p>
+          <p className="mt-1 text-sm text-ink-soft">Período da visão geral: {rotuloDoPeriodo}.</p>
         </div>
         <button type="button" onClick={() => setLocation("/operador/relatorios/sem-agendamento")} className="w-fit rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white">
           Abrir relatório completo
@@ -50,6 +55,9 @@ export function PainelDeSemAgendamento() {
 function diaCurto(data: string) {
   return `${data.slice(8, 10)}/${data.slice(5, 7)}`;
 }
+
+/** O nome que a equipe usa para cada unidade da Amil nos filtros. */
+const NOME_DA_UNIDADE: Record<string, string> = { HSH: "Hospital", MSH: "Maternidade" };
 
 /** As cores de cada unidade no gráfico: a frente, a tampa de cima e a lateral, para dar volume. */
 const TONS_DA_UNIDADE: Record<string, { frente: string; topo: string; lateral: string }> = {
@@ -94,6 +102,12 @@ function TotalDoDia(entrada: unknown) {
 export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSemAgendamento; periodo: { desde: string; ate: string } }) {
   const unidadesNoGrafico = resumo.porUnidade.map(item => item.unidade);
   const niveis = new Map<string, NivelDoFornecedor>(resumo.porFornecedor.map((item, indice) => [item.fornecedor, nivelDoFornecedor(indice, resumo.porFornecedor.length)]));
+  const [unidadesOcultas, setUnidadesOcultas] = useState<string[]>([]);
+  const [nivelSelecionado, setNivelSelecionado] = useState<NivelDoFornecedor | null>(null);
+  const alternarUnidade = (unidade: string) =>
+    setUnidadesOcultas(atuais => (atuais.includes(unidade) ? atuais.filter(item => item !== unidade) : [...atuais, unidade]));
+  const unidadesVisiveis = unidadesNoGrafico.filter(unidade => !unidadesOcultas.includes(unidade));
+  const ultimaVisivel = unidadesVisiveis[unidadesVisiveis.length - 1];
   const dadosDoGrafico = resumo.porDiaEUnidade.map(dia => ({
     dia: diaCurto(dia.data),
     total: dia.total,
@@ -113,10 +127,24 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-faint">Recebimento</p>
             <h2 className="mt-1 font-display text-xl font-extrabold text-ink">Notas sem agendamento por dia</h2>
           </div>
-          <div className="flex flex-wrap gap-3 text-[12px] font-bold text-ink-soft">
-            {unidadesNoGrafico.map(unidade => (
-              <span key={unidade} className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full" style={{ background: (TONS_DA_UNIDADE[unidade] ?? TOM_PADRAO).frente }} />{unidade}</span>
-            ))}
+          <div className="flex flex-wrap gap-2 text-[12px] font-bold text-ink-soft">
+            {unidadesNoGrafico.map(unidade => {
+              const oculta = unidadesOcultas.includes(unidade);
+              return (
+                <button
+                  key={unidade}
+                  type="button"
+                  onClick={() => alternarUnidade(unidade)}
+                  aria-pressed={!oculta}
+                  title={oculta ? `Mostrar ${unidade}` : `Esconder ${unidade}`}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 transition ${oculta ? "opacity-40" : ""}`}
+                >
+                  <span className="size-2.5 rounded-full" style={{ background: (TONS_DA_UNIDADE[unidade] ?? TOM_PADRAO).frente }} />
+                  {NOME_DA_UNIDADE[unidade] ?? unidade}
+                  <span className="font-display text-sm font-extrabold text-ink">{resumo.porUnidade.find(item => item.unidade === unidade)?.quantidade ?? 0}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
         <div className="mt-5 h-80">
@@ -127,9 +155,9 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
                 <XAxis dataKey="dia" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <Tooltip cursor={{ fill: "rgba(120,32,120,0.06)" }} />
-                {unidadesNoGrafico.map((unidade, indice) => (
-                  <Bar key={unidade} dataKey={unidade} name={unidade} stackId="dia" shape={BarraEm3D as never} maxBarSize={40}>
-                    {indice === unidadesNoGrafico.length - 1 && <LabelList dataKey="total" content={TotalDoDia as never} />}
+                {unidadesNoGrafico.map(unidade => (
+                  <Bar key={unidade} dataKey={unidade} name={unidade} stackId="dia" shape={BarraEm3D as never} maxBarSize={40} hide={unidadesOcultas.includes(unidade)}>
+                    {unidade === ultimaVisivel && <LabelList dataKey="total" content={TotalDoDia as never} />}
                   </Bar>
                 ))}
               </BarChart>
@@ -141,8 +169,8 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        <NiveisDosFornecedores niveis={niveis} />
-        {resumo.ranking.length ? resumo.ranking.map(grupo => <RankingDaUnidade key={grupo.unidade} grupo={grupo} niveis={niveis} />) : (
+        <NiveisDosFornecedores niveis={niveis} selecionado={nivelSelecionado} onEscolher={setNivelSelecionado} />
+        {resumo.ranking.length ? resumo.ranking.map(grupo => <RankingDaUnidade key={grupo.unidade} grupo={grupo} niveis={niveis} selecionado={nivelSelecionado} />) : (
           <section className="panel p-5 shadow-sm sm:p-7 xl:col-span-2">
             <p className="text-sm text-ink-soft">Nenhum fornecedor no período.</p>
           </section>
@@ -152,19 +180,30 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
   );
 }
 
+/**
+ * Uma barra horizontal com volume: o topo mais claro, a base escura e uma
+ * sombra embaixo, como as colunas em 3D do gráfico.
+ */
+function barraEm3D(cor: string): React.CSSProperties {
+  return {
+    background: `linear-gradient(180deg, ${cor}ff 0%, ${cor}cc 55%, ${cor}99 100%)`,
+    boxShadow: `inset 0 -2px 0 rgba(0,0,0,0.35), 0 3px 4px rgba(0,0,0,0.35)`,
+  };
+}
+
 /** As cores de cada nível: verde para o bom, vermelho para o péssimo. */
 const COR_DO_NIVEL: Record<NivelDoFornecedor, string> = { Ótimo: "text-state-go", Bom: "text-rvd-blue", Ruim: "text-state-wait", Péssimo: "text-state-stop" };
-const BARRA_DO_NIVEL: Record<NivelDoFornecedor, string> = { Ótimo: "bg-state-go", Bom: "bg-rvd-blue", Ruim: "bg-state-wait", Péssimo: "bg-state-stop" };
+const COR_HEX_DO_NIVEL: Record<NivelDoFornecedor, string> = { Ótimo: "#3BA56B", Bom: "#4F9CB8", Ruim: "#D9A441", Péssimo: "#C8453F" };
 
 /**
  * Quantos fornecedores caem em cada nível. Sem agendamento é falha de quem
  * entrega, então a lista vai do Ótimo, em cima, até o Péssimo, embaixo.
  */
-function NiveisDosFornecedores({ niveis }: { niveis: Map<string, NivelDoFornecedor> }) {
+function NiveisDosFornecedores({ niveis, selecionado, onEscolher }: { niveis: Map<string, NivelDoFornecedor>; selecionado: NivelDoFornecedor | null; onEscolher: (nivel: NivelDoFornecedor | null) => void }) {
   const contagem = new Map<NivelDoFornecedor, number>(NIVEIS_DO_FORNECEDOR.map(nivel => [nivel, 0]));
   Array.from(niveis.values()).forEach(nivel => contagem.set(nivel, (contagem.get(nivel) ?? 0) + 1));
   const total = niveis.size;
-  const ordem: NivelDoFornecedor[] = ["Ótimo", "Bom", "Ruim", "Péssimo"];
+  const ordem: NivelDoFornecedor[] = ["Péssimo", "Ruim", "Bom", "Ótimo"];
   return (
     <section className="panel p-5 shadow-sm sm:p-7 xl:col-span-2">
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-faint">Classificação</p>
@@ -173,13 +212,23 @@ function NiveisDosFornecedores({ niveis }: { niveis: Map<string, NivelDoForneced
       <ul className="mt-5 space-y-3">
         {ordem.map(nivel => {
           const quantidade = contagem.get(nivel) ?? 0;
+          const nomes = Array.from(niveis.entries()).filter(([, nivelDoItem]) => nivelDoItem === nivel).map(([nome]) => nome);
+          const ativo = selecionado === nivel;
           return (
-            <li key={nivel} className="flex items-center gap-4">
-              <span className={`w-24 shrink-0 text-sm font-bold ${COR_DO_NIVEL[nivel]}`}>{nivel}</span>
-              <div className="h-2.5 flex-1 rounded-full bg-sunken">
-                <div className={`h-2.5 rounded-full ${BARRA_DO_NIVEL[nivel]}`} style={{ width: total ? `${Math.round((quantidade / total) * 100)}%` : "0%" }} />
-              </div>
-              <span className="w-8 shrink-0 text-right font-display text-base font-extrabold text-ink">{quantidade}</span>
+            <li key={nivel}>
+              <button
+                type="button"
+                onClick={() => onEscolher(ativo ? null : nivel)}
+                aria-pressed={ativo}
+                title={nomes.length ? nomes.join("\n") : "Nenhum fornecedor neste nível"}
+                className={`flex w-full items-center gap-4 rounded-lg px-2 py-1 text-left transition ${selecionado && !ativo ? "opacity-40" : ""} ${ativo ? "bg-sunken" : "hover:bg-sunken"}`}
+              >
+                <span className={`w-24 shrink-0 text-sm font-bold ${COR_DO_NIVEL[nivel]}`}>{nivel}</span>
+                <div className="h-2.5 flex-1 rounded-full bg-sunken">
+                  <div className="h-2.5 rounded-full" style={{ width: total ? `${Math.round((quantidade / total) * 100)}%` : "0%", ...barraEm3D(COR_HEX_DO_NIVEL[nivel]) }} />
+                </div>
+                <span className="w-8 shrink-0 text-right font-display text-base font-extrabold text-ink">{quantidade}</span>
+              </button>
             </li>
           );
         })}
@@ -189,7 +238,7 @@ function NiveisDosFornecedores({ niveis }: { niveis: Map<string, NivelDoForneced
 }
 
 /** O ranking de uma unidade: quem mandou, a quantidade e a parte dela na unidade. */
-function RankingDaUnidade({ grupo, niveis }: { grupo: RankingDaUnidade; niveis: Map<string, NivelDoFornecedor> }) {
+function RankingDaUnidade({ grupo, niveis, selecionado }: { grupo: RankingDaUnidade; niveis: Map<string, NivelDoFornecedor>; selecionado: NivelDoFornecedor | null }) {
   const maior = grupo.fornecedores[0]?.quantidade ?? 0;
   return (
     <section className="panel p-5 shadow-sm sm:p-7">
@@ -202,16 +251,15 @@ function RankingDaUnidade({ grupo, niveis }: { grupo: RankingDaUnidade; niveis: 
       </div>
       <ol className="mt-5 divide-y divide-line">
         {grupo.fornecedores.map((item, indice) => (
-          <li key={item.fornecedor} className="py-3 first:pt-0 last:pb-0">
+          <li key={item.fornecedor} className={`py-3 first:pt-0 last:pb-0 transition ${selecionado && niveis.get(item.fornecedor) !== selecionado ? "opacity-30" : ""}`} title={`${item.fornecedor}: ${item.quantidade} nota(s) — ${niveis.get(item.fornecedor) ?? ""}`}>
             <div className="flex items-center justify-between gap-4">
               <span className="min-w-0 truncate text-sm font-bold text-rvd-plum">{indice + 1}. {item.fornecedor} <span className={`ml-1 text-[11px] font-bold ${COR_DO_NIVEL[niveis.get(item.fornecedor) ?? "Ruim"]}`}>{niveis.get(item.fornecedor)}</span></span>
               <span className="shrink-0 text-right">
                 <span className="block font-display text-lg font-extrabold text-ink">{item.quantidade}</span>
-                <span className="block text-[11px] font-bold text-ink-soft">{item.percentual.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>
               </span>
             </div>
             <div className="mt-2 h-1.5 rounded-full bg-sunken">
-              <div className="h-1.5 rounded-full bg-rvd-plum" style={{ width: `${Math.round((item.quantidade / maior) * 100)}%` }} />
+              <div className="h-1.5 rounded-full" style={{ width: `${Math.round((item.quantidade / maior) * 100)}%`, ...barraEm3D(COR_HEX_DO_NIVEL[niveis.get(item.fornecedor) ?? "Ruim"]) }} />
             </div>
           </li>
         ))}
