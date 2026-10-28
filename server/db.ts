@@ -39,6 +39,7 @@ import { getUnscheduledReceiptRegisteredAt } from "./receiptTiming";
 import { getReceiptTimestampForStatus } from "./receiptStatus";
 import { getSaoPauloDayRange } from "../shared/dateFilters";
 import { condicaoDaEmpresa } from "./condicaoDeEmpresa";
+import { STATUS_RECEBIDOS_SEM_AGENDA } from "../shared/recebimentoSemAgendamento";
 import { empresaDoCnpj, EMPRESAS, gravarEmpresas, type CodigoDaEmpresa, type EscopoDeEmpresas } from "../shared/empresas";
 import type { ChaveDeDuplicidade } from "../shared/duplicidadeDeNota";
 import { copiaQueFica, copiasQueSaem } from "../shared/copiaQueFica";
@@ -2395,6 +2396,42 @@ export async function ultimasNotasNoBacklog(limite = 10, vistosEm: Date | null =
     if (recentes.length === limite) break;
   }
   return recentes;
+}
+
+/**
+ * As notas recebidas sem agendamento prévio, no período, para o relatório e o
+ * dashboard. Só lê o que a consulta precisa: nada de XML nem de histórico.
+ */
+export async function listarRecebimentosSemAgendamento(input: { empresas?: EscopoDeEmpresas; inicio?: Date; fim?: Date } = {}) {
+  const db = await getDb();
+  if (!db) return [];
+  const daEmpresa = condicaoDaEmpresa(input.empresas);
+  const noPeriodo = [
+    ...(input.inicio ? [gte(appointments.receivedAt, input.inicio)] : []),
+    ...(input.fim ? [lte(appointments.receivedAt, input.fim)] : []),
+  ];
+  return db
+    .select({
+      id: appointments.id,
+      invoiceNumber: appointments.invoiceNumber,
+      fornecedor: appointments.invoiceSupplierName,
+      recipientCnpj: appointments.recipientCnpj,
+      purchaseOrder: appointments.purchaseOrder,
+      status: appointments.status,
+      receivedAt: appointments.receivedAt,
+      invoiceTotalCents: appointments.invoiceTotalCents,
+      invoiceVolumeCount: appointments.invoiceVolumeCount,
+    })
+    .from(appointments)
+    .where(and(
+      eq(appointments.semAgendamento, true),
+      inArray(appointments.status, [...STATUS_RECEBIDOS_SEM_AGENDA]),
+      isNotNull(appointments.receivedAt),
+      ...(daEmpresa ? [daEmpresa] : []),
+      ...noPeriodo,
+    ))
+    .orderBy(desc(appointments.receivedAt))
+    .limit(10_000);
 }
 
 export async function listBacklogReportRows(empresas: EscopoDeEmpresas = null) {

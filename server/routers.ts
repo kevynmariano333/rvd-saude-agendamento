@@ -27,6 +27,7 @@ import {
   getAppointmentById,
   entregasMarcadasNoDia,
   sugestoesPendentesNoDia,
+  listarRecebimentosSemAgendamento,
   getSuggestionById,
   getUserByCompanyCnpj,
   getUserByEmail,
@@ -166,6 +167,7 @@ import {
 import { ehSomenteLeitura } from "./permissions";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
 import { horarioSugeridoPorOutro } from "../shared/sugestoesEmAberto";
+import { notaSemAgendamento, resumoSemAgendamento, type NotaSemAgendamento } from "../shared/recebimentoSemAgendamento";
 import { buildAttendanceMetrics } from "./attendanceMetrics";
 import {
   attendanceActionOwner,
@@ -2219,6 +2221,22 @@ export const appRouter = router({
       assertSchedulingDesk(ctx.user.role);
       return listBacklogReportRows(empresasDoUsuario(ctx.user));
     }),
+    /**
+     * As notas recebidas sem agendamento prévio, no período, com o resumo para o
+     * dashboard. Cada empresa vê só as próprias notas.
+     */
+    semAgendamento: protectedProcedure
+      .input(z.object({ desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        assertSchedulingDesk(ctx.user.role);
+        const linhas = await listarRecebimentosSemAgendamento({
+          empresas: empresasDoUsuario(ctx.user),
+          inicio: input?.desde ? new Date(`${input.desde}T00:00:00-03:00`) : undefined,
+          fim: input?.ate ? new Date(`${input.ate}T23:59:59.999-03:00`) : undefined,
+        });
+        const notas = linhas.map(notaSemAgendamento).filter((nota): nota is NotaSemAgendamento => nota !== null);
+        return { notas, resumo: resumoSemAgendamento(notas) };
+      }),
   }),
   internalNotes: router({
     list: protectedProcedure

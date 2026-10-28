@@ -181,6 +181,7 @@ export default function PortalLayout({
       filhos: [
         { label: "Notas lançadas", path: "/operador/relatorios" },
         ...(recursosDaEmpresa.temBacklog ? [{ label: "Backlog", path: "/operador/relatorios/backlog" }] : []),
+        { label: "Sem agendamento", path: "/operador/relatorios/sem-agendamento" },
         // Cadastro de parceiros, e não movimento do dia: fica com o administrador.
         ...(isAdmin ? [{ label: "Fornecedores cadastrados", path: "/operador/relatorios/fornecedores" }] : []),
       ],
