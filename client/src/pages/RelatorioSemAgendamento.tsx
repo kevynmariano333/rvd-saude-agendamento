@@ -189,10 +189,10 @@ function BarraEm3D(entrada: unknown) {
 
 /** O número do dia em cima da coluna empilhada, centralizado. */
 function TotalDoDia(entrada: unknown) {
-  const { x = 0, y = 0, width = 0, payload } = entrada as { x?: number; y?: number; width?: number; payload?: { total?: number } };
+  const { x = 0, y = 0, width = 0, value } = entrada as { x?: number; y?: number; width?: number; value?: number };
   return (
-    <text x={x + width / 2 + PROFUNDIDADE_3D / 2} y={y - PROFUNDIDADE_3D - 6} textAnchor="middle" fill="#1E2432" fontSize={12} fontWeight={800}>
-      {payload?.total ?? 0}
+    <text x={x + width / 2 + PROFUNDIDADE_3D / 2} y={y - PROFUNDIDADE_3D - 6} textAnchor="middle" style={{ fill: "var(--color-ink)" }} fontSize={12} fontWeight={800}>
+      {value ?? 0}
     </text>
   );
 }
