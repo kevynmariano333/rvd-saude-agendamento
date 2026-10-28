@@ -60,11 +60,9 @@ function diaCurto(data: string) {
 const NOME_DA_UNIDADE: Record<string, string> = { HSH: "Hospital", MSH: "Maternidade" };
 
 /** As cores de cada unidade no gráfico: a frente, a tampa de cima e a lateral, para dar volume. */
-const TONS_DA_UNIDADE: Record<string, { frente: string; topo: string; lateral: string }> = {
-  HSH: { frente: "#782078", topo: "#A24FA2", lateral: "#54155A" },
-  MSH: { frente: "#3E7F99", topo: "#6BAFC8", lateral: "#2C5F73" },
-};
-const TOM_PADRAO = { frente: "#8B93A6", topo: "#B0B7C6", lateral: "#636B7D" };
+/** As cores das unidades da Amil: azul forte para o Hospital, azul bebê para a Maternidade. */
+const COR_DA_UNIDADE: Record<string, string> = { HSH: "#4B2BFF", MSH: "#8DD3F5" };
+const COR_PADRAO = "#8B93A6";
 
 /** O número do dia em cima da coluna empilhada, centralizado. */
 function TotalDoDia(entrada: unknown) {
@@ -114,7 +112,7 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
                   title={oculta ? `Mostrar ${unidade}` : `Esconder ${unidade}`}
                   className={`inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 transition ${oculta ? "opacity-40" : ""}`}
                 >
-                  <span className="size-2.5 rounded-full" style={{ background: (TONS_DA_UNIDADE[unidade] ?? TOM_PADRAO).frente }} />
+                  <span className="size-2.5 rounded-full" style={{ background: COR_DA_UNIDADE[unidade] ?? COR_PADRAO }} />
                   {NOME_DA_UNIDADE[unidade] ?? unidade}
                   <span className="font-display text-sm font-extrabold text-ink">{resumo.porUnidade.find(item => item.unidade === unidade)?.quantidade ?? 0}</span>
                 </button>
@@ -131,7 +129,7 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
                 <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <Tooltip cursor={{ fill: "rgba(120,32,120,0.06)" }} />
                 {unidadesNoGrafico.map(unidade => (
-                  <Bar key={unidade} dataKey={unidade} name={unidade} stackId="dia" shape={BarraEm3D as never} fill={(TONS_DA_UNIDADE[unidade] ?? TOM_PADRAO).frente} maxBarSize={40} hide={unidadesOcultas.includes(unidade)}>
+                  <Bar key={unidade} dataKey={unidade} name={unidade} stackId="dia" shape={BarraEm3D as never} fill={COR_DA_UNIDADE[unidade] ?? COR_PADRAO} maxBarSize={40} hide={unidadesOcultas.includes(unidade)}>
                     {unidade === ultimaVisivel && <LabelList dataKey="total" content={TotalDoDia as never} />}
                   </Bar>
                 ))}

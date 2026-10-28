@@ -58,3 +58,17 @@ export function barraEm3DStyle(cor: string): CSSProperties {
     boxShadow: "inset 0 -2px 0 rgba(0,0,0,0.35), 0 3px 4px rgba(0,0,0,0.35)",
   };
 }
+
+/**
+ * O número em cima de uma coluna em 3D. Fica acima da tampa, e não em cima da
+ * face, que é onde o rótulo padrão do gráfico cai e sobrepõe o topo.
+ */
+export function RotuloEm3D(entrada: unknown) {
+  const { x = 0, y = 0, width = 0, value } = entrada as { x?: number; y?: number; width?: number; value?: number | string };
+  if (!value) return null;
+  return (
+    <text x={x + width / 2 + PROFUNDIDADE_3D / 2} y={y - PROFUNDIDADE_3D - 4} textAnchor="middle" style={{ fill: "var(--color-ink)" }} fontSize={11} fontWeight={800}>
+      {value}
+    </text>
+  );
+}
