@@ -36,14 +36,26 @@ export type NotaSemAgendamento = {
   volumes: number | null;
 };
 
+/** Um fornecedor dentro de uma unidade, com a parte dele no total da unidade. */
+export type FornecedorNaUnidade = { fornecedor: string; quantidade: number; percentual: number };
+
+/** O ranking de uma unidade: quantas notas e quem as mandou, do maior para o menor. */
+export type RankingDaUnidade = { unidade: string; total: number; fornecedores: FornecedorNaUnidade[] };
+
 export type ResumoSemAgendamento = {
   total: number;
   porDia: { data: string; quantidade: number }[];
+  /** Cada dia com a contagem por unidade, para o gráfico empilhado. */
+  porDiaEUnidade: { data: string; total: number; unidades: Record<string, number> }[];
   porUnidade: { unidade: string; quantidade: number }[];
   porFornecedor: { fornecedor: string; quantidade: number }[];
+  /** HSH e MSH primeiro, depois as outras unidades. Cada uma com o seu ranking. */
+  ranking: RankingDaUnidade[];
 };
 
 const SEM_UNIDADE = "Sem unidade";
+/** A ordem da organização: as duas unidades da Amil primeiro, o resto depois. */
+const UNIDADES_PRINCIPAIS = ["HSH", "MSH"];
 
 /** A linha como o relatório mostra, ou null se ela não é uma nota recebida sem agenda. */
 export function notaSemAgendamento(linha: LinhaSemAgendamento): NotaSemAgendamento | null {
@@ -63,21 +75,55 @@ export function notaSemAgendamento(linha: LinhaSemAgendamento): NotaSemAgendamen
   };
 }
 
-/** Os totais para o dashboard: quantas no período, em que dia e em que unidade. */
+/** A ordem das unidades: HSH e MSH na frente, as outras depois, pelo volume. */
+function ordenarUnidades(unidades: string[], total: Map<string, number>) {
+  return [...unidades].sort((a, b) => {
+    const pa = UNIDADES_PRINCIPAIS.indexOf(a);
+    const pb = UNIDADES_PRINCIPAIS.indexOf(b);
+    if (pa !== -1 || pb !== -1) return (pa === -1 ? Infinity : pa) - (pb === -1 ? Infinity : pb);
+    return (total.get(b) ?? 0) - (total.get(a) ?? 0);
+  });
+}
+
+const umDecimal = (valor: number) => Math.round(valor * 10) / 10;
+
+/** Os totais para o dashboard e para a planilha: quantas no período, em que dia, de que unidade e de quem. */
 export function resumoSemAgendamento(notas: NotaSemAgendamento[]): ResumoSemAgendamento {
   const porDia = new Map<string, number>();
+  const porDiaEUnidade = new Map<string, { total: number; unidades: Record<string, number> }>();
   const porUnidade = new Map<string, number>();
   const porFornecedor = new Map<string, number>();
+  const porUnidadeEFornecedor = new Map<string, Map<string, number>>();
   for (const nota of notas) {
     const dia = formatSaoPauloDateKey(new Date(nota.recebidoEm));
     porDia.set(dia, (porDia.get(dia) ?? 0) + 1);
+    const do_dia = porDiaEUnidade.get(dia) ?? { total: 0, unidades: {} };
+    do_dia.total += 1;
+    do_dia.unidades[nota.unidade] = (do_dia.unidades[nota.unidade] ?? 0) + 1;
+    porDiaEUnidade.set(dia, do_dia);
     porUnidade.set(nota.unidade, (porUnidade.get(nota.unidade) ?? 0) + 1);
     porFornecedor.set(nota.fornecedor, (porFornecedor.get(nota.fornecedor) ?? 0) + 1);
+    const deFornecedor = porUnidadeEFornecedor.get(nota.unidade) ?? new Map<string, number>();
+    deFornecedor.set(nota.fornecedor, (deFornecedor.get(nota.fornecedor) ?? 0) + 1);
+    porUnidadeEFornecedor.set(nota.unidade, deFornecedor);
   }
+
+  const ranking: RankingDaUnidade[] = ordenarUnidades(Array.from(porUnidadeEFornecedor.keys()), porUnidade).map(unidade => {
+    const fornecedores = porUnidadeEFornecedor.get(unidade) ?? new Map<string, number>();
+    const total = porUnidade.get(unidade) ?? 0;
+    return {
+      unidade,
+      total,
+      fornecedores: Array.from(fornecedores, ([fornecedor, quantidade]) => ({ fornecedor, quantidade, percentual: umDecimal((quantidade / total) * 100) })).sort((a, b) => b.quantidade - a.quantidade),
+    };
+  });
+
   return {
     total: notas.length,
     porDia: Array.from(porDia, ([data, quantidade]) => ({ data, quantidade })).sort((a, b) => a.data.localeCompare(b.data)),
-    porUnidade: Array.from(porUnidade, ([unidade, quantidade]) => ({ unidade, quantidade })).sort((a, b) => b.quantidade - a.quantidade),
+    porDiaEUnidade: Array.from(porDiaEUnidade, ([data, dia]) => ({ data, ...dia })).sort((a, b) => a.data.localeCompare(b.data)),
+    porUnidade: ordenarUnidades(Array.from(porUnidade.keys()), porUnidade).map(unidade => ({ unidade, quantidade: porUnidade.get(unidade) ?? 0 })),
     porFornecedor: Array.from(porFornecedor, ([fornecedor, quantidade]) => ({ fornecedor, quantidade })).sort((a, b) => b.quantidade - a.quantidade),
+    ranking,
   };
 }

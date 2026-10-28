@@ -77,6 +77,39 @@ describe("resumoSemAgendamento", () => {
   });
 
   it("sem notas, o resumo é zero", () => {
-    expect(resumoSemAgendamento([])).toEqual({ total: 0, porDia: [], porUnidade: [], porFornecedor: [] });
+    expect(resumoSemAgendamento([])).toEqual({ total: 0, porDia: [], porDiaEUnidade: [], porUnidade: [], porFornecedor: [], ranking: [] });
+  });
+
+  it("organiza o ranking por unidade, HSH e MSH primeiro, com a parte de cada fornecedor", () => {
+    const MSH = "43293604002120";
+    const notas = [
+      notaSemAgendamento(linha({ id: 1, fornecedor: "Cremer", recipientCnpj: HSH })),
+      notaSemAgendamento(linha({ id: 2, fornecedor: "Biolab", recipientCnpj: HSH })),
+      notaSemAgendamento(linha({ id: 3, fornecedor: "Biolab", recipientCnpj: HSH })),
+      notaSemAgendamento(linha({ id: 4, fornecedor: "Cremer", recipientCnpj: MSH })),
+      notaSemAgendamento(linha({ id: 5, fornecedor: "Cremer", recipientCnpj: RVD })),
+    ].filter((nota): nota is NonNullable<typeof nota> => nota !== null);
+    const { ranking } = resumoSemAgendamento(notas);
+    expect(ranking.map(item => item.unidade)).toEqual(["HSH", "MSH", "RVD"]);
+    expect(ranking[0]).toEqual({
+      unidade: "HSH",
+      total: 3,
+      fornecedores: [
+        { fornecedor: "Biolab", quantidade: 2, percentual: 66.7 },
+        { fornecedor: "Cremer", quantidade: 1, percentual: 33.3 },
+      ],
+    });
+  });
+
+  it("separa cada dia por unidade para o gráfico empilhado", () => {
+    const MSH = "43293604002120";
+    const notas = [
+      notaSemAgendamento(linha({ id: 1, recipientCnpj: HSH })),
+      notaSemAgendamento(linha({ id: 2, recipientCnpj: MSH })),
+      notaSemAgendamento(linha({ id: 3, recipientCnpj: MSH })),
+    ].filter((nota): nota is NonNullable<typeof nota> => nota !== null);
+    expect(resumoSemAgendamento(notas).porDiaEUnidade).toEqual([
+      { data: "2026-10-21", total: 3, unidades: { HSH: 1, MSH: 2 } },
+    ]);
   });
 });
