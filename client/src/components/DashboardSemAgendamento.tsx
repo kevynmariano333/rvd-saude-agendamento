@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
-import type React from "react";
 import { useState } from "react";
+import { BarraEm3D, barraEm3DStyle, PROFUNDIDADE_3D } from "@/components/BarraEm3D";
 import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { Building2, FileWarning } from "lucide-react";
 import { useLocation } from "wouter";
@@ -65,29 +65,6 @@ const TONS_DA_UNIDADE: Record<string, { frente: string; topo: string; lateral: s
   MSH: { frente: "#3E7F99", topo: "#6BAFC8", lateral: "#2C5F73" },
 };
 const TOM_PADRAO = { frente: "#8B93A6", topo: "#B0B7C6", lateral: "#636B7D" };
-/** Quanto a barra "sai" para trás, em pixels: é isso que dá a cara de 3D. */
-const PROFUNDIDADE_3D = 7;
-
-/**
- * Uma barra com volume: a face da frente, a tampa de cima e a lateral.
- *
- * O Recharts não desenha 3D de verdade. Esta forma imita: a face da frente é a
- * barra, e a tampa e a lateral são polígonos mais claro e mais escuro por cima e
- * ao lado, saindo para trás.
- */
-function BarraEm3D(entrada: unknown) {
-  const { x = 0, y = 0, width = 0, height = 0, dataKey = "" } = entrada as { x?: number; y?: number; width?: number; height?: number; dataKey?: string };
-  if (!width || !height || height <= 0) return null;
-  const tom = TONS_DA_UNIDADE[dataKey] ?? TOM_PADRAO;
-  const d = PROFUNDIDADE_3D;
-  return (
-    <g>
-      <polygon points={`${x},${y} ${x + d},${y - d} ${x + width + d},${y - d} ${x + width},${y}`} fill={tom.topo} />
-      <polygon points={`${x + width},${y} ${x + width + d},${y - d} ${x + width + d},${y + height - d} ${x + width},${y + height}`} fill={tom.lateral} />
-      <rect x={x} y={y} width={width} height={height} fill={tom.frente} />
-    </g>
-  );
-}
 
 /** O número do dia em cima da coluna empilhada, centralizado. */
 function TotalDoDia(entrada: unknown) {
@@ -156,7 +133,7 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
                 <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <Tooltip cursor={{ fill: "rgba(120,32,120,0.06)" }} />
                 {unidadesNoGrafico.map(unidade => (
-                  <Bar key={unidade} dataKey={unidade} name={unidade} stackId="dia" shape={BarraEm3D as never} maxBarSize={40} hide={unidadesOcultas.includes(unidade)}>
+                  <Bar key={unidade} dataKey={unidade} name={unidade} stackId="dia" shape={BarraEm3D as never} fill={(TONS_DA_UNIDADE[unidade] ?? TOM_PADRAO).frente} maxBarSize={40} hide={unidadesOcultas.includes(unidade)}>
                     {unidade === ultimaVisivel && <LabelList dataKey="total" content={TotalDoDia as never} />}
                   </Bar>
                 ))}
@@ -178,17 +155,6 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
       </section>
     </div>
   );
-}
-
-/**
- * Uma barra horizontal com volume: o topo mais claro, a base escura e uma
- * sombra embaixo, como as colunas em 3D do gráfico.
- */
-function barraEm3D(cor: string): React.CSSProperties {
-  return {
-    background: `linear-gradient(180deg, ${cor}ff 0%, ${cor}cc 55%, ${cor}99 100%)`,
-    boxShadow: `inset 0 -2px 0 rgba(0,0,0,0.35), 0 3px 4px rgba(0,0,0,0.35)`,
-  };
 }
 
 /** As cores de cada nível: verde para o bom, vermelho para o péssimo. */
@@ -225,7 +191,7 @@ function NiveisDosFornecedores({ niveis, selecionado, onEscolher }: { niveis: Ma
               >
                 <span className={`w-24 shrink-0 text-sm font-bold ${COR_DO_NIVEL[nivel]}`}>{nivel}</span>
                 <div className="h-2.5 flex-1 rounded-full bg-sunken">
-                  <div className="h-2.5 rounded-full" style={{ width: total ? `${Math.round((quantidade / total) * 100)}%` : "0%", ...barraEm3D(COR_HEX_DO_NIVEL[nivel]) }} />
+                  <div className="h-2.5 rounded-full" style={{ width: total ? `${Math.round((quantidade / total) * 100)}%` : "0%", ...barraEm3DStyle(COR_HEX_DO_NIVEL[nivel]) }} />
                 </div>
                 <span className="w-8 shrink-0 text-right font-display text-base font-extrabold text-ink">{quantidade}</span>
               </button>
@@ -259,7 +225,7 @@ function RankingDaUnidade({ grupo, niveis, selecionado }: { grupo: RankingDaUnid
               </span>
             </div>
             <div className="mt-2 h-1.5 rounded-full bg-sunken">
-              <div className="h-1.5 rounded-full" style={{ width: `${Math.round((item.quantidade / maior) * 100)}%`, ...barraEm3D(COR_HEX_DO_NIVEL[niveis.get(item.fornecedor) ?? "Ruim"]) }} />
+              <div className="h-1.5 rounded-full" style={{ width: `${Math.round((item.quantidade / maior) * 100)}%`, ...barraEm3DStyle(COR_HEX_DO_NIVEL[niveis.get(item.fornecedor) ?? "Ruim"]) }} />
             </div>
           </li>
         ))}
