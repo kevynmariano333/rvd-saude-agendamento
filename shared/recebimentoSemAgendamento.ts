@@ -53,6 +53,23 @@ export type ResumoSemAgendamento = {
   ranking: RankingDaUnidade[];
 };
 
+/**
+ * Os níveis do ranking de fornecedores, do pior para o melhor. Nota sem
+ * agendamento é falha de quem entrega, então quem mais manda sem agendar cai
+ * no Péssimo, e quem manda menos sobe até o Ótimo.
+ */
+export const NIVEIS_DO_FORNECEDOR = ["Péssimo", "Ruim", "Bom", "Ótimo"] as const;
+export type NivelDoFornecedor = (typeof NIVEIS_DO_FORNECEDOR)[number];
+
+/**
+ * O nível de um fornecedor pela posição no ranking (0 é o que mais manda). Os
+ * fornecedores são divididos em quatro faixas iguais, da primeira à última.
+ */
+export function nivelDoFornecedor(posicao: number, total: number): NivelDoFornecedor {
+  if (total <= 0) return NIVEIS_DO_FORNECEDOR[0];
+  return NIVEIS_DO_FORNECEDOR[Math.floor((posicao * NIVEIS_DO_FORNECEDOR.length) / total)];
+}
+
 const SEM_UNIDADE = "Sem unidade";
 /** A ordem da organização: as duas unidades da Amil primeiro, o resto depois. */
 const UNIDADES_PRINCIPAIS = ["HSH", "MSH"];
