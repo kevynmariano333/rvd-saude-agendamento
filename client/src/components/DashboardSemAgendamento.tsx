@@ -5,7 +5,7 @@ import { formatSaoPauloDateKey } from "@shared/dateFilters";
 import { Building2, FileWarning } from "lucide-react";
 import { useLocation } from "wouter";
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { NIVEIS_DO_FORNECEDOR, nivelDoFornecedor, type NivelDoFornecedor, type RankingDaUnidade, type ResumoSemAgendamento } from "@shared/recebimentoSemAgendamento";
+import type { RankingDaUnidade, ResumoSemAgendamento } from "@shared/recebimentoSemAgendamento";
 
 /** Quantos dias o painel olha quando ninguém escolheu período. */
 export const DIAS_PADRAO = 30;
@@ -78,9 +78,7 @@ function TotalDoDia(entrada: unknown) {
 
 export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSemAgendamento; periodo: { desde: string; ate: string } }) {
   const unidadesNoGrafico = resumo.porUnidade.map(item => item.unidade);
-  const niveis = new Map<string, NivelDoFornecedor>(resumo.porFornecedor.map((item, indice) => [item.fornecedor, nivelDoFornecedor(indice, resumo.porFornecedor.length)]));
   const [unidadesOcultas, setUnidadesOcultas] = useState<string[]>([]);
-  const [nivelSelecionado, setNivelSelecionado] = useState<NivelDoFornecedor | null>(null);
   const alternarUnidade = (unidade: string) =>
     setUnidadesOcultas(atuais => (atuais.includes(unidade) ? atuais.filter(item => item !== unidade) : [...atuais, unidade]));
   const unidadesVisiveis = unidadesNoGrafico.filter(unidade => !unidadesOcultas.includes(unidade));
@@ -146,8 +144,7 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        <NiveisDosFornecedores niveis={niveis} selecionado={nivelSelecionado} onEscolher={setNivelSelecionado} />
-        {resumo.ranking.length ? resumo.ranking.map(grupo => <RankingDaUnidade key={grupo.unidade} grupo={grupo} niveis={niveis} selecionado={nivelSelecionado} />) : (
+        {resumo.ranking.length ? resumo.ranking.map(grupo => <RankingDaUnidade key={grupo.unidade} grupo={grupo} />) : (
           <section className="panel p-5 shadow-sm sm:p-7 xl:col-span-2">
             <p className="text-sm text-ink-soft">Nenhum fornecedor no período.</p>
           </section>
@@ -157,54 +154,8 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
   );
 }
 
-/** As cores de cada nível: verde para o bom, vermelho para o péssimo. */
-const COR_DO_NIVEL: Record<NivelDoFornecedor, string> = { Ótimo: "text-state-go", Bom: "text-rvd-blue", Ruim: "text-state-wait", Péssimo: "text-state-stop" };
-const COR_HEX_DO_NIVEL: Record<NivelDoFornecedor, string> = { Ótimo: "#3BA56B", Bom: "#4F9CB8", Ruim: "#D9A441", Péssimo: "#C8453F" };
-
-/**
- * Quantos fornecedores caem em cada nível. Sem agendamento é falha de quem
- * entrega, então a lista vai do Ótimo, em cima, até o Péssimo, embaixo.
- */
-function NiveisDosFornecedores({ niveis, selecionado, onEscolher }: { niveis: Map<string, NivelDoFornecedor>; selecionado: NivelDoFornecedor | null; onEscolher: (nivel: NivelDoFornecedor | null) => void }) {
-  const contagem = new Map<NivelDoFornecedor, number>(NIVEIS_DO_FORNECEDOR.map(nivel => [nivel, 0]));
-  Array.from(niveis.values()).forEach(nivel => contagem.set(nivel, (contagem.get(nivel) ?? 0) + 1));
-  const total = niveis.size;
-  const ordem: NivelDoFornecedor[] = ["Péssimo", "Ruim", "Bom", "Ótimo"];
-  return (
-    <section className="panel p-5 shadow-sm sm:p-7 xl:col-span-2">
-      <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-faint">Classificação</p>
-      <h2 className="mt-1 font-display text-xl font-extrabold text-ink">Fornecedores por nível</h2>
-      <p className="mt-1 text-sm text-ink-soft">{total} fornecedor(es). O que mais manda sem agendamento cai no Péssimo.</p>
-      <ul className="mt-5 space-y-3">
-        {ordem.map(nivel => {
-          const quantidade = contagem.get(nivel) ?? 0;
-          const nomes = Array.from(niveis.entries()).filter(([, nivelDoItem]) => nivelDoItem === nivel).map(([nome]) => nome);
-          const ativo = selecionado === nivel;
-          return (
-            <li key={nivel}>
-              <button
-                type="button"
-                onClick={() => onEscolher(ativo ? null : nivel)}
-                aria-pressed={ativo}
-                title={nomes.length ? nomes.join("\n") : "Nenhum fornecedor neste nível"}
-                className={`flex w-full items-center gap-4 rounded-lg px-2 py-1 text-left transition ${selecionado && !ativo ? "opacity-40" : ""} ${ativo ? "bg-sunken" : "hover:bg-sunken"}`}
-              >
-                <span className={`w-24 shrink-0 text-sm font-bold ${COR_DO_NIVEL[nivel]}`}>{nivel}</span>
-                <div className="h-2.5 flex-1 rounded-full bg-sunken">
-                  <div className="h-2.5 rounded-full" style={{ width: total ? `${Math.round((quantidade / total) * 100)}%` : "0%", ...barraEm3DStyle(COR_HEX_DO_NIVEL[nivel]) }} />
-                </div>
-                <span className="w-8 shrink-0 text-right font-display text-base font-extrabold text-ink">{quantidade}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
-
 /** O ranking de uma unidade: quem mandou, a quantidade e a parte dela na unidade. */
-function RankingDaUnidade({ grupo, niveis, selecionado }: { grupo: RankingDaUnidade; niveis: Map<string, NivelDoFornecedor>; selecionado: NivelDoFornecedor | null }) {
+function RankingDaUnidade({ grupo }: { grupo: RankingDaUnidade }) {
   const maior = grupo.fornecedores[0]?.quantidade ?? 0;
   return (
     <section className="panel p-5 shadow-sm sm:p-7">
@@ -217,15 +168,15 @@ function RankingDaUnidade({ grupo, niveis, selecionado }: { grupo: RankingDaUnid
       </div>
       <ol className="mt-5 divide-y divide-line">
         {grupo.fornecedores.map((item, indice) => (
-          <li key={item.fornecedor} className={`py-3 first:pt-0 last:pb-0 transition ${selecionado && niveis.get(item.fornecedor) !== selecionado ? "opacity-30" : ""}`} title={`${item.fornecedor}: ${item.quantidade} nota(s) — ${niveis.get(item.fornecedor) ?? ""}`}>
+          <li key={item.fornecedor} className="py-3 first:pt-0 last:pb-0" title={`${item.fornecedor}: ${item.quantidade} nota(s)`}>
             <div className="flex items-center justify-between gap-4">
-              <span className="min-w-0 truncate text-sm font-bold text-rvd-plum">{indice + 1}. {item.fornecedor} <span className={`ml-1 text-[11px] font-bold ${COR_DO_NIVEL[niveis.get(item.fornecedor) ?? "Ruim"]}`}>{niveis.get(item.fornecedor)}</span></span>
+              <span className="min-w-0 truncate text-sm font-bold text-rvd-plum">{indice + 1}. {item.fornecedor}</span>
               <span className="shrink-0 text-right">
                 <span className="block font-display text-lg font-extrabold text-ink">{item.quantidade}</span>
               </span>
             </div>
             <div className="mt-2 h-1.5 rounded-full bg-sunken">
-              <div className="h-1.5 rounded-full" style={{ width: `${Math.round((item.quantidade / maior) * 100)}%`, ...barraEm3DStyle(COR_HEX_DO_NIVEL[niveis.get(item.fornecedor) ?? "Ruim"]) }} />
+              <div className="h-1.5 rounded-full" style={{ width: `${Math.round((item.quantidade / maior) * 100)}%`, ...barraEm3DStyle("#782078") }} />
             </div>
           </li>
         ))}

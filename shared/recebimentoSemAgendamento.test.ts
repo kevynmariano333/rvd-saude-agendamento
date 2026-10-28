@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nivelDoFornecedor, notaSemAgendamento, resumoSemAgendamento, type LinhaSemAgendamento } from "./recebimentoSemAgendamento";
+import { notaSemAgendamento, resumoSemAgendamento, type LinhaSemAgendamento } from "./recebimentoSemAgendamento";
 
 const HSH = "06033403000113";
 const RVD = "39283469000110";
@@ -111,16 +111,5 @@ describe("resumoSemAgendamento", () => {
     expect(resumoSemAgendamento(notas).porDiaEUnidade).toEqual([
       { data: "2026-10-21", total: 3, unidades: { HSH: 1, MSH: 2 } },
     ]);
-  });
-});
-
-describe("nivelDoFornecedor", () => {
-  it("com quatro fornecedores, cada um cai num nível: o que mais manda é Péssimo, o que menos manda é Ótimo", () => {
-    expect([0, 1, 2, 3].map(posicao => nivelDoFornecedor(posicao, 4))).toEqual(["Péssimo", "Ruim", "Bom", "Ótimo"]);
-  });
-
-  it("um fornecedor só é Péssimo, e dois ficam em Péssimo e Bom", () => {
-    expect(nivelDoFornecedor(0, 1)).toBe("Péssimo");
-    expect([0, 1].map(posicao => nivelDoFornecedor(posicao, 2))).toEqual(["Péssimo", "Bom"]);
   });
 });
