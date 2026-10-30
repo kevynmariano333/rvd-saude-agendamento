@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { notaEhUrgente, pedidoEhUrgente, pedidosDaNota } from "./purchaseOrders";
+import { mesmosPedidos, notaEhUrgente, pedidoEhUrgente, pedidoEhZerado, pedidosDaNota } from "./purchaseOrders";
 
 describe("pedidos de compra de uma nota", () => {
   it("devolve o pedido único como está", () => {
@@ -44,5 +44,20 @@ describe("urgência pelo número do pedido", () => {
   it("nota sem pedido não é urgente", () => {
     expect(notaEhUrgente(null)).toBe(false);
     expect(notaEhUrgente("")).toBe(false);
+  });
+});
+
+describe("pedidoEhZerado", () => {
+  it("reconhece o pedido feito só de zeros", () => {
+    expect(pedidoEhZerado("00000000")).toBe(true);
+    expect(pedidoEhZerado("4504748409")).toBe(false);
+    expect(pedidoEhZerado("")).toBe(false);
+  });
+});
+
+describe("mesmosPedidos", () => {
+  it("compara os números sem olhar a ordem", () => {
+    expect(mesmosPedidos(["1", "2"], ["2", "1"])).toBe(true);
+    expect(mesmosPedidos(["1"], ["1", "2"])).toBe(false);
   });
 });

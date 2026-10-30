@@ -30,3 +30,17 @@ export function pedidoEhUrgente(pedido: string): boolean {
 export function notaEhUrgente(valor: string | null | undefined): boolean {
   return pedidosDaNota(valor).some(pedidoEhUrgente);
 }
+
+/**
+ * Pedido feito só de zeros não é pedido: é o campo preenchido por preencher.
+ * A nota traz o número de verdade, e é ele que o recebimento confere.
+ */
+export function pedidoEhZerado(pedido: string): boolean {
+  const digitos = pedido.replace(/\D/g, "");
+  return digitos.length > 0 && /^0+$/.test(digitos);
+}
+
+/** Os mesmos pedidos, na mesma quantidade, em qualquer ordem? */
+export function mesmosPedidos(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every(numero => b.includes(numero));
+}

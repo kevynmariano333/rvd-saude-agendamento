@@ -143,7 +143,7 @@ import { executarBackup, procurarNotaEmBackup, restaurarNotaDoBackup } from "./b
 import { storageGetSignedUrl } from "./storage";
 import { decodificarCsv, importarAcervo } from "./agilizaImport";
 import { lerPedidosDoSap } from "./pedidosSap";
-import { pedidosDaNota as numerosDosPedidos } from "../shared/purchaseOrders";
+import { mesmosPedidos, pedidoEhZerado, pedidosDaNota as numerosDosPedidos } from "../shared/purchaseOrders";
 import { normalizeCnpj } from "./fiscalFilters";
 import { situacaoDasMigracoes } from "./_core/migrations";
 
@@ -1066,8 +1066,8 @@ export const appRouter = router({
         if (!pedidos.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe ao menos um pedido de compra." });
         // Dez dígitos é o formato do pedido no ERP; um número curto aqui vira
         // uma nota que ninguém consegue conferir depois.
-        const invalido = pedidos.find(pedido => pedido.length !== 10);
-        if (invalido) throw new TRPCError({ code: "BAD_REQUEST", message: `O pedido ${invalido} não tem 10 dígitos.` });
+        const invalido = pedidos.find(pedido => pedido.length !== 10 || pedidoEhZerado(pedido));
+        if (invalido) throw new TRPCError({ code: "BAD_REQUEST", message: `O pedido ${invalido} não é válido: precisa de 10 dígitos e não pode ser só zeros.` });
 
         // A nota de serviço era o único caminho sem conferência: número digitado
         // à mão, sem XML e sem chave, duas pessoas registrando a mesma nota do
@@ -1338,6 +1338,10 @@ export const appRouter = router({
         if (!purchaseOrder) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o número do pedido de compra da nota." });
         }
+        // Zeros não são um pedido: o campo precisa do número que está na nota.
+        if (numerosDosPedidos(purchaseOrder).some(pedidoEhZerado)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "O pedido não pode ser só zeros. Informe o número do pedido como está na nota." });
+        }
         // Vários pedidos são gravados num campo só; passar do limite cortaria o
         // último pela metade e a nota ficaria com um pedido que não existe.
         if (!pedidosCabem(input.purchaseOrder)) {
@@ -1353,6 +1357,12 @@ export const appRouter = router({
           invoice = parseInvoiceXml(content);
         } catch (error) {
           throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Não foi possível ler o XML." });
+        }
+        // O pedido segue a nota. Quando o XML traz o pedido, é esse número que vale,
+        // e o que o fornecedor digitou precisa ser o mesmo.
+        const pedidosDaNotaXml = numerosDosPedidos(invoice.purchaseOrder);
+        if (pedidosDaNotaXml.length && !mesmosPedidos(numerosDosPedidos(purchaseOrder), pedidosDaNotaXml)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `O pedido da nota é ${invoice.purchaseOrder}. Informe esse número, do jeito que está na nota.` });
         }
         // A dica existe porque o reenvio quase sempre tem a mesma causa: a nota
         // cobre mais de um pedido de compra e o fornecedor manda o mesmo XML
@@ -1381,7 +1391,7 @@ export const appRouter = router({
           // traz às vezes, e é este número que o Operador usa para achar a
           // compra. O do XML continua sendo lido para os recebimentos avulsos,
           // onde não há fornecedor na tela para digitar.
-          purchaseOrder,
+          purchaseOrder: invoice.purchaseOrder ?? purchaseOrder,
           invoiceSupplierName: invoice.supplierName,
           invoiceSupplierCnpj: invoice.supplierCnpj,
           recipientCnpj: invoice.recipientCnpj,
@@ -1548,8 +1558,8 @@ export const appRouter = router({
         }
         const pedidos = input.purchaseOrders.map(pedido => pedido.replace(/\D/g, "")).filter(Boolean);
         if (!pedidos.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe ao menos um pedido de compra." });
-        const invalido = pedidos.find(pedido => pedido.length !== 10);
-        if (invalido) throw new TRPCError({ code: "BAD_REQUEST", message: `O pedido ${invalido} não tem 10 dígitos.` });
+        const invalido = pedidos.find(pedido => pedido.length !== 10 || pedidoEhZerado(pedido));
+        if (invalido) throw new TRPCError({ code: "BAD_REQUEST", message: `O pedido ${invalido} não é válido: precisa de 10 dígitos e não pode ser só zeros.` });
         const purchaseOrder = pedidos.join(", ");
         if (!pedidosCabem(purchaseOrder)) throw new TRPCError({ code: "BAD_REQUEST", message: `Os pedidos não cabem em ${PURCHASE_ORDER_MAX} caracteres.` });
         return definirPedidoDaNota({
