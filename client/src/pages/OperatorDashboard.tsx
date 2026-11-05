@@ -838,7 +838,7 @@ function SuggestDialog({ item, open, onOpenChange, date, time, notes, onDate, on
           <div className="mt-5 space-y-5">
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="font-bold text-rvd-plum">Data</Label><Input type="date" value={date} onChange={event => onDate(event.target.value)} className="mt-2 h-12 border-line bg-surface text-rvd-plum" /></div>
-              <div className="sm:col-span-2"><Label className="font-bold text-rvd-plum">Horário</Label><SeletorDeHorario data={date} valor={time} onEscolher={onTime} appointmentId={item?.id} podeOcupar className="mt-2" /></div>
+              <div className="sm:col-span-2"><Label className="font-bold text-rvd-plum">Horário</Label><SeletorDeHorario data={date} valor={time} onEscolher={onTime} appointmentId={item?.id} podeOcupar semTrava className="mt-2" /></div>
             </div>
             {paradaEscolhida && (
               <p className="rounded-xl bg-state-stop-bg px-3 py-2 text-xs font-bold leading-5 text-state-stop">
