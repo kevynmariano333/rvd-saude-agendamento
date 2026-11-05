@@ -160,7 +160,6 @@ import {
   horariosDoDia,
   janelaDoDia,
   JANELA_POR_EXTENSO,
-  motivoDoHorarioOcupado,
 } from "../shared/horariosDaAgenda";
 import { ehSomenteLeitura } from "./permissions";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
@@ -339,14 +338,6 @@ async function assertHorarioLivre(input: {
       code: "BAD_REQUEST",
       message: `Escolha um dos horários de recebimento: ${JANELA_POR_EXTENSO}, de meia em meia hora.`,
     });
-  }
-  const entregas = await entregasMarcadasNoDia(dia);
-  // A nota entra na doca da empresa dela. O horário ocupado na da Amil continua
-  // livre na da RVD e na da LLT: elas recebem ao mesmo tempo.
-  const agenda = horariosDoDia({ dia, entregas, supplierIds: input.supplierIds, ignorar: input.appointmentId, doca: empresaDoCnpj(input.recipientCnpj) });
-  const escolhido = agenda.find(horario => horario.hora === hora);
-  if (escolhido?.situacao === "ocupado") {
-    throw new TRPCError({ code: "BAD_REQUEST", message: motivoDoHorarioOcupado(hora) });
   }
 }
 

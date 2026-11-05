@@ -2,10 +2,8 @@ import { trpc } from "@/lib/trpc";
 import {
   avisoDeHorarioOcupado,
   DIA_SEM_RECEBIMENTO,
-  DIA_SEM_VAGA,
   janelaDoDia,
   JANELA_POR_EXTENSO,
-  temVaga,
   type HorarioDaAgenda,
 } from "@shared/horariosDaAgenda";
 import { Clock3, Lock } from "lucide-react";
@@ -63,17 +61,6 @@ export default function SeletorDeHorario({
     { enabled: Boolean(data) && !fechado },
   );
 
-  // Trocar de dia pode tornar inválida a hora já escolhida: 10:00 estava livre
-  // na terça e está tomada na quarta. Sem isto a pílula continua pintada como
-  // escolhida, a pessoa confirma, e só então o servidor recusa — com a culpa
-  // parecendo dela. Quem pode marcar por cima mantém a escolha: para a mesa
-  // não é erro, é decisão.
-  const escolhidoAgora = agenda.data?.find(horario => horario.hora === valor);
-  const perdeuAVaga = Boolean(valor) && !podeOcupar && escolhidoAgora?.situacao === "ocupado";
-  useEffect(() => {
-    if (perdeuAVaga) onEscolher("");
-  }, [perdeuAVaga, onEscolher]);
-
   if (!data) {
     return (
       <p className={`rounded-xl px-3 py-2.5 text-xs font-semibold ${naCapa ? "bg-white/10 text-white/85" : "bg-sunken text-ink-soft"} ${className}`}>
@@ -107,14 +94,10 @@ export default function SeletorDeHorario({
     );
   }
 
-  // O dia cheio é o caso que o campo livre nunca contou: sem isto, a pessoa
-  // tenta horário por horário até desistir.
-  const lotado = !temVaga(horarios) && !podeOcupar;
-
   function escolher(horario: HorarioDaAgenda) {
     if (somenteLeitura) return;
-    if (horario.situacao !== "ocupado") return onEscolher(horario.hora);
-    if (!podeOcupar) return;
+    // Para o fornecedor, o horário ocupado também pode ser pedido: a mesa decide.
+    if (horario.situacao !== "ocupado" || !podeOcupar) return onEscolher(horario.hora);
     // A pergunta é o pedido do balcão: marcar em cima de outro fornecedor
     // pode, desde que ninguém faça isso sem perceber.
     if (window.confirm(avisoDeHorarioOcupado(horario))) onEscolher(horario.hora);
@@ -122,16 +105,9 @@ export default function SeletorDeHorario({
 
   return (
     <div className={className}>
-      {lotado && (
-        <p className={`mb-2 rounded-xl px-3 py-2.5 text-xs font-bold leading-5 ${naCapa ? "bg-state-stop text-white" : "bg-state-stop-bg text-state-stop"}`}>
-          {DIA_SEM_VAGA}
-        </p>
-      )}
       <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
         {horarios.map(horario => {
           const escolhido = horario.hora === valor;
-          // Ocupado por outro só a mesa abre.
-          const bloqueado = horario.situacao === "ocupado" && !podeOcupar;
           const titulo = horario.situacao === "ocupado"
             ? horario.fornecedores.length
               ? `Ocupado — ${horario.fornecedores.join(", ")}`
@@ -144,14 +120,14 @@ export default function SeletorDeHorario({
               key={horario.hora}
               type="button"
               title={titulo}
-              disabled={bloqueado || somenteLeitura}
+              disabled={somenteLeitura}
               onClick={() => escolher(horario)}
               className={`relative rounded-xl border px-2 py-2 text-[13px] font-bold tabular-nums transition ${
                 escolhido
                   ? naCapa
                     ? "border-white bg-rvd-blue text-rvd-plum"
                     : "border-rvd-plum bg-brand text-white"
-                  : horario.situacao === "ocupado"
+                  : horario.situacao === "ocupado" && podeOcupar
                     ? naCapa
                       ? "border-white/25 bg-white/10 text-white/60 line-through"
                       : "border-state-stop/30 bg-state-stop-bg text-state-stop line-through"
@@ -160,10 +136,10 @@ export default function SeletorDeHorario({
                       : naCapa
                         ? "border-white/40 bg-surface text-rvd-plum hover:bg-rvd-blue-pale"
                         : "border-line bg-surface text-rvd-plum hover:bg-rvd-plum-pale"
-              } ${bloqueado ? "cursor-not-allowed" : ""}`}
+              }`}
             >
               {horario.hora}
-              {horario.situacao === "ocupado" && !escolhido && (
+              {horario.situacao === "ocupado" && podeOcupar && !escolhido && (
                 <Lock aria-hidden className="absolute right-1 top-1 size-2.5" />
               )}
             </button>
@@ -175,10 +151,12 @@ export default function SeletorDeHorario({
           <Clock3 className="size-3" />
           Neste dia, das {horarios[0]?.hora} às {horarios[horarios.length - 1]?.hora}
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className={`size-2.5 rounded border ${naCapa ? "border-white/30 bg-white/15" : "border-state-stop/40 bg-state-stop-bg"}`} />
-          Indisponível
-        </span>
+        {podeOcupar && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className={`size-2.5 rounded border ${naCapa ? "border-white/30 bg-white/15" : "border-state-stop/40 bg-state-stop-bg"}`} />
+            Indisponível
+          </span>
+        )}
         <span className="inline-flex items-center gap-1.5">
           <span className="size-2.5 rounded border border-rvd-blue bg-rvd-blue-pale" />
           Sua entrega
