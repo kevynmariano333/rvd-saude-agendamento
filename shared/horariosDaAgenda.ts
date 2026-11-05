@@ -55,13 +55,7 @@ export type SituacaoDoHorario =
   /** Quem está marcado é o próprio fornecedor: pode juntar a carga. */
   | "proprio"
   /** Outro fornecedor ocupou: o fornecedor não escolhe, o operador escolhe avisado. */
-  | "ocupado"
-  /**
-   * Livre, mas o fornecedor já tem entrega neste dia em outro horário: ele junta
-   * a carga naquele ou escolhe outro dia. Dois caminhões do mesmo fornecedor no
-   * mesmo dia ocupam a doca duas vezes para entregar o que cabia em uma.
-   */
-  | "outro_horario";
+  | "ocupado";
 
 export type HorarioDaAgenda = {
   /** "08:30" — o mesmo formato que o input type="time" usa. */
@@ -176,11 +170,6 @@ export function horariosDoDia(input: {
   entregas: EntregaMarcada[];
   supplierIds?: number[] | null;
   /**
-   * Quem pede só pode ficar no horário que já tem no dia (o fornecedor). A mesa
-   * não: ela decide com o aviso na mão e pode abrir outro horário.
-   */
-  soNoHorarioDele?: boolean;
-  /**
    * A nota que está recebendo a data. A entrega dela não conta: o fornecedor que
    * move a nota das 10h para as 11h não está abrindo um segundo horário, está
    * trocando o único que tem.
@@ -206,10 +195,6 @@ export function horariosDoDia(input: {
   const proprios = new Set(input.supplierIds ?? []);
   const doDia = input.ignorar === undefined ? input.entregas : input.entregas.filter(entrega => entrega.appointmentId !== input.ignorar);
   // Os horários em que o fornecedor já tem entrega marcada neste dia.
-  const horasDele = new Set(
-    doDia.filter(entrega => proprios.has(entrega.supplierId)).map(entrega => horaEmSaoPaulo(entrega.quando)).filter(Boolean),
-  );
-  const fixoNoDele = Boolean(input.soNoHorarioDele) && horasDele.size > 0;
   const porHorario = new Map<string, EntregaMarcada[]>();
   for (const entrega of doDia) {
     const hora = horaEmSaoPaulo(entrega.quando);
@@ -240,9 +225,7 @@ export function horariosDoDia(input: {
       ? "ocupado"
       : temOProprio
         ? "proprio"
-        : fixoNoDele
-          ? "outro_horario"
-          : "livre";
+        : "livre";
     // Nome repetido é a mesma empresa com duas notas: a tela diria "Amil, Amil".
     // Só de quem está na doca consultada: o nome de quem entrega em outra empresa
     // não atravessa.
@@ -254,17 +237,6 @@ export function horariosDoDia(input: {
 /** Sobrou algum horário para este fornecedor marcar neste dia? */
 export function temVaga(horarios: HorarioDaAgenda[]): boolean {
   return horarios.some(horario => horario.situacao === "livre" || horario.situacao === "proprio");
-}
-
-/** Os horários em que quem pede já tem entrega no dia, em ordem. */
-export function horariosDoProprio(horarios: HorarioDaAgenda[]): string[] {
-  return horarios.filter(horario => horario.situacao === "proprio").map(horario => horario.hora);
-}
-
-/** O que o fornecedor lê quando já tem horário no dia e tenta abrir outro. */
-export function motivoDoOutroHorario(horariosDele: string[]): string {
-  const quando = horariosDele.length === 1 ? `às ${horariosDele[0]}` : `às ${horariosDele.join(" e ")}`;
-  return `Você já tem entrega neste dia ${quando}. Junte a carga nesse horário ou escolha outro dia.`;
 }
 
 /** O recado de quando o dia inteiro está tomado. */

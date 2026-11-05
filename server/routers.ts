@@ -158,11 +158,9 @@ import {
   horaEmSaoPaulo,
   horarioDaJanela,
   horariosDoDia,
-  horariosDoProprio,
   janelaDoDia,
   JANELA_POR_EXTENSO,
   motivoDoHorarioOcupado,
-  motivoDoOutroHorario,
 } from "../shared/horariosDaAgenda";
 import { ehSomenteLeitura } from "./permissions";
 import { formatSaoPauloDateKey } from "../shared/dateFilters";
@@ -345,14 +343,10 @@ async function assertHorarioLivre(input: {
   const entregas = await entregasMarcadasNoDia(dia);
   // A nota entra na doca da empresa dela. O horário ocupado na da Amil continua
   // livre na da RVD e na da LLT: elas recebem ao mesmo tempo.
-  const agenda = horariosDoDia({ dia, entregas, supplierIds: input.supplierIds, soNoHorarioDele: true, ignorar: input.appointmentId, doca: empresaDoCnpj(input.recipientCnpj) });
+  const agenda = horariosDoDia({ dia, entregas, supplierIds: input.supplierIds, ignorar: input.appointmentId, doca: empresaDoCnpj(input.recipientCnpj) });
   const escolhido = agenda.find(horario => horario.hora === hora);
   if (escolhido?.situacao === "ocupado") {
     throw new TRPCError({ code: "BAD_REQUEST", message: motivoDoHorarioOcupado(hora) });
-  }
-  // O fornecedor que já tem horário no dia fica nele — ou escolhe outro dia.
-  if (escolhido?.situacao === "outro_horario") {
-    throw new TRPCError({ code: "BAD_REQUEST", message: motivoDoOutroHorario(horariosDoProprio(agenda)) });
   }
 }
 
@@ -1639,7 +1633,6 @@ export const appRouter = router({
           entregas,
           sugestoes,
           supplierIds: await supplierScopeIds(doFornecedor),
-          soNoHorarioDele: !isSchedulingDesk(ctx.user.role),
           ignorar: input.appointmentId,
           doca: recipientCnpj ? empresaDoCnpj(recipientCnpj) : null,
         });
