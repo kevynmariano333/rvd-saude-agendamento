@@ -100,6 +100,8 @@ import {
   itensDoPedido,
   setUserRole,
   setUserEmpresas,
+  salvarInscricaoDePush,
+  removerInscricaoDePush,
 } from "./db";
 import { supplierNameRule } from "../shared/attendanceFields";
 import { canApplySuggestion, canMoveAppointmentStatus, canRequestAppointment, canRescueAppointment, canScheduleAppointment, canSuggestSchedule, canTransitionAppointment, canTreatBacklog, isOperator, isSchedulingDesk } from "./permissions";
@@ -150,6 +152,7 @@ import { situacaoDasMigracoes } from "./_core/migrations";
 /** Uma importação de acervo por vez em todo o servidor. Ver a rota abaixo. */
 let importacaoEmCurso = false;
 import { normalizePurchaseOrder, pedidosCabem, PURCHASE_ORDER_MAX } from "./purchaseOrder";
+import { avisarSolicitacaoDaPortaria, configuracaoDoAviso } from "./notificacoesPush";
 import { MIRO_DIGITS, normalizeMiroNumber } from "../shared/miro";
 import { buildDashboardMetrics } from "./dashboardMetrics";
 import { motivoDaRecusa, paradaNoDia } from "../shared/paradaDoEstoque";
@@ -2086,6 +2089,24 @@ export const appRouter = router({
         return { success: true, avisado } as const;
       }),
   }),
+  push: router({
+    /** A chave pública do aviso: o navegador precisa dela para se inscrever. Não é segredo. */
+    chaveDoAviso: publicProcedure.query(() => configuracaoDoAviso()?.publicKey ?? null),
+    /** Quem decide a liberação pode pedir aviso neste aparelho. */
+    inscrever: protectedProcedure
+      .input(z.object({ endpoint: z.string().url().max(600), p256dh: z.string().min(1).max(200), auth: z.string().min(1).max(100) }))
+      .mutation(async ({ ctx, input }) => {
+        if (!canManageOperation(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Só a Operação recebe avisos da portaria." });
+        await salvarInscricaoDePush({ userId: ctx.user.id, ...input });
+        return { success: true } as const;
+      }),
+    cancelar: protectedProcedure
+      .input(z.object({ endpoint: z.string().max(600) }))
+      .mutation(async ({ ctx, input }) => {
+        await removerInscricaoDePush(input.endpoint, ctx.user.id);
+        return { success: true } as const;
+      }),
+  }),
   messages: router({
     list: protectedProcedure
       .input(z.object({ appointmentId: z.number().int().positive() }))
@@ -2387,7 +2408,10 @@ export const appRouter = router({
         // Onde o campo não aparece na tela, um valor só chegaria por chamada
         // forjada — e gravaria um fornecedor que a Portaria nunca digitou.
         const supplierName = supplierRule === "oculto" ? null : (input.supplierName ?? null);
-        return createAttendance({ ...input, supplierName, createdById: ctx.user.id });
+        const chegada = await createAttendance({ ...input, supplierName, createdById: ctx.user.id });
+        // A chegada já está gravada: o aviso vai por fora, e falha sem afetar a portaria.
+        void avisarSolicitacaoDaPortaria({ placa: input.licensePlate, fornecedor: supplierName ?? input.driverName }).catch(() => undefined);
+        return chegada;
       }),
     // Quem decide o recebimento é a Operação: a Portaria registra a chegada e
     // envia o caminhão para a decisão de quem vai receber a carga.

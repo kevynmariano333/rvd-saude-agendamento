@@ -667,3 +667,21 @@ export const feedbacks = mysqlTable(
   },
   table => [index("feedbacks_recentes_idx").on(table.createdAt), index("feedbacks_nao_lidos_idx").on(table.lidoEm, table.createdAt)]
 );
+
+/**
+ * Os aparelhos que pediram aviso de solicitação da portaria. Cada navegador
+ * instalado tem o seu endpoint; o aviso vai para todos os aparelhos da equipe
+ * que decide a liberação no portão.
+ */
+export const pushSubscriptions = mysqlTable(
+  "push_subscriptions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    endpoint: varchar("endpoint", { length: 600 }).notNull().unique(),
+    p256dh: varchar("p256dh", { length: 200 }).notNull(),
+    auth: varchar("auth", { length: 100 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [index("push_subscriptions_user_idx").on(table.userId)],
+);

@@ -358,6 +358,13 @@
       "when": 1792704987189,
       "tag": "0050_leitura_por_pessoa",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "5",
+      "when": 1793977793884,
+      "tag": "0051_push_subscriptions",
+      "breakpoints": true
     }
   ]
 }

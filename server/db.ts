@@ -15,6 +15,7 @@ import {
   attendanceEvents,
   attendances,
   passwordResetTokens,
+  pushSubscriptions,
   type AppointmentSource,
   type AppointmentStatus,
   type AttendanceClassification,
@@ -3584,4 +3585,34 @@ export async function marcarFeedbackLido(input: { feedbackId: number; adminId: n
     .update(feedbacks)
     .set(input.lido ? { lidoEm: new Date(), lidoPor: input.adminId } : { lidoEm: null, lidoPor: null })
     .where(eq(feedbacks.id, input.feedbackId));
+}
+
+/**
+ * Guarda o aparelho que pediu aviso. O mesmo endpoint não se repete: reinscrever
+ * o navegador troca o registro antigo, e não duplica.
+ */
+export async function salvarInscricaoDePush(input: { userId: number; endpoint: string; p256dh: string; auth: string }) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, input.endpoint));
+  await db.insert(pushSubscriptions).values(input);
+}
+
+/** Tira o aparelho da lista. Com `userId`, só a própria conta consegue tirar o seu. */
+export async function removerInscricaoDePush(endpoint: string, userId?: number) {
+  const db = await getDb();
+  if (!db) return;
+  const condicao = userId === undefined ? eq(pushSubscriptions.endpoint, endpoint) : and(eq(pushSubscriptions.endpoint, endpoint), eq(pushSubscriptions.userId, userId));
+  await db.delete(pushSubscriptions).where(condicao);
+}
+
+/** Os aparelhos das contas liberadas que atendem a Operação. */
+export async function listarInscricoesDaOperacao(papeis: readonly UserRole[]) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({ endpoint: pushSubscriptions.endpoint, p256dh: pushSubscriptions.p256dh, auth: pushSubscriptions.auth })
+    .from(pushSubscriptions)
+    .innerJoin(users, eq(pushSubscriptions.userId, users.id))
+    .where(and(inArray(users.role, [...papeis]), eq(users.accessStatus, "approved")));
 }

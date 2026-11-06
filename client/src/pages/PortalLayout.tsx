@@ -37,6 +37,7 @@ import {
   X,
   type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import AvisosDePortaria from "@/components/AvisosDePortaria";
 import { toast } from "sonner";
 import { useTheme, type ThemeChoice } from "../contexts/ThemeContext";
 import ChangeNameDialog from "../components/ChangeNameDialog";
@@ -397,6 +398,7 @@ export default function PortalLayout({
             >
               {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
             </button>
+            <AvisosDePortaria visivel={canApproveEntries} />
             <button
               onClick={() => {
                 setNotificationsOpen(value => !value);
