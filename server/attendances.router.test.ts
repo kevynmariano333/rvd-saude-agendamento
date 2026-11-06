@@ -341,6 +341,12 @@ describe("perfis internos", () => {
     expect(mocks.setUserAccessStatus).toHaveBeenCalledWith({ userId: 31, accessStatus: "rejected" });
   });
 
+  it("o administrador pode mudar uma conta para Fornecedor", async () => {
+    mocks.getUserById.mockResolvedValue({ id: 31, role: "operator", accessStatus: "approved" });
+    await appRouter.createCaller(context("admin")).staff.setRole({ userId: 31, role: "supplier" });
+    expect(mocks.setUserRole).toHaveBeenCalledWith({ userId: 31, role: "supplier" });
+  });
+
   it("impede o administrador de rebaixar a própria conta", async () => {
     await expect(
       appRouter.createCaller(context("admin", 7)).staff.setRole({ userId: 7, role: "operacao" })

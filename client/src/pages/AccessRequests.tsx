@@ -32,7 +32,7 @@ type PendingRequest = {
 };
 
 /** Perfis internos que o administrador pode atribuir a uma conta já existente. */
-const assignableRoles = ["admin", "operator", "planejador", "planejador_leitura", "portaria"] as const;
+const assignableRoles = ["admin", "operator", "planejador", "planejador_leitura", "portaria", "supplier"] as const;
 
 /** Os perfis que o administrador pode dar ao aprovar um cadastro novo. */
 const perfisDaSolicitacao = ["supplier", "operator", "planejador", "planejador_leitura", "portaria", "operacao"] as const;

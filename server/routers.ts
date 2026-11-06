@@ -2605,7 +2605,7 @@ export const appRouter = router({
         return { ...publicUser(criado), avisado };
       }),
     setRole: adminProcedure
-      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["admin", "operator", "portaria", "operacao", "planejador", "planejador_leitura"]) }))
+      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["admin", "operator", "portaria", "operacao", "planejador", "planejador_leitura", "supplier"]) }))
       .mutation(async ({ ctx, input }) => {
         // An administrator changing their own role would drop the only account
         // that can hand the role back.
