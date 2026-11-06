@@ -263,6 +263,24 @@ function assertOperacao(role: UserRole) {
 }
 
 /**
+ * Troca o perfil de uma conta, com as mesmas regras para quem aprova um cadastro
+ * e para quem muda o perfil depois.
+ *
+ * A conta que vira cargo de mesa e ainda não tem empresa passa a atender a Amil,
+ * como todas faziam. Quem já tem empresa e vira planejador numa que não tem
+ * planejamento é recusado, em vez de ficar com um cargo que a empresa dela não usa.
+ */
+async function aplicarPerfil(userId: number, role: UserRole) {
+  const alvo = await getUserById(userId);
+  const empresasDaConta = ehCargoDeMesa(role) ? lerEmpresas(alvo?.empresasOperadas) : null;
+  if (empresasDaConta && !cargoExisteNasEmpresas(role, empresasDaConta)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Uma das empresas desta conta ainda não tem planejador: por enquanto só há operador." });
+  }
+  await setUserRole({ userId, role });
+  if (empresasDaConta && !alvo?.empresasOperadas) await setUserEmpresas({ userId, empresas: empresasDaConta });
+}
+
+/**
  * O estoque daquela unidade está fechado no dia escolhido?
  *
  * Fica no servidor, e não só na tela, porque a tela é um conselho: quem manda
@@ -2046,12 +2064,20 @@ export const appRouter = router({
   accessRequests: router({
     listPending: adminProcedure.query(async () => listPendingAccessRequests()),
     decide: adminProcedure
-      .input(z.object({ userId: z.number().int().positive(), approve: z.boolean() }))
+      .input(z.object({
+        userId: z.number().int().positive(),
+        approve: z.boolean(),
+        // O perfil que vale ao aprovar. Quem escolheu o cargo errado no cadastro
+        // (por exemplo "Operador" sendo fornecedor) é corrigido aqui, sem depender
+        // de liberar e trocar depois. Admin não entra por aqui.
+        role: z.enum(["supplier", "operator", "planejador", "planejador_leitura", "portaria", "operacao"]).optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         // Guard against an administrator locking themselves out mid-session.
         if (input.userId === ctx.user.id) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode alterar o próprio acesso." });
         }
+        if (input.approve && input.role) await aplicarPerfil(input.userId, input.role);
         await setUserAccessStatus({ userId: input.userId, accessStatus: input.approve ? "approved" : "rejected" });
         // Aprovar sem avisar é deixar a pessoa esperando por algo que já
         // aconteceu: ela não tem como saber, e a maioria não tenta de novo.
@@ -2587,17 +2613,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode alterar o seu próprio perfil." });
         }
         await assertAnotherAdminRemains(input.userId, input.role !== "admin");
-        const alvo = await getUserById(input.userId);
-        // A conta que vira cargo de mesa e ainda não tem empresa passa a atender
-        // a Amil, como todas faziam. Quem já tem empresa e vira planejador
-        // numa que não tem planejamento é recusado, em vez de ficar com um
-        // cargo que a empresa dela não usa.
-        const empresasDaConta = ehCargoDeMesa(input.role) ? lerEmpresas(alvo?.empresasOperadas) : null;
-        if (empresasDaConta && !cargoExisteNasEmpresas(input.role, empresasDaConta)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Uma das empresas desta conta ainda não tem planejador: por enquanto só há operador." });
-        }
-        await setUserRole({ userId: input.userId, role: input.role });
-        if (empresasDaConta && !alvo?.empresasOperadas) await setUserEmpresas({ userId: input.userId, empresas: empresasDaConta });
+        await aplicarPerfil(input.userId, input.role);
         return { success: true } as const;
       }),
 

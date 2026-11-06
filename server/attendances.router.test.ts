@@ -327,6 +327,20 @@ describe("perfis internos", () => {
     expect(mocks.setUserRole).toHaveBeenCalledWith({ userId: 31, role: "portaria" });
   });
 
+  it("ao aprovar, o administrador corrige o perfil pedido no cadastro", async () => {
+    // Fornecedor que escolheu "Operador" por engano entra como Fornecedor.
+    mocks.getUserById.mockResolvedValue({ id: 31, role: "operator", accessStatus: "pending" });
+    await appRouter.createCaller(context("admin")).accessRequests.decide({ userId: 31, approve: true, role: "supplier" });
+    expect(mocks.setUserRole).toHaveBeenCalledWith({ userId: 31, role: "supplier" });
+    expect(mocks.setUserAccessStatus).toHaveBeenCalledWith({ userId: 31, accessStatus: "approved" });
+  });
+
+  it("recusar não muda o perfil", async () => {
+    await appRouter.createCaller(context("admin")).accessRequests.decide({ userId: 31, approve: false, role: "supplier" });
+    expect(mocks.setUserRole).not.toHaveBeenCalled();
+    expect(mocks.setUserAccessStatus).toHaveBeenCalledWith({ userId: 31, accessStatus: "rejected" });
+  });
+
   it("impede o administrador de rebaixar a própria conta", async () => {
     await expect(
       appRouter.createCaller(context("admin", 7)).staff.setRole({ userId: 7, role: "operacao" })

@@ -34,6 +34,15 @@ type PendingRequest = {
 /** Perfis internos que o administrador pode atribuir a uma conta já existente. */
 const assignableRoles = ["admin", "operator", "planejador", "planejador_leitura", "portaria"] as const;
 
+/** Os perfis que o administrador pode dar ao aprovar um cadastro novo. */
+const perfisDaSolicitacao = ["supplier", "operator", "planejador", "planejador_leitura", "portaria", "operacao"] as const;
+type PerfilDaSolicitacao = (typeof perfisDaSolicitacao)[number];
+
+/** O perfil que aparece selecionado: o pedido no cadastro, ou Operador se ele não estiver na lista. */
+function perfilInicialDaSolicitacao(role: string): PerfilDaSolicitacao {
+  return (perfisDaSolicitacao as readonly string[]).includes(role) ? (role as PerfilDaSolicitacao) : "operator";
+}
+
 /**
  * O que a tela diz depois de liberar um acesso.
  *
@@ -159,6 +168,9 @@ export default function AccessRequests() {
     onSuccess: dados => setLinkDeSenha(dados),
     onError: erro => toast.error(erro.message),
   });
+
+  // O perfil escolhido por solicitação. Começa no que a pessoa pediu no cadastro.
+  const [perfisEscolhidos, setPerfisEscolhidos] = useState<Record<number, PerfilDaSolicitacao>>({});
 
   const decide = trpc.accessRequests.decide.useMutation({
     onSuccess: (result, variables) => {
@@ -298,7 +310,17 @@ export default function AccessRequests() {
                       )}
                     </div>
                   </div>
-                  <div className="flex shrink-0 gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <select
+                      aria-label="Perfil desta conta ao aprovar"
+                      value={perfisEscolhidos[request.id] ?? perfilInicialDaSolicitacao(request.role)}
+                      onChange={evento => setPerfisEscolhidos(atuais => ({ ...atuais, [request.id]: evento.target.value as PerfilDaSolicitacao }))}
+                      className="h-10 rounded-xl border border-line bg-surface px-3 text-xs font-bold text-rvd-plum"
+                    >
+                      {perfisDaSolicitacao.map(perfil => (
+                        <option key={perfil} value={perfil}>{roleLabel[perfil]}</option>
+                      ))}
+                    </select>
                     <Button
                       onClick={() => decide.mutate({ userId: request.id, approve: false })}
                       disabled={decide.isPending}
@@ -309,7 +331,7 @@ export default function AccessRequests() {
                       Recusar
                     </Button>
                     <Button
-                      onClick={() => decide.mutate({ userId: request.id, approve: true })}
+                      onClick={() => decide.mutate({ userId: request.id, approve: true, role: perfisEscolhidos[request.id] ?? perfilInicialDaSolicitacao(request.role) })}
                       disabled={decide.isPending}
                       className="h-10 rounded-xl bg-brand px-4 text-xs font-bold text-white hover:bg-brand/90"
                     >
