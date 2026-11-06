@@ -329,7 +329,7 @@ export default function BacklogPage() {
           </div>
           <div>
             <Label className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Novo horário *</Label>
-            <SeletorDeHorario data={novaData} valor={novaHora} onEscolher={setNovaHora} appointmentId={reagendando?.id} podeOcupar className="mt-2" />
+            <SeletorDeHorario data={novaData} valor={novaHora} onEscolher={setNovaHora} appointmentId={reagendando?.id} podeOcupar semTrava className="mt-2" />
           </div>
         </div>
         <footer className="flex items-center justify-end gap-3 border-t border-line px-6 py-4">

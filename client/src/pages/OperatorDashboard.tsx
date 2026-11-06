@@ -769,7 +769,7 @@ function ScheduleDialog({ item, open, onOpenChange, date, time, onDate, onTime, 
             </div>
             <div className="mt-4">
               <Label className="text-xs font-bold uppercase tracking-wide text-rvd-plum">Horário</Label>
-              <SeletorDeHorario data={date} valor={time} onEscolher={onTime} appointmentId={item?.id} podeOcupar className="mt-2" />
+              <SeletorDeHorario data={date} valor={time} onEscolher={onTime} appointmentId={item?.id} podeOcupar semTrava className="mt-2" />
             </div>
             {paradaEscolhida && (
               <p className="mt-3 rounded-xl bg-state-stop-bg px-3 py-2 text-xs font-bold leading-5 text-state-stop">
