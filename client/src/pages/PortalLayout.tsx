@@ -144,6 +144,14 @@ export default function PortalLayout({
   const conversaDoBacklog = trpc.appointments.conversaDoBacklog.useQuery(undefined, { enabled: ehBalcao, refetchInterval: 30_000 });
   const falasDoBacklog = ehBalcao ? (conversaDoBacklog.data ?? []) : [];
   const releaseCount = pendingReleases.length;
+  // Com o app instalado, o número das solicitações da portaria aparece no ícone
+  // da barra de tarefas: o caminhão esperando no portão é visto sem abrir o portal.
+  // Quando zera, o número some. Fora do app instalado, o navegador ignora.
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (valor?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    if (releaseCount > 0) void nav.setAppBadge?.(releaseCount).catch(() => undefined);
+    else void nav.clearAppBadge?.().catch(() => undefined);
+  }, [releaseCount]);
   // Limpar não apaga nada: grava que esta pessoa leu o que está na lista. A
   // liberação do portão fica de fora — é caminhão parado esperando decisão.
   const limparAvisos = trpc.messages.limparAvisos.useMutation({
