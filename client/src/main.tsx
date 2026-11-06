@@ -109,3 +109,11 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </trpc.Provider>
 );
+
+// O app instalado no PC precisa de um service worker para o navegador oferecer
+// a instalação. Ele não guarda cache: só existe para isso.
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  });
+}
