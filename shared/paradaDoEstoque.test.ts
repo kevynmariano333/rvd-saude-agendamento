@@ -81,7 +81,8 @@ describe("quando a parada some da tela", () => {
   it("o aviso da unidade só aparece para quem entrega nela", () => {
     const antes = new Date("2026-11-01T10:00:00.000-03:00");
     expect(paradaDaUnidade(HOSPITAL, antes)?.motivo).toBe("Inventário no estoque");
-    expect(paradaDaUnidade(MATERNIDADE, antes)).toBeNull();
+    // A Maternidade tem o inventário de dezembro, que ainda está por vir: aparece para ela, e não para o Hospital.
+    expect(paradaDaUnidade(MATERNIDADE, antes)?.dias[0]).toBe("2026-12-02");
     expect(paradaDaUnidade(HOSPITAL, new Date("2026-12-01T10:00:00.000-03:00"))).toBeNull();
   });
 
@@ -144,5 +145,34 @@ describe("as paradas cadastradas", () => {
   it("o inventário de novembro está lá, nos três dias", () => {
     const parada = PARADAS_DO_ESTOQUE.find(item => item.cnpj === HOSPITAL);
     expect(parada?.dias).toEqual(["2026-11-11", "2026-11-12", "2026-11-13"]);
+  });
+
+  it("o inventário da Maternidade de dezembro está lá, nos quatro dias", () => {
+    const parada = PARADAS_DO_ESTOQUE.find(item => item.cnpj === MATERNIDADE);
+    expect(parada?.dias).toEqual(["2026-12-02", "2026-12-03", "2026-12-04", "2026-12-05"]);
+  });
+});
+
+describe("o inventário da Maternidade em dezembro", () => {
+  it("fecha a Maternidade nos dias 2, 3, 4 e 5", () => {
+    for (const dia of ["02", "03", "04", "05"]) {
+      expect(paradaNoDia(MATERNIDADE, `2026-12-${dia}T10:00:00.000-03:00`)).toBeTruthy();
+    }
+  });
+
+  it("o dia 1 e o dia 6 continuam livres", () => {
+    expect(paradaNoDia(MATERNIDADE, "2026-12-01T10:00:00.000-03:00")).toBeNull();
+    expect(paradaNoDia(MATERNIDADE, "2026-12-06T10:00:00.000-03:00")).toBeNull();
+  });
+
+  it("o Hospital recebe nesses dias", () => {
+    expect(paradaNoDia(HOSPITAL, "2026-12-03T10:00:00.000-03:00")).toBeNull();
+  });
+
+  it("o aviso diz a Maternidade, os dias de dezembro e que o Hospital recebe normalmente", () => {
+    const aviso = avisoDaParada({ cnpj: MATERNIDADE, dias: ["2026-12-02", "2026-12-03", "2026-12-04", "2026-12-05"], motivo: "Inventário no estoque" });
+    expect(aviso).toContain("Inventário no estoque da Maternidade");
+    expect(aviso).toContain("2, 3, 4 e 5 de dezembro");
+    expect(aviso).toContain("O Hospital recebe normalmente");
   });
 });

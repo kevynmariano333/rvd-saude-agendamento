@@ -657,6 +657,16 @@ describe("procedures de agendamento", () => {
     expect(mocks.scheduleAppointment).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 1, previousScheduledFor, scheduledFor: new Date("2030-09-02T13:00:00.000Z"), rescheduled: true }));
   });
 
+  it("nenhum perfil consegue sugerir ou marcar a Maternidade no inventário de dezembro", async () => {
+    // A trava vale para quem sugere e para quem marca: fornecedor, planejador e operador.
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled", recipientCnpj: "43293604002120" });
+    await expect(appRouter.createCaller(context("supplier")).suggestions.create({ appointmentId: 1, suggestedFor: "2026-12-03T13:00:00.000Z" })).rejects.toThrow(/inventário no estoque/i);
+    await expect(appRouter.createCaller(context("planejador")).suggestions.create({ appointmentId: 1, suggestedFor: "2026-12-04T13:00:00.000Z" })).rejects.toThrow(/Maternidade/);
+    mocks.getAppointmentById.mockResolvedValue({ id: 1, status: "pending", scheduledFor: new Date("2026-11-01T09:00:00.000Z"), recipientCnpj: "43293604002120" });
+    await expect(appRouter.createCaller(context("operator")).appointments.schedule({ appointmentId: 1, scheduledFor: "2026-12-05T13:00:00.000Z" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.scheduleAppointment).not.toHaveBeenCalled();
+  });
+
   it("não deixa o balcão marcar o Hospital no dia do inventário", async () => {
     // O balcão é quem sabe do inventário, e é também quem tem trinta notas
     // para despachar: a data que escapa aqui vira caminhão parado no portão.

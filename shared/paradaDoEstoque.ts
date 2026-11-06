@@ -36,6 +36,11 @@ export const PARADAS_DO_ESTOQUE: ParadaDoEstoque[] = [
     dias: ["2026-11-11", "2026-11-12", "2026-11-13"],
     motivo: "Inventário no estoque",
   },
+  {
+    cnpj: "43293604002120",
+    dias: ["2026-12-02", "2026-12-03", "2026-12-04", "2026-12-05"],
+    motivo: "Inventário no estoque",
+  },
 ];
 
 /** O nome da unidade que parou, para a frase do aviso. */
