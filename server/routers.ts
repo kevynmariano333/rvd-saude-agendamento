@@ -145,7 +145,7 @@ import { executarBackup, procurarNotaEmBackup, restaurarNotaDoBackup } from "./b
 import { storageGetSignedUrl } from "./storage";
 import { decodificarCsv, importarAcervo } from "./agilizaImport";
 import { lerPedidosDoSap } from "./pedidosSap";
-import { mesmosPedidos, pedidoEhZerado, pedidosDaNota as numerosDosPedidos } from "../shared/purchaseOrders";
+import { pedidoEhZerado, pedidosDaNota as numerosDosPedidos } from "../shared/purchaseOrders";
 import { normalizeCnpj } from "./fiscalFilters";
 import { situacaoDasMigracoes } from "./_core/migrations";
 
@@ -1364,12 +1364,6 @@ export const appRouter = router({
         } catch (error) {
           throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Não foi possível ler o XML." });
         }
-        // O pedido segue a nota. Quando o XML traz o pedido, é esse número que vale,
-        // e o que o fornecedor digitou precisa ser o mesmo.
-        const pedidosDaNotaXml = numerosDosPedidos(invoice.purchaseOrder);
-        if (pedidosDaNotaXml.length && !mesmosPedidos(numerosDosPedidos(purchaseOrder), pedidosDaNotaXml)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: `O pedido da nota é ${invoice.purchaseOrder}. Informe esse número, do jeito que está na nota.` });
-        }
         // A dica existe porque o reenvio quase sempre tem a mesma causa: a nota
         // cobre mais de um pedido de compra e o fornecedor manda o mesmo XML
         // uma vez para cada um. Recusar sem dizer isso não resolve o problema
@@ -1397,7 +1391,7 @@ export const appRouter = router({
           // traz às vezes, e é este número que o Operador usa para achar a
           // compra. O do XML continua sendo lido para os recebimentos avulsos,
           // onde não há fornecedor na tela para digitar.
-          purchaseOrder: invoice.purchaseOrder ?? purchaseOrder,
+          purchaseOrder,
           invoiceSupplierName: invoice.supplierName,
           invoiceSupplierCnpj: invoice.supplierCnpj,
           recipientCnpj: invoice.recipientCnpj,

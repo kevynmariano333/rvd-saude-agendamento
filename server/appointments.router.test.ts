@@ -763,14 +763,6 @@ describe("procedures de agendamento", () => {
     expect(mocks.createManualXmlAppointment).not.toHaveBeenCalled();
   });
 
-  it("o pedido digitado precisa ser o da nota, quando a nota traz um", async () => {
-    // A nota manda: o fornecedor não digita outro número no lugar do que está nela.
-    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><det nItem="1"><prod><xPed>4504748409</xPed></prod></det></infNFe></NFe>').toString("base64");
-    const caller = appRouter.createCaller(context("supplier"));
-    await expect(caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: "4504748410" })).rejects.toThrow(/O pedido da nota é 4504748409/);
-    expect(mocks.createManualXmlAppointment).not.toHaveBeenCalled();
-  });
-
   it("recusa também pela porta do fornecedor", async () => {
     // A trava vale para as duas entradas: o XML do fornecedor e o recebimento
     // avulso da portaria levam a mesma nota para dentro.
@@ -816,14 +808,14 @@ describe("procedures de agendamento", () => {
     expect(mocks.createManualXmlAppointment).toHaveBeenCalledWith(expect.objectContaining({ purchaseOrder: "4504748409" }));
   });
 
-  it("recusa o pedido digitado que não é o da nota", async () => {
-    // Quem manda é a nota: se ela traz o pedido, o fornecedor não escreve outro.
+  it("aceita qualquer pedido digitado pelo fornecedor, mesmo que seja diferente do da nota", async () => {
+    // O fornecedor digita o pedido que tem. Só o pedido só de zeros é recusado.
+    mocks.createManualXmlAppointment.mockResolvedValue({ id: 13, status: "pending" });
     const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><det><prod><xPed>4504748410</xPed></prod></det></infNFe></NFe>').toString("base64");
     const caller = appRouter.createCaller(context("supplier"));
-    await expect(caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: "4504748409" })).rejects.toThrow(/O pedido da nota é 4504748410/);
-    expect(mocks.createManualXmlAppointment).not.toHaveBeenCalled();
+    await caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: "4504748409" });
+    expect(mocks.createManualXmlAppointment).toHaveBeenCalledWith(expect.objectContaining({ purchaseOrder: "4504748409" }));
   });
-
   it("permite que o fornecedor envie uma mensagem no próprio agendamento", async () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 1, supplierId: 12, status: "scheduled" });
     mocks.createAppointmentMessage.mockResolvedValue(17);
