@@ -87,14 +87,14 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
     ...Object.fromEntries(unidadesNoGrafico.map(unidade => [unidade, dia.unidades[unidade] ?? 0])),
   }));
   return (
-    <div className="mt-7 space-y-6">
+    <div className="mt-4 space-y-4">
       <section className="grid gap-4 sm:grid-cols-3">
         <Cartao rotulo="Notas no período" valor={resumo.total} detalhe={`${periodo.desde} a ${periodo.ate}`} icone={FileWarning} />
         <Cartao rotulo="Unidades" valor={resumo.porUnidade.length} detalhe={resumo.porUnidade.map(item => `${item.unidade}: ${item.quantidade}`).join(" · ") || "—"} icone={Building2} />
         <Cartao rotulo="Fornecedores" valor={resumo.porFornecedor.length} detalhe={resumo.porFornecedor[0] ? `Mais notas: ${resumo.porFornecedor[0].fornecedor}` : "—"} icone={Building2} />
       </section>
 
-      <section className="panel p-5 shadow-sm sm:p-7">
+      <section className="panel p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-faint">Recebimento</p>
@@ -120,7 +120,7 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
             })}
           </div>
         </div>
-        <div className="mt-5 h-80">
+        <div className="mt-3 h-72">
           {dadosDoGrafico.length ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={dadosDoGrafico} margin={{ top: 28, right: 8, left: -16, bottom: 0 }} barCategoryGap="22%">
@@ -141,9 +141,9 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-2">
+      <section className="grid gap-4 xl:grid-cols-2">
         {resumo.ranking.length ? resumo.ranking.map(grupo => <RankingDaUnidade key={grupo.unidade} grupo={grupo} />) : (
-          <section className="panel p-5 shadow-sm sm:p-7 xl:col-span-2">
+          <section className="panel p-4 shadow-sm sm:p-5 xl:col-span-2">
             <p className="text-sm text-ink-soft">Nenhum fornecedor no período.</p>
           </section>
         )}
@@ -156,7 +156,7 @@ export function DashboardSemAgendamento({ resumo, periodo }: { resumo: ResumoSem
 function RankingDaUnidade({ grupo }: { grupo: RankingDaUnidade }) {
   const maior = grupo.fornecedores[0]?.quantidade ?? 0;
   return (
-    <section className="panel p-5 shadow-sm sm:p-7">
+    <section className="panel p-4 shadow-sm sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-faint">Ranking</p>
@@ -164,9 +164,9 @@ function RankingDaUnidade({ grupo }: { grupo: RankingDaUnidade }) {
         </div>
         <span className="rounded-xl bg-rvd-plum-pale px-3 py-1.5 text-xs font-bold text-rvd-plum">{grupo.total} nota(s)</span>
       </div>
-      <ol className="mt-5 divide-y divide-line">
+      <ol className="mt-3 divide-y divide-line">
         {grupo.fornecedores.map((item, indice) => (
-          <li key={item.fornecedor} className="py-3 first:pt-0 last:pb-0" title={`${item.fornecedor}: ${item.quantidade} nota(s)`}>
+          <li key={item.fornecedor} className="py-2 first:pt-0 last:pb-0" title={`${item.fornecedor}: ${item.quantidade} nota(s)`}>
             <div className="flex items-center justify-between gap-4">
               <span className="min-w-0 truncate text-sm font-bold text-rvd-plum">{indice + 1}. {item.fornecedor}</span>
               <span className="shrink-0 text-right">

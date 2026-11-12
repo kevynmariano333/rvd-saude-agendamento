@@ -521,7 +521,7 @@ describe("procedures de agendamento", () => {
     mocks.getAppointmentById.mockResolvedValue({ id: 2, supplierId: 12, status: "scheduled", recipientCnpj: "43293604002120" });
     mocks.createAppointmentSuggestion.mockResolvedValue({ id: 9, status: "pending" });
     const caller = appRouter.createCaller(context("supplier"));
-    await caller.suggestions.create({ appointmentId: 2, suggestedFor: "2026-11-11T13:00:00.000Z" });
+    await caller.suggestions.create({ appointmentId: 2, suggestedFor: "2030-09-02T13:00:00.000Z" });
     expect(mocks.createAppointmentSuggestion).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 2 }));
   });
 
