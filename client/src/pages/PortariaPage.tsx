@@ -87,10 +87,10 @@ export default function PortariaPage() {
 
   // A resposta da Operação chega enquanto o caminhão está parado no acesso,
   // então as listas se atualizam sozinhas em vez de depender de recarregar.
-  const waiting = trpc.attendances.list.useQuery({ status: "aguardando" }, { refetchInterval: 20_000 });
-  const yard = trpc.attendances.list.useQuery({ statuses: yardStatuses }, { refetchInterval: 20_000 });
+  const waiting = trpc.attendances.list.useQuery({ status: "aguardando" }, { refetchInterval: 60_000 });
+  const yard = trpc.attendances.list.useQuery({ statuses: yardStatuses }, { refetchInterval: 60_000 });
   const dayLog = trpc.attendances.dayLog.useQuery(undefined, { refetchInterval: 60_000 });
-  const overview = trpc.attendances.overview.useQuery(undefined, { refetchInterval: 20_000 });
+  const overview = trpc.attendances.overview.useQuery(undefined, { refetchInterval: 60_000 });
 
   const refreshBoard = () => {
     utils.attendances.list.invalidate();

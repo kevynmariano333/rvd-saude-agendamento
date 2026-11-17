@@ -61,7 +61,7 @@ export default function SupplierDashboard() {
   // Qual conversa tem resposta esperando. O sino do topo diz que existe
   // mensagem nova; sem isto, o fornecedor teria que abrir nota por nota para
   // descobrir em qual. Acompanha o mesmo intervalo do sino.
-  const mensagens = trpc.messages.porNota.useQuery(undefined, { refetchInterval: 15_000 });
+  const mensagens = trpc.messages.porNota.useQuery(undefined, { refetchInterval: 60_000 });
   const mensagensPorNota = new Map((mensagens.data ?? []).map(linha => [linha.appointmentId, linha])); const logout = trpc.auth.logout.useMutation({ onSuccess: () => setLocation("/") });
   const [xmlFile, setXmlFile] = useState<File | null>(null); const [xmlInputKey, setXmlInputKey] = useState(0);
   // Para qual unidade esta nota vai. Sai do XML que o fornecedor acabou de

@@ -206,15 +206,15 @@ export default function OperatorDashboard() {
   // Quantas mensagens cada nota tem, e quantas são novas. O sino do topo diz
   // que existe mensagem; sem isto, o operador teria que abrir conversa por
   // conversa para descobrir em qual.
-  const mensagens = trpc.messages.porNota.useQuery(undefined, { refetchInterval: 15_000 });
+  const mensagens = trpc.messages.porNota.useQuery(undefined, { refetchInterval: 60_000 });
   // A data que alguém propôs e ainda espera resposta. Sem isto, a nota com
   // proposta em aberto e a que ninguém tocou diziam a mesma coisa na coluna.
-  const sugestoes = trpc.suggestions.pendentesPorNota.useQuery(undefined, { refetchInterval: 30_000 });
+  const sugestoes = trpc.suggestions.pendentesPorNota.useQuery(undefined, { refetchInterval: 60_000 });
   const sugestaoPorNota = useMemo(() => new Map((sugestoes.data ?? []).map(linha => [linha.appointmentId, { quando: linha.suggestedFor, doPlanejamento: linha.doPlanejamento }])), [sugestoes.data]);
   const mensagensPorNota = useMemo(() => new Map((mensagens.data ?? []).map(linha => [linha.appointmentId, linha])), [mensagens.data]);
   // O mesmo para a conversa da tratativa: o ícone era igual na nota com dez
   // recados e na sem nenhum, e quem cuida do backlog abria uma por uma.
-  const tratativas = trpc.internalNotes.porNota.useQuery(undefined, { refetchInterval: 15_000 });
+  const tratativas = trpc.internalNotes.porNota.useQuery(undefined, { refetchInterval: 60_000 });
   const tratativasPorNota = useMemo(() => new Map((tratativas.data ?? []).map(linha => [linha.appointmentId, linha])), [tratativas.data]);
   // Quantas notas o filtro alcança. A lista devolve uma página; o número de
   // páginas só o banco sabe.

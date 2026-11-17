@@ -110,7 +110,7 @@ export default function BacklogPage() {
   const [conversando, setConversando] = useState<AppointmentDetail | null>(null);
   // Quantas observações cada nota já tem, e quantas ainda não foram lidas. Sem
   // isto, o ícone da conversa é igual na nota com dez recados e na sem nenhum.
-  const tratativas = trpc.internalNotes.porNota.useQuery(undefined, { refetchInterval: 15_000 });
+  const tratativas = trpc.internalNotes.porNota.useQuery(undefined, { refetchInterval: 60_000 });
   const tratativasPorNota = new Map((tratativas.data ?? []).map(linha => [linha.appointmentId, linha]));
   // Motivo clicado errado numa lista de catorze parecidos: o conserto tem que
   // estar onde a fila é trabalhada, e não numa tela que o planejamento não abre.

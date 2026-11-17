@@ -61,9 +61,9 @@ export default function OperacaoPage() {
   const [refusal, setRefusal] = useState<{ id: number; protocol: string; plate: string } | null>(null);
   const [refusalReason, setRefusalReason] = useState("");
 
-  const incoming = trpc.attendances.list.useQuery({ status: "aguardando" }, { refetchInterval: 15_000 });
-  const records = trpc.attendances.list.useQuery({ statuses: activeStatuses }, { refetchInterval: 20_000 });
-  const overview = trpc.attendances.overview.useQuery(undefined, { refetchInterval: 20_000 });
+  const incoming = trpc.attendances.list.useQuery({ status: "aguardando" }, { refetchInterval: 60_000 });
+  const records = trpc.attendances.list.useQuery({ statuses: activeStatuses }, { refetchInterval: 60_000 });
+  const overview = trpc.attendances.overview.useQuery(undefined, { refetchInterval: 60_000 });
 
   const refreshBoard = () => {
     utils.attendances.list.invalidate();

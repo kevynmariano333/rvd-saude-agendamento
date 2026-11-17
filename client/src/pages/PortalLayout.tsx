@@ -93,7 +93,7 @@ export default function PortalLayout({
   const empresasOperadas = user.empresasOperadas ?? null;
   const isOperator = isPortalOperator(role);
   const isAdmin = isPortalAdmin(role);
-  const notifications = trpc.messages.notifications.useQuery(undefined, { refetchInterval: 15_000 });
+  const notifications = trpc.messages.notifications.useQuery(undefined, { refetchInterval: 60_000 });
   const utils = trpc.useUtils();
   const logoutMutation = trpc.auth.logout.useMutation();
 
@@ -120,7 +120,7 @@ export default function PortalLayout({
   const canApproveEntries = isPortalYard(role);
   const releaseRequests = trpc.attendances.list.useQuery(
     { status: "aguardando" },
-    { enabled: canApproveEntries, refetchInterval: 15_000 }
+    { enabled: canApproveEntries, refetchInterval: 60_000 }
   );
   const pendingReleases = canApproveEntries ? (releaseRequests.data ?? []) : [];
   // Quem trata o backlog precisa saber que ele encheu sem abrir a tela.
@@ -142,7 +142,7 @@ export default function PortalLayout({
   // casa ela não é segredo: quem mandou a nota para o backlog foi o balcão, e
   // ele precisa saber no que deu.
   const ehBalcao = isPortalSchedulingDesk(role);
-  const conversaDoBacklog = trpc.appointments.conversaDoBacklog.useQuery(undefined, { enabled: ehBalcao, refetchInterval: 30_000 });
+  const conversaDoBacklog = trpc.appointments.conversaDoBacklog.useQuery(undefined, { enabled: ehBalcao, refetchInterval: 60_000 });
   const falasDoBacklog = ehBalcao ? (conversaDoBacklog.data ?? []) : [];
   const releaseCount = pendingReleases.length;
   // Com o app instalado, o número das solicitações da portaria aparece no ícone
