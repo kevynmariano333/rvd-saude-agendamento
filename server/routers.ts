@@ -1364,6 +1364,11 @@ export const appRouter = router({
         } catch (error) {
           throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Não foi possível ler o XML." });
         }
+        // Sem destinatário a nota não tem unidade, e sem o valor total não há o que
+        // conferir na doca. Um XML assim não entra: o fornecedor manda o completo.
+        if (!invoice.recipientCnpj || invoice.totalCents === null) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Este XML está incompleto: não traz o destinatário ou o valor da nota. Envie o XML completo da NF-e, como sai do sistema do fornecedor." });
+        }
         // A dica existe porque o reenvio quase sempre tem a mesma causa: a nota
         // cobre mais de um pedido de compra e o fornecedor manda o mesmo XML
         // uma vez para cada um. Recusar sem dizer isso não resolve o problema

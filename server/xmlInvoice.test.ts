@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { empresaDoCnpj } from "../shared/empresas";
-import { MAX_XML_BYTES, parseInvoiceXml } from "./xmlInvoice";
+import { MAX_XML_BYTES, numeroDaNotaNaChave, parseInvoiceXml } from "./xmlInvoice";
 
 describe("leitura de XML de nota fiscal", () => {
   it("extrai os dados disponíveis de uma NF-e sem exigir campos manuais", () => {
@@ -50,5 +50,30 @@ describe("a nota cai na empresa do destinatário", () => {
   it("a da RVD é da RVD, e a do Hospital segue sendo da Amil", () => {
     expect(empresaDoCnpj(parseInvoiceXml(nota("39.283.469/0001-10")).recipientCnpj)).toBe("rvd");
     expect(empresaDoCnpj(parseInvoiceXml(nota("06.033.403/0001-13")).recipientCnpj)).toBe("amil");
+  });
+});
+
+describe("número da nota quando o XML não traz o número", () => {
+  it("tira o número de dentro da chave de acesso", () => {
+    expect(numeroDaNotaNaChave("35261104689134000201550010000182921203700237")).toBe("18292");
+  });
+
+  it("chave com número todo zero não vira número nenhum", () => {
+    // 25 dígitos de cabeçalho, 9 zeros do número da nota, 10 dígitos finais: 44 no total.
+    const chave = "3526110468913400020155001" + "000000000" + "1203700237";
+    expect(chave).toHaveLength(44);
+    expect(numeroDaNotaNaChave(chave)).toBeNull();
+  });
+
+  it("chave que não tem 44 dígitos não serve", () => {
+    expect(numeroDaNotaNaChave("123")).toBeNull();
+    expect(numeroDaNotaNaChave(null)).toBeNull();
+  });
+
+  it("um XML só com a chave ainda é lido, com o número da nota", () => {
+    const xml = '<nfeProc><NFe><infNFe Id="NFe35261104689134000201550010000182921203700237"><emit><xNome>FISHER PAYKEL DO BRASIL LTDA.</xNome><CNPJ>04689134000201</CNPJ></emit></infNFe></NFe></nfeProc>';
+    const nota = parseInvoiceXml(Buffer.from(xml, "utf8"));
+    expect(nota.invoiceNumber).toBe("18292");
+    expect(nota.accessKey).toBe("35261104689134000201550010000182921203700237");
   });
 });

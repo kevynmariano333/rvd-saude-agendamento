@@ -767,7 +767,7 @@ describe("procedures de agendamento", () => {
     // A trava vale para as duas entradas: o XML do fornecedor e o recebimento
     // avulso da portaria levam a mesma nota para dentro.
     mocks.notaJaRegistrada.mockResolvedValue({ id: 7, invoiceNumber: "123456", invoiceSupplierName: null, status: "pending", source: "portal", createdAt: new Date("2026-09-20T12:00:00.000Z"), scheduledFor: new Date() });
-    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide></infNFe></NFe>').toString("base64");
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><dest><CNPJ>12.345.678/0001-99</CNPJ></dest><total><ICMSTot><vNF>100.00</vNF></ICMSTot></total></infNFe></NFe>').toString("base64");
     const caller = appRouter.createCaller(context("supplier"));
     await expect(caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: "4504748409" })).rejects.toThrow(/já está no sistema/i);
     expect(mocks.createManualXmlAppointment).not.toHaveBeenCalled();
@@ -785,7 +785,7 @@ describe("procedures de agendamento", () => {
 
   it("permite ao fornecedor enviar XML com sugestão opcional de data e horário", async () => {
     mocks.createManualXmlAppointment.mockResolvedValue({ id: 11, status: "pending" });
-    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><emit><xNome>Fornecedor XML</xNome></emit><dest><CNPJ>12.345.678/0001-99</CNPJ></dest></infNFe></NFe>').toString("base64");
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><emit><xNome>Fornecedor XML</xNome></emit><dest><CNPJ>12.345.678/0001-99</CNPJ></dest><total><ICMSTot><vNF>100.00</vNF></ICMSTot></total></infNFe></NFe>').toString("base64");
     const caller = appRouter.createCaller(context("supplier"));
     await caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: "4504748409", suggestedFor: "2030-09-02T13:00:00.000Z", suggestionNotes: "Preferência pela manhã" });
     expect(mocks.createManualXmlAppointment).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 12, purchaseOrder: "4504748409", suggestedFor: new Date("2030-09-02T13:00:00.000Z"), suggestionNotes: "Preferência pela manhã" }));
@@ -800,9 +800,19 @@ describe("procedures de agendamento", () => {
     expect(mocks.createManualXmlAppointment).not.toHaveBeenCalled();
   });
 
+  it("recusa o envio do fornecedor quando o XML vem sem destinatário ou sem valor", async () => {
+    // Nota incompleta não tem unidade nem valor para conferir na doca: não agenda.
+    const semDestinatario = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>18292</nNF></ide><total><ICMSTot><vNF>100.00</vNF></ICMSTot></total></infNFe></NFe>').toString("base64");
+    const semValor = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>18292</nNF></ide><dest><CNPJ>12.345.678/0001-99</CNPJ></dest></infNFe></NFe>').toString("base64");
+    const caller = appRouter.createCaller(context("supplier"));
+    await expect(caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: semDestinatario, purchaseOrder: "4504748409" })).rejects.toThrow(/incompleto/i);
+    await expect(caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: semValor, purchaseOrder: "4504748409" })).rejects.toThrow(/incompleto/i);
+    expect(mocks.createManualXmlAppointment).not.toHaveBeenCalled();
+  });
+
   it("grava o pedido da nota, quando o fornecedor digita o mesmo número", async () => {
     mocks.createManualXmlAppointment.mockResolvedValue({ id: 12, status: "pending" });
-    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><det><prod><xPed>4504748409</xPed></prod></det></infNFe></NFe>').toString("base64");
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><det><prod><xPed>4504748409</xPed></prod></det><dest><CNPJ>12.345.678/0001-99</CNPJ></dest><total><ICMSTot><vNF>100.00</vNF></ICMSTot></total></infNFe></NFe>').toString("base64");
     const caller = appRouter.createCaller(context("supplier"));
     await caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: " 4504748409 " });
     expect(mocks.createManualXmlAppointment).toHaveBeenCalledWith(expect.objectContaining({ purchaseOrder: "4504748409" }));
@@ -811,7 +821,7 @@ describe("procedures de agendamento", () => {
   it("aceita qualquer pedido digitado pelo fornecedor, mesmo que seja diferente do da nota", async () => {
     // O fornecedor digita o pedido que tem. Só o pedido só de zeros é recusado.
     mocks.createManualXmlAppointment.mockResolvedValue({ id: 13, status: "pending" });
-    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><det><prod><xPed>4504748410</xPed></prod></det></infNFe></NFe>').toString("base64");
+    const xml = Buffer.from('<NFe><infNFe Id="NFe35260112345678901234550010000000011000000010"><ide><nNF>123456</nNF></ide><det><prod><xPed>4504748410</xPed></prod></det><dest><CNPJ>12.345.678/0001-99</CNPJ></dest><total><ICMSTot><vNF>100.00</vNF></ICMSTot></total></infNFe></NFe>').toString("base64");
     const caller = appRouter.createCaller(context("supplier"));
     await caller.appointments.createManualXml({ fileName: "nota.xml", xmlBase64: xml, purchaseOrder: "4504748409" });
     expect(mocks.createManualXmlAppointment).toHaveBeenCalledWith(expect.objectContaining({ purchaseOrder: "4504748409" }));

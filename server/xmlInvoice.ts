@@ -114,6 +114,19 @@ export function lerPedidosDoXml(xml: string): string | null {
   return candidatos.length === 1 ? candidatos[0] : null;
 }
 
+/**
+ * O número da nota, de dentro da chave de acesso de 44 dígitos.
+ *
+ * Na chave, o número ocupa as posições 26 a 34, sem os zeros da frente. É usado
+ * quando o XML traz a chave mas não traz o número da nota: a nota continua
+ * sendo identificada, e a conferência por número não fica cega.
+ */
+export function numeroDaNotaNaChave(chave: string | null | undefined): string | null {
+  const digitos = (chave ?? "").replace(/\D/g, "");
+  if (digitos.length !== 44) return null;
+  return digitos.slice(25, 34).replace(/^0+/, "") || null;
+}
+
 export function parseInvoiceXml(content: Buffer): XmlInvoiceDetails {
   if (!content.length || content.length > MAX_XML_BYTES) throw new Error("O XML deve ter até 2 MB.");
   const xml = content.toString("utf8").replace(/^\uFEFF/, "");
@@ -141,7 +154,7 @@ export function parseInvoiceXml(content: Buffer): XmlInvoiceDetails {
   if (!invoiceNumber && !accessKey) throw new Error("Não foi possível identificar a nota fiscal no XML enviado.");
 
   return {
-    invoiceNumber: invoiceNumber?.slice(0, 100) ?? null,
+    invoiceNumber: (invoiceNumber ?? numeroDaNotaNaChave(accessKey))?.slice(0, 100) ?? null,
     accessKey: accessKey ? accessKey.replace(/\s/g, "").slice(0, 80) : null,
     issuedAt: issueDate,
     serviceDescription: serviceDescription?.slice(0, 80) ?? null,
