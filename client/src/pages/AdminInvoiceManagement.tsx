@@ -37,7 +37,9 @@ export default function AdminInvoiceManagement() {
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
   const [correctionTarget, setCorrectionTarget] = useState<Invoice | null>(null);
-  const invoices = trpc.appointments.list.useQuery({ invoiceNumber: invoiceNumber || undefined });
+  // A busca geral acha a nota pelo número, pelo nome do fornecedor e pelo pedido.
+  // Nota sem número fiscal só aparece por aqui, pelo nome do fornecedor.
+  const invoices = trpc.appointments.list.useQuery({ busca: invoiceNumber.trim() || undefined });
   const refreshOperationalData = () => {
     utils.appointments.list.invalidate();
     utils.calendar.list.invalidate();
@@ -81,7 +83,7 @@ export default function AdminInvoiceManagement() {
           </div>
           <div className="w-full lg:max-w-sm">
             <label htmlFor="admin-invoice-search" className="text-xs font-bold uppercase tracking-wide text-rvd-plum">Localizar nota</label>
-            <div className="relative mt-2"><Search className="absolute left-3 top-3 size-4 text-rvd-plum" /><Input id="admin-invoice-search" value={invoiceNumber} onChange={event => setInvoiceNumber(event.target.value)} placeholder="Número da NF" className="border-line bg-surface pl-9 text-rvd-plum" /></div>
+            <div className="relative mt-2"><Search className="absolute left-3 top-3 size-4 text-rvd-plum" /><Input id="admin-invoice-search" value={invoiceNumber} onChange={event => setInvoiceNumber(event.target.value)} placeholder="Número da NF ou fornecedor" className="border-line bg-surface pl-9 text-rvd-plum" /></div>
           </div>
         </div>
       </section>
